@@ -1,0 +1,5 @@
+jax
+jaxlib
+dm-haiku
+torch
+torchvision

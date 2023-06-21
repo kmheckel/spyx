@@ -8,7 +8,27 @@ class ActivityRegularization(hk.Module):
         return spikes
 
 
-class Heaviside: # not sure where to ultimately put this
+class Heaviside:
+    """
+    This class implements the Heaviside activation function for a spiking neuron.
+    
+    The Heaviside function is a step function that takes a single argument. 
+    It returns 0 if the input is less than 0, and 1 if the input is greater than 0.
+    
+    The Heaviside function is often used in the context of spiking neurons because 
+    it can be used to model the firing of a neuron. When the input to the neuron 
+    (the sum of the weighted inputs) exceeds a certain threshold, the neuron fires, 
+    producing a spike of activity. This can be modeled as the Heaviside function, 
+    where the output is 0 when the input is below the threshold, and 1 when the input 
+    is above the threshold.
+    
+    Attributes:
+        scale_factor: A scaling factor that can be used to adjust the steepness of the 
+                      step function. Default is 25.
+    """
+    
+    
+    
     def __init__(self, scale_factor=25):
         self.k = scale_factor
         
@@ -32,7 +52,26 @@ class Heaviside: # not sure where to ultimately put this
 
 
 # Surrogate functions
-class Arctan: # not sure where to ultimately put this
+class Arctan:
+    """
+    This class implements the Arctangent surrogate gradient activation function for a spiking neuron.
+    
+    The Arctangent function is a smooth function that approximates the step function. 
+    It is used as a surrogate gradient for the step function in the context of spiking neurons. 
+    The surrogate gradient is used during the backpropagation process to update the weights of the neuron.
+    
+    The Arctangent function returns a value between -pi/2 and pi/2 for inputs in the range of -Infinity to Infinity.
+    It is often used in the context of spiking neurons because it provides a smooth approximation to the step function 
+    that is differentiable everywhere, which is a requirement for gradient-based optimization methods.
+    
+    Attributes:
+        scale_factor: A scaling factor that can be used to adjust the steepness of the 
+                      Arctangent function. Default is 2.
+    """
+    
+
+
+
     def __init__(self, scale_factor=2):
         self.a = scale_factor
         
@@ -55,6 +94,24 @@ class Arctan: # not sure where to ultimately put this
         return self.f(U) 
     
 class Sigmoid:
+    """
+    This class implements the Sigmoid surrogate gradient activation function for a spiking neuron.
+    
+    The Sigmoid function is a smooth function that approximates the step function. 
+    It is used as a surrogate gradient for the step function in the context of spiking neurons. 
+    The surrogate gradient is used during the backpropagation process to update the weights of the neuron.
+    
+    The Sigmoid function returns a value between 0 and 1 for inputs in the range of -Infinity to Infinity.
+    It is often used in the context of spiking neurons because it provides a smooth approximation to the step function 
+    that is differentiable everywhere, which is a requirement for gradient-based optimization methods.
+    
+    Attributes:
+        scale_factor: A scaling factor that can be used to adjust the steepness of the 
+                      Sigmoid function. Default is 25.
+    """
+    
+
+
     def __init__(self, scale_factor=25):
         self.k = scale_factor
         
@@ -77,6 +134,30 @@ class Sigmoid:
         return self.f(V, T)
 
 class SuperSpike:
+    """
+    This class implements the SuperSpike surrogate gradient activation function for a spiking neuron.
+    
+    The SuperSpike function is a smooth function that approximates the step function. 
+    It is used as a surrogate gradient for the step function in the context of spiking neurons. 
+    The surrogate gradient is used during the backpropagation process to update the weights of the neuron.
+    
+    The SuperSpike function is defined as 1/(1+k|U|)^2, where U is the input to the function and k is a scaling factor.
+    It returns a value between 0 and 1 for inputs in the range of -Infinity to Infinity.
+    
+    It is often used in the context of spiking neurons because it provides a smooth approximation to the step function 
+    that is differentiable everywhere, which is a requirement for gradient-based optimization methods.
+
+    It is a fast approximation of the Sigmoid function adapted from:
+
+    F. Zenke, S. Ganguli (2018) SuperSpike: Supervised Learning in Multilayer Spiking Neural Networks. Neural Computation, pp. 1514-1541.
+    
+    Attributes:
+        scale_factor: A scaling factor that can be used to adjust the steepness of the 
+                      SuperSpike function. Default is 25.
+    """
+
+
+
     def __init__(self, scale_factor=25):
         self.k = scale_factor
         
@@ -90,7 +171,7 @@ class SuperSpike:
             
         # accepts context, primal val
         def f_bwd(U, grad):
-            return ((1 / (1+self.k*jnp.abs(U))**2) * grad, )
+            return (grad / (1+self.k*jnp.abs(U))**2 , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
