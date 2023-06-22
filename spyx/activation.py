@@ -17,6 +17,106 @@ class ActivityRegularization(hk.Module):
         return spikes
 
 
+class AdaSpike:
+    """
+    Simplified version of SuperSpike, dropping the power from the denominator.
+    Features an increasing scale factor with linear schedule, increasing the
+    sharpness of the surrogate gradient over time.
+    """
+
+    def __init__(self,  warmup_steps, growth_rate=0.5):
+        self.k = 1
+        self.gr = growth_rate
+        
+        @jax.custom_vjp
+        def f(U, k): # primal function
+            return (U>0).astype(jnp.float16)
+        
+        # returns value, grad context
+        def f_fwd(U, k):
+            return f(U), (U, k)
+            
+        # accepts context, primal val
+        # not sure if k actually changes or it gets jit'ed and stays static..
+        def f_bwd(context, grad):
+            U, k = context
+            return (grad / (1+k*jnp.abs(U)) , )
+            
+        f.defvjp(f_fwd, f_bwd)
+        self.f = f
+        
+    def __call__(self, U):
+        self.k += self.growth_rate
+        return self.f(U, self.k)
+
+# Surrogate functions
+class Arctan:
+    """
+    This class implements the Arctangent surrogate gradient activation function for a spiking neuron.
+    
+    The Arctangent function is a smooth function that approximates the step function. 
+    It is used as a surrogate gradient for the step function in the context of spiking neurons. 
+    The surrogate gradient is used during the backpropagation process to update the weights of the neuron.
+    
+    The Arctangent function returns a value between -pi/2 and pi/2 for inputs in the range of -Infinity to Infinity.
+    It is often used in the context of spiking neurons because it provides a smooth approximation to the step function 
+    that is differentiable everywhere, which is a requirement for gradient-based optimization methods.
+    
+    Attributes:
+        scale_factor: A scaling factor that can be used to adjust the steepness of the 
+                      Arctangent function. Default is 2.
+    """
+    
+
+    def __init__(self, scale_factor=2):
+        self.k = scale_factor
+        
+        @jax.custom_vjp
+        def f(U): # primal function
+            return (U>0).astype(jnp.float16)
+        
+        # returns value, grad context
+        def f_fwd(U):
+            return f(U), ()
+            
+        # Straight Through Estimator
+        def f_bwd(U, grad):
+            return ( (1 / (jnp.pi * (1+(jnp.pi*U*self.k/2)**2))) * grad ) 
+            
+        f.defvjp(f_fwd, f_bwd)
+        self.f = f
+        
+    def __call__(self, U):
+        return self.f(U) 
+
+class Boxcar:
+    """
+    Boxcar surrogate gradient activation function. Under construction.
+    """
+
+    def __init__(self, scale_factor=1):
+        self.k = scale_factor
+        
+        @jax.custom_vjp
+        def f(U): # primal function
+            return (U>0).astype(jnp.float16)
+        
+        # returns value, grad context
+        def f_fwd(U):
+            return f(U), U
+            
+        # Needs fixed.
+        def f_bwd(U, grad):
+            if jnp.abs(U) <= 0.5:
+                return ( 0.5 * grad )
+            return ( 0 ) 
+            
+        f.defvjp(f_fwd, f_bwd)
+        self.f = f
+        
+    def __call__(self, U):
+        return self.f(U)
+
 class Heaviside:
     """
     This class implements the Heaviside activation function for a spiking neuron.
@@ -60,46 +160,6 @@ class Heaviside:
         return self.f(U)
 
 
-# Surrogate functions
-class Arctan:
-    """
-    This class implements the Arctangent surrogate gradient activation function for a spiking neuron.
-    
-    The Arctangent function is a smooth function that approximates the step function. 
-    It is used as a surrogate gradient for the step function in the context of spiking neurons. 
-    The surrogate gradient is used during the backpropagation process to update the weights of the neuron.
-    
-    The Arctangent function returns a value between -pi/2 and pi/2 for inputs in the range of -Infinity to Infinity.
-    It is often used in the context of spiking neurons because it provides a smooth approximation to the step function 
-    that is differentiable everywhere, which is a requirement for gradient-based optimization methods.
-    
-    Attributes:
-        scale_factor: A scaling factor that can be used to adjust the steepness of the 
-                      Arctangent function. Default is 2.
-    """
-    
-
-    def __init__(self, scale_factor=2):
-        self.a = scale_factor
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return (U>0).astype(jnp.float16)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), ()
-            
-        # Straight Through Estimator
-        def f_bwd(U, grad):
-            return ( (1 / (jnp.pi * (1+(jnp.pi*U*self.a/2)**2))) * grad ) 
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U) 
-    
 class Sigmoid:
     """
     This class implements the Sigmoid surrogate gradient activation function for a spiking neuron.
@@ -179,67 +239,6 @@ class SuperSpike:
         # accepts context, primal val
         def f_bwd(U, grad):
             return (grad / (1+self.k*jnp.abs(U))**2 , )
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
-    
-class AdaSpike:
-    """
-    Simplified version of SuperSpike, dropping the power from the denominator.
-    Features an increasing scale factor with linear schedule, increasing the
-    sharpness of the surrogate gradient over time.
-    """
-
-    def __init__(self,  warmup_steps, growth_rate=0.5):
-        self.k = 1
-        self.gr = growth_rate
-        
-        @jax.custom_vjp
-        def f(U, k): # primal function
-            return (U>0).astype(jnp.float16)
-        
-        # returns value, grad context
-        def f_fwd(U, k):
-            return f(U), (U, k)
-            
-        # accepts context, primal val
-        # not sure if k actually changes or it gets jit'ed and stays static..
-        def f_bwd(context, grad):
-            U, k = context
-            return (grad / (1+k*jnp.abs(U)) , )
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        self.k += self.growth_rate
-        return self.f(U, self.k)
-        
-
-class Boxcar:
-    """
-    Boxcar surrogate gradient activation function. Under construction.
-    """
-
-    def __init__(self, scale_factor=1):
-        self.k = scale_factor
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return (U>0).astype(jnp.float16)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
-            
-        # Needs fixed.
-        def f_bwd(U, grad):
-            if jnp.abs(U) <= 0.5:
-                return ( 0.5 * grad )
-            return ( 0 ) 
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f

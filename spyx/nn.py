@@ -1,45 +1,8 @@
 import jax
 import jax.numpy as jnp
 import haiku as hk
-from .actv import Heaviside
+from .activation import Heaviside
 
-
-class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
-    """
-    Leaky Integrate and Fire neuron model inspired by the implementation in
-    snnTorch:
-
-    https://snntorch.readthedocs.io/en/latest/snn.neurons_leaky.html
-    
-    """
-
-    def __init__(self, hidden_size, beta=None, threshold=1, 
-                 activation = Heaviside(),
-                 name="LIF"):
-        super().__init__(name=name)
-        self.hidden_size = hidden_size
-        self.beta = beta
-        self.threshold = threshold
-        self.act = activation
-    
-    def __call__(self, x, V):
-        
-        # numerical stability gremlin...
-        beta = self.beta
-        if not beta:
-            beta = hk.get_parameter("b", [self.hidden_size], dtype=jnp.float16,
-                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jax.nn.hard_sigmoid(beta)
-        # calculate whether spike is generated, and update membrane potential
-        spikes = self.act(V - self.threshold)
-        V = (beta*V + x - spikes*self.threshold).astype(jnp.float16)
-        
-        return spikes, V
-
-    def initial_state(self, batch_size): # figure out how to make dynamic...
-        return jnp.zeros([batch_size, self.hidden_size], dtype=jnp.float16)
-    
-    
 
 class ALIF(hk.RNNCore): # make alpha and beta learnable with an additional clamp func
     """
@@ -89,6 +52,64 @@ class ALIF(hk.RNNCore): # make alpha and beta learnable with an additional clamp
     def initial_state(self, batch_size):
         return jnp.zeros([batch_size, self.hidden_size*2], dtype=jnp.float16)
     
+
+        
+# allow for population encoding???
+class LI(hk.RNNCore):
+    """
+    Leaky-Integrate (Non-spiking) neuron model.
+    """
+
+    def __init__(self, layer_size, beta=0.8, name="LI"):
+        super().__init__(name=name)
+        self.layer_size = layer_size
+        self.beta = beta
+    
+    def __call__(self, x, Vin):
+        # calculate whether spike is generated, and update membrane potential
+        Vout = self.beta*Vin + x
+        return Vout, Vout
+    
+    def initial_state(self, batch_size):
+        return jnp.zeros([batch_size, self.layer_size], dtype=jnp.float32)
+
+
+
+class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
+    """
+    Leaky Integrate and Fire neuron model inspired by the implementation in
+    snnTorch:
+
+    https://snntorch.readthedocs.io/en/latest/snn.neurons_leaky.html
+    
+    """
+
+    def __init__(self, hidden_size, beta=None, threshold=1, 
+                 activation = Heaviside(),
+                 name="LIF"):
+        super().__init__(name=name)
+        self.hidden_size = hidden_size
+        self.beta = beta
+        self.threshold = threshold
+        self.act = activation
+    
+    def __call__(self, x, V):
+        
+        # numerical stability gremlin...
+        beta = self.beta
+        if not beta:
+            beta = hk.get_parameter("b", [self.hidden_size], dtype=jnp.float16,
+                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
+            beta = jax.nn.hard_sigmoid(beta)
+        # calculate whether spike is generated, and update membrane potential
+        spikes = self.act(V - self.threshold)
+        V = (beta*V + x - spikes*self.threshold).astype(jnp.float16)
+        
+        return spikes, V
+
+    def initial_state(self, batch_size): # figure out how to make dynamic...
+        return jnp.zeros([batch_size, self.hidden_size], dtype=jnp.float16)
+
 class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     """
     Recurrent LIF Neuron adapted from snnTorch:
@@ -124,7 +145,7 @@ class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         return jnp.zeros([batch_size, self.hidden_size], dtype=jnp.float16)
 
 
-    
+
 # Synaptic Conductance a.k.a CoBa
 class SC(hk.RNNCore): 
     """
@@ -170,19 +191,3 @@ class SC(hk.RNNCore):
     def initial_state(self, batch_size):
         return jnp.zeros([batch_size, self.hidden_size*2], dtype=jnp.float16)
     
-
-        
-# allow for population encoding???
-class LI(hk.RNNCore):
-    def __init__(self, layer_size, beta=0.8, name="LI"):
-        super().__init__(name=name)
-        self.layer_size = layer_size
-        self.beta = beta
-    
-    def __call__(self, x, Vin):
-        # calculate whether spike is generated, and update membrane potential
-        Vout = self.beta*Vin + x
-        return Vout, Vout
-    
-    def initial_state(self, batch_size):
-        return jnp.zeros([batch_size, self.layer_size], dtype=jnp.float32)
