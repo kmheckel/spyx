@@ -265,6 +265,8 @@ class SHD_loader():
     # speaker being retained for the validation set.
     def train_reset(self):
         train_indices, val_indices = next(self.logo)
+        self.train_len = len(train_indices)
+        self.val_len = len(val_indices)
         train_split = Subset(self.train_val_dataset, train_indices)
         val_split = Subset(self.train_val_dataset, val_indices)
         
