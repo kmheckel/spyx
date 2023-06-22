@@ -6,6 +6,9 @@ from sklearn.model_selection import train_test_split
 from collections import namedtuple
 from itertools import cycle
 
+import numpy as np
+import jax.numpy as jnp
+
 
 State = namedtuple("State", "obs labels")
 
