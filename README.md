@@ -3,7 +3,7 @@
 
 Welcome to Spyx, a library for Spiking Neural Networks in JAX!
 
-![alt text](spyx.png "Title")
+![README Art](https://github.com/kmheckel/spyx/blob/main/spyx.png "Title")
 
 Spyx is a compact library built on top of DeepMind's Haiku library, enabling easy construction of spiking neural network models. 
 
