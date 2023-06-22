@@ -235,7 +235,7 @@ class SHD_loader():
         test_dataset = datasets.SHD("./data", train=False, transform=transform)
         
         logo = LeaveOneGroupOut()
-        self.logo = logo.split([*range(len(self.train_val_dataset))], groups=self.train_val_dataset.speaker)
+        self.logo = cycle(logo.split([*range(len(self.train_val_dataset))], groups=self.train_val_dataset.speaker))
         train_indices, val_indices = next(self.logo)
         
         
