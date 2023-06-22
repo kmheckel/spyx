@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import haiku as hk
 
+# eventually, it would be good to make an abstract class that all activations below extend...
 
 class ActivityRegularization(hk.Module):
     """

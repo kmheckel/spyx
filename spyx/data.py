@@ -3,6 +3,7 @@ from tonic import datasets, transforms
 import torchvision as tv
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import LeaveOneGroupOut
 from collections import namedtuple
 from itertools import cycle
 
@@ -188,6 +189,7 @@ class NMNIST_loader():
 
 ###########################################################
 
+# should push all of the transforms into here and make a single bin/frame func
 class SHD2Raster():
     """ Tool for rastering SHD samples into frames."""
 
@@ -211,14 +213,12 @@ class SHD_loader():
 
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=128, val_size=0.3):        
+    def __init__(self, batch_size=128, sample_T = 100):        
         shd_timestep = 1e-6
         shd_channels = 700
         net_channels = 128
         net_dt = 10e-3
-        sample_T = 100
            
-        self.val_size = val_size
         self.batch_size = batch_size
         self.obs_shape = tuple([net_channels,])
         self.act_shape = tuple([20,])
@@ -231,30 +231,25 @@ class SHD_loader():
             SHD2Raster(net_channels, sample_T = sample_T)
         ])
         
-        train_val_dataset = datasets.SHD("./data", train=True, transform=transform)
+        self.train_val_dataset = datasets.SHD("./data", train=True, transform=transform)
         test_dataset = datasets.SHD("./data", train=False, transform=transform)
         
-        # create train/validation split here...
-        # generate indices: instead of the actual data we pass in integers instead
-        train_indices, val_indices = train_test_split(
-            range(len(train_val_dataset)),
-            test_size=self.val_size,
-            random_state=0,
-            shuffle=True # This really should be set externally!!!!!
-        )
+        logo = LeaveOneGroupOut()
+        self.logo = logo.split([*range(len(self.train_val_dataset))], groups=self.train_val_dataset.speaker)
+        train_indices, val_indices = next(self.logo)
         
         
-        train_split = Subset(train_val_dataset, train_indices)
+        train_split = Subset(self.train_val_dataset, train_indices)
         self.train_len = len(train_indices)
         
-        val_split = Subset(train_val_dataset, val_indices)
+        val_split = Subset(self.train_val_dataset, val_indices)
         self.val_len = len(val_indices)
                         
         self.test_len = len(test_dataset)
         
         # change this to just dl and add if statement based on test=T/F
         self._train_dl = DataLoader(train_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
         self.train_dl = iter(self._train_dl)
         
         self._val_dl = DataLoader(val_split, batch_size=self.batch_size,
@@ -266,7 +261,19 @@ class SHD_loader():
         self.test_dl = iter(self._test_dl)
         
         
+    # This class implements Leave One Group Out, so that each epoch is performed with one
+    # speaker being retained for the validation set.
     def train_reset(self):
+        train_indices, val_indices = next(self.logo)
+        train_split = Subset(self.train_val_dataset, train_indices)
+        val_split = Subset(self.train_val_dataset, val_indices)
+        
+        self._train_dl = DataLoader(train_split, batch_size=self.batch_size,
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
+        self._val_dl = DataLoader(val_split, batch_size=self.batch_size,
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False)
+        
+        self.val_dl = iter(self._val_dl)
         self.train_dl = iter(self._train_dl)
         
     def train_step(self):
