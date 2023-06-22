@@ -12,6 +12,8 @@ State = namedtuple("State", "obs labels")
 
 
 class SHD2Raster():
+    """ Tool for rastering SHD samples into frames."""
+
     def __init__(self, encoding_dim, sample_T = 100):
         self.encoding_dim = encoding_dim
         self.sample_T = sample_T
@@ -26,6 +28,11 @@ class SHD2Raster():
     
 
 class shd_loader():
+    """
+    Dataloading wrapper for the Spiking Heidelberg Dataset.
+    """
+
+
     # Change this to allow a config dictionary of 
     def __init__(self, batch_size=128, val_size=0.3):        
         shd_timestep = 1e-6
@@ -111,12 +118,19 @@ class shd_loader():
     # Here we scale the max probability to .8 so that we don't have inputs that are continually spiking.
 # might need to find a home for this in the lib.
 def rate_code(data, steps, key, max_r=0.8):
+    """Unrolls input data along axis 1 and converts to rate encoded spikes."""
+
     data = jnp.array(data, dtype=jnp.float16)
     unrolled_data = jnp.repeat(data, steps, axis=1)
     return jax.random.bernoulli(key, unrolled_data*max_r).astype(jnp.int8)
 
 
 class MNIST_loader():
+    """
+    Dataloader for the MNIST dataset, right now it is rate encoded.
+    
+    """
+
     # Change this to allow a config dictionary of 
     def __init__(self, batch_size=32, val_size=0.3, key=0, download_dir='./MNIST'):
            
@@ -203,6 +217,10 @@ class MNIST_loader():
 
 
 class NMNIST_loader():
+    """
+    Dataloading wrapper for the Neuromorphic MNIST dataset.
+    """
+
     # Change this to allow a config dictionary of 
     def __init__(self, batch_size=32, val_size=0.3, download_dir='./NMNIST'):
         sample_T = 64

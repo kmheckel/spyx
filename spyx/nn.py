@@ -5,6 +5,14 @@ import haiku as hk
 
 
 class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
+    """
+    Leaky Integrate and Fire neuron model inspired by the implementation in
+    snnTorch:
+
+    https://snntorch.readthedocs.io/en/latest/snn.neurons_leaky.html
+    
+    """
+
     def __init__(self, hidden_size, beta=None, threshold=1, 
                  activation = Heaviside(),
                  name="LIF"):
@@ -34,6 +42,16 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     
 
 class ALIF(hk.RNNCore): # make alpha and beta learnable with an additional clamp func
+    """
+    Adaptive LIF Neuron based on the model used in LSNNs:
+
+    Bellec, G., Salaj, D., Subramoney, A., Legenstein, R. & Maass, W. 
+    Long short- term memory and learning-to-learn in networks of spiking neurons. 
+    32nd Conference on Neural Information Processing Systems (2018).
+    
+    """
+
+
     def __init__(self, hidden_size, beta=None, gamma=None, threshold=1,
                  activation = Heaviside(),
                  name="ALIF"):
@@ -72,6 +90,12 @@ class ALIF(hk.RNNCore): # make alpha and beta learnable with an additional clamp
         return jnp.zeros([batch_size, self.hidden_size*2], dtype=jnp.float16)
     
 class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
+    """
+    Recurrent LIF Neuron adapted from snnTorch:
+
+    https://snntorch.readthedocs.io/en/latest/snn.neurons_rleaky.html
+    """
+
     def __init__(self, hidden_size, beta=None, threshold=1,
                  activation = Heaviside(),
                  name="RLIF"):
@@ -103,6 +127,14 @@ class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     
 # Synaptic Conductance a.k.a CoBa
 class SC(hk.RNNCore): 
+    """
+    Conductance based neuron modeling synaptic conductance.
+
+    Adapted from snnTorch:
+
+    https://snntorch.readthedocs.io/en/latest/snn.neurons_synaptic.html
+    """
+
     def __init__(self, hidden_size, alpha=None, beta=None, threshold=1, 
                  activation = Heaviside(),
                  name="SC"):

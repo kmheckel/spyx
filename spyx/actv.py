@@ -1,4 +1,8 @@
 class ActivityRegularization(hk.Module):
+    """
+    Add state to the SNN to track the average number of spikes emitted per neuron per batch.
+    """
+
     def __init__(self, name="ActReg"):
         super().__init__(name=name)
         
@@ -180,6 +184,12 @@ class SuperSpike:
         return self.f(U)
     
 class AdaSpike:
+    """
+    Simplified version of SuperSpike, dropping the power from the denominator.
+    Features an increasing scale factor with linear schedule, increasing the
+    sharpness of the surrogate gradient over time.
+    """
+
     def __init__(self,  warmup_steps, growth_rate=0.5):
         self.k = 1
         self.gr = growth_rate
@@ -196,7 +206,7 @@ class AdaSpike:
         # not sure if k actually changes or it gets jit'ed and stays static..
         def f_bwd(context, grad):
             U, k = context
-            return ((1 / (1+k*jnp.abs(U))) * grad, )
+            return (grad / (1+k*jnp.abs(U)) , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
@@ -205,7 +215,12 @@ class AdaSpike:
         self.k += self.growth_rate
         return self.f(U, self.k)
         
+
 class Boxcar:
+    """
+    Boxcar surrogate gradient activation function. Under construction.
+    """
+
     def __init__(self, scale_factor=1):
         self.k = scale_factor
         
