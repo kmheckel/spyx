@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import haiku as hk
-
+from .actv import Heaviside
 
 
 class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
