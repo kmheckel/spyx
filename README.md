@@ -1,5 +1,5 @@
 🏗️ 🚧 This library is under construction!🚧
-
+===========================================
 
 Welcome to Spyx, a library for Spiking Neural Networks in JAX!
 
