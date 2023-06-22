@@ -7,6 +7,7 @@ from collections import namedtuple
 from itertools import cycle
 
 import numpy as np
+import jax
 import jax.numpy as jnp
 
 

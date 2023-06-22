@@ -1,19 +1,10 @@
-import unittest
+import pytest
 
 #from spyx import
 
 
-
-class neuron_model_tests(unittest.TestCase):
-    """
-    Needs to be built.
-    
-    Train a number of simple/shallow networks on the rate-MNIST
-    to verify the networks actually build.
-    """
-
+def test_net():
     pass
-
 
 
 
