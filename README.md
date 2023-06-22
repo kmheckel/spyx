@@ -1,4 +1,4 @@
-🏗️🚧 This library is under construction with high probability of breaking changes and major restructuring over the next few months!🚧
+🏗️🚧 This library is under construction!🚧
 
 
 Welcome to Spyx, a library for Spiking Neural Networks in JAX!

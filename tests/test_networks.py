@@ -4,7 +4,8 @@ import pytest
 
 
 def test_net():
-    pass
+    
+    assert 1 == 1
 
 
 
@@ -16,5 +17,3 @@ def test_net():
 
 
 
-if __name__ == '__main__':
-    unittest.main()

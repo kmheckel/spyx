@@ -79,8 +79,6 @@ class Arctan:
     """
     
 
-
-
     def __init__(self, scale_factor=2):
         self.a = scale_factor
         
@@ -94,7 +92,7 @@ class Arctan:
             
         # Straight Through Estimator
         def f_bwd(U, grad):
-            return ( (1 / (jnp.pi * (1+(jnp.pi*U*a/2)**2))) * grad ) 
+            return ( (1 / (jnp.pi * (1+(jnp.pi*U*self.a/2)**2))) * grad ) 
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
