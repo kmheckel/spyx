@@ -1,3 +1,8 @@
+import jax
+import jax.numpy as jnp
+import haiku as hk
+
+
 class ActivityRegularization(hk.Module):
     """
     Add state to the SNN to track the average number of spikes emitted per neuron per batch.
