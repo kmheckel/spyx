@@ -54,13 +54,13 @@ def regularized_xentropy(traces, targets, avg_spike_counts, time_steps, r):
     Weighted loss of integral crossentropy plus inverse spike rate regularization.
     """
 
-    xe = integral_crossentropy(traces, targets)
+    xe = integral_xentropy(traces, targets)
     reg = SRR_INV(avg_spike_counts, time_steps)
     return xe + r*reg
 
 # needs fixing.
 @jax.jit
-def exweight_integral_crossentropy(spikes, targets):
+def exponential_integral_xentropy(spikes, targets):
     """
     Integral crossentropy with exponential weighting to promote pushing voltage
     deflections and therefore spikes to earlier in the network rollout.
