@@ -3,27 +3,12 @@ spyx.loss
 
 .. currentmodule:: spyx.loss
 
-.. autoclass:: integral_crossentropy
-    :members:
-    :undoc-members:
-    :show-inheritance:
+.. autofunc:: integral_xentropy
 
-.. autoclass:: integral_accuracy
-    :members:
-    :undoc-members:
-    :show-inheritance:
+.. autofunc:: integral_accuracy
 
-.. autoclass:: regularized_xentropy
-    :members:
-    :undoc-members:
-    :show-inheritance:
+.. autofunc:: regularized_xentropy
 
-.. autoclass:: SRR_MSE
-    :members:
-    :undoc-members:
-    :show-inheritance:
+.. autofunc:: SRR_MSE
 
-.. autoclass:: SRR_INV
-    :members:
-    :undoc-members:
-    :show-inheritance:
+.. autofunc:: SRR_INV

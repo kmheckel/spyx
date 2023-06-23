@@ -58,6 +58,11 @@ class ALIF(hk.RNNCore): # make alpha and beta learnable with an additional clamp
 class LI(hk.RNNCore):
     """
     Leaky-Integrate (Non-spiking) neuron model.
+
+    Attributes:
+        layer_size: Number of output neurons from the previous linear layer.
+
+        beta: Decay rate on membrane potential (voltage). Set uniformly across the layer.
     """
 
     def __init__(self, layer_size, beta=0.8, name="LI"):
@@ -82,6 +87,13 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
 
     https://snntorch.readthedocs.io/en/latest/snn.neurons_leaky.html
     
+
+    Attributes:
+        hidden_size: Size of preceding layer's outputs
+        beta: decay rate. Set to float in range (0,1] for uniform decay across layer, otherwise it will be a normal
+            distribution centered on 0.5 with stddev of 0.25
+        threshold: threshold for reset. Defaults to 1.
+        activation: spyx.activation function, default is Heaviside with Straight-Through-Estimation.
     """
 
     def __init__(self, hidden_size, beta=None, threshold=1, 
@@ -128,7 +140,7 @@ class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     
     def __call__(self, x, V):
         # calculate whether spike is generated, and update membrane potential
-        recurrent = hk.get_parameter("w", [self.hidden_size])
+        recurrent = hk.get_parameter("w", [self.hidden_size], init=hk.initializers.TruncatedNormal())
         
         beta = self.beta
         if not beta:

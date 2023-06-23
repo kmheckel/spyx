@@ -2,6 +2,8 @@ import jax
 import jax.numpy as jnp
 import optax
 
+# need to make these consistent...
+
 @jax.jit
 def SRR_MSE(avg_spike_counts, target_count):
     """Spike rate regularization based on mean squared error from target rate."""
@@ -34,7 +36,7 @@ def integral_accuracy(traces, targets):
     return jnp.sum(preds == targets) / traces.shape[0], preds
 
 @jax.jit
-def integral_crossentropy(traces, targets):
+def integral_xentropy(traces, targets):
     """
     Calculate the crossentropy between the integral of membrane potentials.
     right now has a fixed value for label smoothing to discourage silencing 

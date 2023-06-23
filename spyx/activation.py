@@ -4,9 +4,13 @@ import haiku as hk
 
 # eventually, it would be good to make an abstract class that all activations below extend...
 
+# should this be added to nn?
 class ActivityRegularization(hk.Module):
     """
     Add state to the SNN to track the average number of spikes emitted per neuron per batch.
+
+    Adding this to a network requires using the Haiku transform_with_state transform, which will also return an initial regularization state vector.
+    This blank initial vector can be reused and is provided as the second arg to the SNN's apply function. 
     """
 
     def __init__(self, name="ActReg"):
@@ -23,9 +27,14 @@ class AdaSpike:
     Simplified version of SuperSpike, dropping the power from the denominator.
     Features an increasing scale factor with linear schedule, increasing the
     sharpness of the surrogate gradient over time.
+
+    $$\frac{\delta S}{\delta U} = \frac{1}{1+k|U|}$$
+
+    Attributes:
+        growth_rate: The amount the scale factor k is incremented by after each batch.
     """
 
-    def __init__(self,  warmup_steps, growth_rate=0.5):
+    def __init__(self, growth_rate=0.5):
         self.k = 1
         self.gr = growth_rate
         
