@@ -78,6 +78,34 @@ class LI(hk.RNNCore):
     def initial_state(self, batch_size):
         return jnp.zeros([batch_size, self.layer_size], dtype=jnp.float32)
 
+class IF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
+    """
+    Integrate and Fire neuron model 
+    
+
+    Attributes:
+        hidden_size: Size of preceding layer's outputs
+        threshold: threshold for reset. Defaults to 1.
+        activation: spyx.activation function, default is Heaviside with Straight-Through-Estimation.
+    """
+
+    def __init__(self, hidden_size, threshold=1, 
+                 activation = Heaviside(),
+                 name="LIF"):
+        super().__init__(name=name)
+        self.hidden_size = hidden_size
+        self.threshold = threshold
+        self.act = activation
+    
+    def __call__(self, x, V):
+        # calculate whether spike is generated, and update membrane potential
+        spikes = self.act(V - self.threshold)
+        V = (V + x - spikes*self.threshold).astype(jnp.float16)
+        
+        return spikes, V
+
+    def initial_state(self, batch_size): # figure out how to make dynamic...
+        return jnp.zeros([batch_size, self.hidden_size], dtype=jnp.float16)
 
 
 class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
@@ -122,6 +150,7 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     def initial_state(self, batch_size): # figure out how to make dynamic...
         return jnp.zeros([batch_size, self.hidden_size], dtype=jnp.float16)
 
+
 class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     """
     Recurrent LIF Neuron adapted from snnTorch:
@@ -156,9 +185,7 @@ class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     def initial_state(self, batch_size):
         return jnp.zeros([batch_size, self.hidden_size], dtype=jnp.float16)
 
-
-
-# Synaptic Conductance a.k.a CoBa
+# Current Based (CuBa)
 class SC(hk.RNNCore): 
     """
     Conductance based neuron modeling synaptic conductance.

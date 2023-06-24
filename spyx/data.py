@@ -209,6 +209,8 @@ class SHD2Raster():
 class SHD_loader():
     """
     Dataloading wrapper for the Spiking Heidelberg Dataset.
+
+    https://zenkelab.org/resources/spiking-heidelberg-datasets-shd/
     """
 
 
