@@ -31,11 +31,11 @@ class MNIST_loader():
     """
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=32, val_size=0.3, key=0, download_dir='./MNIST'):
+    def __init__(self, time_steps=64, max_rate = 0.5, batch_size=32, val_size=0.3, key=0, download_dir='./MNIST'):
            
         self.key = jax.random.PRNGKey(key)
-        self.sample_T = 64
-        self.spike_rate = 0.7
+        self.sample_T = time_steps
+        self.max_rate = max_rate
         self.val_size = val_size
         self.batch_size = batch_size
         self.obs_shape = (28,28)
@@ -87,7 +87,7 @@ class MNIST_loader():
     def train_step(self):
         batch_data, batch_labels = next(self.train_dl)
         key, self.key = jax.random.split(self.key)
-        spike_data = jnp.expand_dims(rate_code(batch_data, self.sample_T, key), -1)
+        spike_data = jnp.expand_dims(rate_code(batch_data, self.sample_T, key, self.max_rate), -1)
         return State(obs=jnp.array(spike_data, dtype=jnp.int8), # perform cast to jnp.int8 here
                      labels=jnp.array(batch_labels))
     
@@ -97,7 +97,7 @@ class MNIST_loader():
     def val_step(self):
         batch_data, batch_labels = next(self.val_dl)
         key, self.key = jax.random.split(self.key)
-        spike_data = jnp.expand_dims(rate_code(batch_data, self.sample_T, key), -1)
+        spike_data = jnp.expand_dims(rate_code(batch_data, self.sample_T, key, self.max_rate), -1)
         return State(obs=jnp.array(spike_data, dtype=jnp.int8), # perform cast to jnp.int8 here
                      labels=jnp.array(batch_labels))
         
@@ -107,7 +107,7 @@ class MNIST_loader():
     def test_step(self):
         batch_data, batch_labels = next(self.test_dl)
         key, self.key = jax.random.split(self.key)
-        spike_data = jnp.expand_dims(rate_code(batch_data, self.sample_T, key), -1)
+        spike_data = jnp.expand_dims(rate_code(batch_data, self.sample_T, key, self.max_rate), -1)
         return State(obs=jnp.array(spike_data, dtype=jnp.int8), # perform cast to jnp.int8 here
                      labels=jnp.array(batch_labels))
 
@@ -193,9 +193,10 @@ class NMNIST_loader():
 class SHD2Raster():
     """ Tool for rastering SHD samples into frames."""
 
-    def __init__(self, encoding_dim, sample_T = 100):
+    def __init__(self, encoding_dim, sample_T = 100, binarize=True):
         self.encoding_dim = encoding_dim
         self.sample_T = sample_T
+        self.binarize = binarize
         
     def __call__(self, events):
         # tensor has dimensions (time_steps, encoding_dim)
@@ -203,7 +204,9 @@ class SHD2Raster():
         np.add.at(tensor, (events["t"], events["x"]), 1)
         #return tensor[:self.sample_T,:]
         tensor = tensor[:self.sample_T,:]
-        return np.minimum(tensor, 1)
+        if self.binarize:
+            tensor = np.minimum(tensor, 1)
+        return tensor
     
 
 class SHD_loader():
@@ -215,10 +218,10 @@ class SHD_loader():
 
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=128, sample_T = 100):        
+    def __init__(self, batch_size=128, sample_T = 100, channels=128, binarize=True):        
         shd_timestep = 1e-6
         shd_channels = 700
-        net_channels = 128
+        net_channels = channels
         net_dt = 10e-3
            
         self.batch_size = batch_size
@@ -230,7 +233,7 @@ class SHD_loader():
             time_factor=shd_timestep / net_dt,
             spatial_factor=net_channels / shd_channels
             ),
-            SHD2Raster(net_channels, sample_T = sample_T)
+            SHD2Raster(net_channels, sample_T = sample_T, binarize=binarize)
         ])
         
         self.train_val_dataset = datasets.SHD("./data", train=True, transform=transform)

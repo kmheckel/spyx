@@ -51,10 +51,7 @@ class ALIF(hk.RNNCore): # make alpha and beta learnable with an additional clamp
     
     def initial_state(self, batch_size):
         return jnp.zeros([batch_size, self.hidden_size*2], dtype=jnp.float16)
-    
-
-        
-# allow for population encoding???
+         
 class LI(hk.RNNCore):
     """
     Leaky-Integrate (Non-spiking) neuron model.
@@ -141,6 +138,7 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
             beta = hk.get_parameter("b", [self.hidden_size], dtype=jnp.float16,
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jax.nn.hard_sigmoid(beta)
+            
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
         V = (beta*V + x - spikes*self.threshold).astype(jnp.float16)

@@ -5,11 +5,26 @@ import optax
 # need to make these consistent...
 
 @jax.jit
-def mse_spike_count_reg(avg_spike_counts, target_count):
+def l2_spike_count_reg(avg_spike_counts, target_count):
     """Spike rate regularization based on mean squared error from target rate."""
 
     flat = jnp.concatenate(jax.tree_util.tree_flatten(avg_spike_counts)[0])
     return jnp.sum(optax.l2_loss(flat, jnp.array([target_count]*flat.shape[0])))
+
+@jax.jit
+def clipped_l2_spike_count_reg(avg_spike_counts, target_count, radius):
+    """
+    Spike rate regularization based on clipped mean squared error from target spike count.
+    
+    Attributes:
+        avg_spike_counts: array of average spikes per neuron over a batch.
+        target_count: the target number of spikes to be emitted by a neuron
+        radius: the tolerance +/- r from the target count where loss is clipped to zero
+    
+    """
+
+    flat = jnp.concatenate(jax.tree_util.tree_flatten(avg_spike_counts)[0])
+    return jnp.sum(jnp.maximum(0,optax.l2_loss(flat, jnp.array([target_count]*flat.shape[0]))/radius - radius))
 
 @jax.jit
 def inverse_spike_count_reg(avg_spike_counts, time_len):
