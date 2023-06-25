@@ -56,7 +56,7 @@ class AdaSpike:
         self.f = f
         
     def __call__(self, U):
-        self.k += self.growth_rate
+        self.k += self.gr
         return self.f(U, self.k)
 
 # Surrogate functions
@@ -80,6 +80,7 @@ class Arctan:
 
     def __init__(self, scale_factor=2):
         self.k = scale_factor
+        self.pi = jnp.array(jnp.pi)
         
         @jax.custom_vjp
         def f(U): # primal function
@@ -91,7 +92,7 @@ class Arctan:
             
         # Straight Through Estimator
         def f_bwd(U, grad):
-            return ( (1 / (jnp.pi * (1+(jnp.pi*U*self.k/2)**2))) * grad ) 
+            return ( (1 / (self.pi * (1+(self.pi*U*self.k/2)**2))) * grad, ) 
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
@@ -117,9 +118,7 @@ class Boxcar:
             
         # Needs fixed.
         def f_bwd(U, grad):
-            if jnp.abs(U) <= 0.5:
-                return ( 0.5 * grad )
-            return ( 0 ) 
+            return ( (jnp.abs(U) <= 0.5).astype(jnp.float16) * 0.5 * grad, )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
@@ -161,7 +160,7 @@ class Heaviside:
             
         # Straight Through Estimator
         def f_bwd(U, grad):
-            return ( grad*U ) 
+            return ( grad*U, ) 
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
@@ -202,7 +201,7 @@ class Sigmoid:
             
         # accepts context, primal val
         def f_bwd(U, grad): # is spk needed at all???
-            return ((self.k*jnp.exp(-self.k*U) / (jnp.exp(-self.k*U)+1)**2) * grad)
+            return ((self.k*jnp.exp(-self.k*U) / (jnp.exp(-self.k*U)+1)**2) * grad, )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
