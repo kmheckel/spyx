@@ -44,7 +44,7 @@ class AdaSpike:
         
         # returns value, grad context
         def f_fwd(U, k):
-            return f(U), (U, k)
+            return f(U, k), (U, k)
             
         # accepts context, primal val
         # not sure if k actually changes or it gets jit'ed and stays static..
