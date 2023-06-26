@@ -50,7 +50,7 @@ class AdaSpike:
         # not sure if k actually changes or it gets jit'ed and stays static..
         def f_bwd(context, grad):
             U, k = context
-            return (grad / (1+k*jnp.abs(U)) , )
+            return (grad / (1+k*jnp.abs(U)) , 0)
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
@@ -92,7 +92,7 @@ class Arctan:
             
         # Straight Through Estimator
         def f_bwd(U, grad):
-            return ( (1 / (self.pi * (1+(self.pi*U*self.k/2)**2))) * grad, ) 
+            return ( (grad / (self.pi * (1+(self.pi*U*self.k/2)**2))), ) 
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
