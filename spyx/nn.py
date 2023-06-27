@@ -33,11 +33,11 @@ class ALIF(hk.RNNCore):
         beta = self.beta
         # threshold adaptation
         if not gamma:
-            gamma = hk.get_parameter("w", [self.hidden_size], 
+            gamma = hk.get_parameter("w", self.hidden_shape, 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
             gamma = jax.nn.hard_sigmoid(gamma)
         if not beta:
-            beta = hk.get_parameter("b", [self.hidden_size], 
+            beta = hk.get_parameter("b", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jax.nn.hard_sigmoid(beta)
         # calculate whether spike is generated, and update membrane potential
@@ -51,7 +51,7 @@ class ALIF(hk.RNNCore):
     
     # not sure if this is borked.
     def initial_state(self, batch_size):
-        return jnp.zeros((batch_size,) + self.hidden_size*2, dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + self.hidden_shape*2, dtype=jnp.float16)
          
 class LI(hk.RNNCore):
     """
@@ -136,7 +136,7 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         # numerical stability gremlin...
         beta = self.beta
         if not beta:
-            beta = hk.get_parameter("b", [self.hidden_size], dtype=jnp.float16,
+            beta = hk.get_parameter("b", self.hidden_shape, dtype=jnp.float16,
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jax.nn.hard_sigmoid(beta)
             
@@ -168,11 +168,11 @@ class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     
     def __call__(self, x, V):
         # calculate whether spike is generated, and update membrane potential
-        recurrent = hk.get_parameter("w", [self.hidden_size], init=hk.initializers.TruncatedNormal())
+        recurrent = hk.get_parameter("w", self.hidden_shape, init=hk.initializers.TruncatedNormal())
         
         beta = self.beta
         if not beta:
-            beta = hk.get_parameter("b", [self.hidden_size], 
+            beta = hk.get_parameter("b", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jax.nn.hard_sigmoid(beta)
         
@@ -211,11 +211,11 @@ class SC(hk.RNNCore):
         beta = self.beta
         # threshold adaptation
         if not alpha:
-            alpha = hk.get_parameter("w", [self.hidden_size], 
+            alpha = hk.get_parameter("w", self.hidden_shape, 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
             alpha = jax.nn.hard_sigmoid(alpha)
         if not beta:
-            beta = hk.get_parameter("b", [self.hidden_size], 
+            beta = hk.get_parameter("b", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jax.nn.hard_sigmoid(beta)
         # calculate whether spike is generated, and update membrane potential
@@ -228,5 +228,5 @@ class SC(hk.RNNCore):
     
     # this is probably borked with the shaping now.
     def initial_state(self, batch_size):
-        return jnp.zeros((batch_size,) + self.hidden_size*2, dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + self.hidden_shape*2, dtype=jnp.float16)
     
