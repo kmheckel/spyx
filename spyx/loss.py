@@ -52,7 +52,7 @@ def integral_accuracy(traces, targets):
 
 # should expose the smoothing rate and allow for users to partial it away or possibly schedule it...
 @jax.jit
-def integral_crossentropy(traces, targets, encode_labels=True, smoothing=0.3):
+def integral_crossentropy(traces, targets, smoothing=0.3):
     """
     Calculate the crossentropy between the integral of membrane potentials.
     Allows for label smoothing to discourage silencing 
@@ -65,9 +65,7 @@ def integral_crossentropy(traces, targets, encode_labels=True, smoothing=0.3):
     """
 
     logits = jnp.sum(traces, axis=-2) # time axis.
-    if encode_labels:
-        targets = jax.nn.one_hot(targets, logits.shape[-1])
-    labels = optax.smooth_labels(targets, smoothing)
+    labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
     return optax.softmax_cross_entropy(logits, labels).mean() #change to mean
 
 
