@@ -3,7 +3,7 @@ from tonic import datasets, transforms
 import torchvision as tv
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import LeaveOneGroupOut
+from sklearn.model_selection import GroupKFold
 from collections import namedtuple
 from itertools import cycle
 
@@ -13,6 +13,35 @@ import jax.numpy as jnp
 
 
 State = namedtuple("State", "obs labels")
+
+
+class shift_augment:
+    """
+        Shift data ugmentation tool. Rolls data along specified axes randomly up to a certain amount.
+    """
+
+    def __init__(self, max_shift=10, axes=(-1,), key=0):
+        self.rng = jax.random.PRNGKey(key)
+        self.max_shift = max_shift
+        self.axes = axes
+
+        @jax.jit
+        def _shift(data, rng):
+            rng, shift_rng = jax.random.split(rng)
+            shift = jax.random.randint(shift_rng, (len(self.axes),), -self.max_shift, self.max_shift)
+            return jnp.roll(data, shift, self.axes), rng
+
+        self._shift = _shift
+
+
+    def __call__(self, data):
+        shifted, self.rng = self._shift(data, self.rng)
+        return shifted
+
+
+
+
+
 
 # Here we scale the max probability to .8 so that we don't have inputs that are continually spiking.
 # might need to find a home for this in the lib.
@@ -218,7 +247,7 @@ class SHD_loader():
 
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=128, sample_T = 100, channels=128, binarize=True):        
+    def __init__(self, batch_size=128, sample_T = 100, channels=128, holdout=1, binarize=True):        
         shd_timestep = 1e-6
         shd_channels = 700
         net_channels = channels
@@ -239,8 +268,8 @@ class SHD_loader():
         self.train_val_dataset = datasets.SHD("./data", train=True, transform=transform)
         test_dataset = datasets.SHD("./data", train=False, transform=transform)
         
-        logo = LeaveOneGroupOut()
-        self.logo = cycle(logo.split([*range(len(self.train_val_dataset))], groups=self.train_val_dataset.speaker))
+        cross_validator = GroupKFold(n_splits=holdout)
+        self.cross_validator = cycle(cross_validator.split([*range(len(self.train_val_dataset))], groups=self.train_val_dataset.speaker))
         train_indices, val_indices = next(self.logo)
         
         
@@ -258,7 +287,7 @@ class SHD_loader():
         self.train_dl = iter(self._train_dl)
         
         self._val_dl = DataLoader(val_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
         self.val_dl = iter(self._val_dl) 
         
         self._test_dl = DataLoader(test_dataset, batch_size=self.batch_size,
@@ -269,7 +298,7 @@ class SHD_loader():
     # This class implements Leave One Group Out, so that each epoch is performed with one
     # speaker being retained for the validation set.
     def train_reset(self):
-        train_indices, val_indices = next(self.logo)
+        train_indices, val_indices = next(self.cross_validator)
         self.train_len = len(train_indices)
         self.val_len = len(val_indices)
         train_split = Subset(self.train_val_dataset, train_indices)
@@ -278,7 +307,7 @@ class SHD_loader():
         self._train_dl = DataLoader(train_split, batch_size=self.batch_size,
                           collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
         self._val_dl = DataLoader(val_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
         
         self.val_dl = iter(self._val_dl)
         self.train_dl = iter(self._train_dl)
