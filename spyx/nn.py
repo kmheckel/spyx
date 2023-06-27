@@ -4,7 +4,7 @@ import haiku as hk
 from .activation import Heaviside
 
 
-class ALIF(hk.RNNCore): # make alpha and beta learnable with an additional clamp func
+class ALIF(hk.RNNCore): 
     """
     Adaptive LIF Neuron based on the model used in LSNNs:
 
@@ -15,11 +15,11 @@ class ALIF(hk.RNNCore): # make alpha and beta learnable with an additional clamp
     """
 
 
-    def __init__(self, hidden_size, beta=None, gamma=None, threshold=1,
+    def __init__(self, hidden_shape, beta=None, gamma=None, threshold=1,
                  activation = Heaviside(),
                  name="ALIF"):
         super().__init__(name=name)
-        self.hidden_size = hidden_size
+        self.hidden_shape = hidden_shape
         self.beta = beta
         self.gamma = gamma
         self.init_threshold = threshold
@@ -49,8 +49,9 @@ class ALIF(hk.RNNCore): # make alpha and beta learnable with an additional clamp
         VT = jnp.concatenate([V,T], axis=-1, dtype=jnp.float16)
         return spikes, VT
     
+    # not sure if this is borked.
     def initial_state(self, batch_size):
-        return jnp.zeros([batch_size, self.hidden_size*2], dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + self.hidden_size*2, dtype=jnp.float16)
          
 class LI(hk.RNNCore):
     """
@@ -64,7 +65,7 @@ class LI(hk.RNNCore):
 
     def __init__(self, layer_size, beta=0.8, name="LI"):
         super().__init__(name=name)
-        self.layer_size = layer_size
+        self.layer_shape = layer_shape
         self.beta = beta
     
     def __call__(self, x, Vin):
@@ -73,7 +74,7 @@ class LI(hk.RNNCore):
         return Vout, Vout
     
     def initial_state(self, batch_size):
-        return jnp.zeros([batch_size, self.layer_size], dtype=jnp.float32)
+        return jnp.zeros((batch_size,) + self.layer_size, dtype=jnp.float32)
 
 class IF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     """
@@ -86,11 +87,11 @@ class IF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         activation: spyx.activation function, default is Heaviside with Straight-Through-Estimation.
     """
 
-    def __init__(self, hidden_size, threshold=1, 
+    def __init__(self, hidden_shape, threshold=1, 
                  activation = Heaviside(),
                  name="LIF"):
         super().__init__(name=name)
-        self.hidden_size = hidden_size
+        self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.act = activation
     
@@ -102,7 +103,7 @@ class IF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         return spikes, V
 
     def initial_state(self, batch_size): # figure out how to make dynamic...
-        return jnp.zeros([batch_size, self.hidden_size], dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + self.hidden_shape, dtype=jnp.float16)
 
 
 class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
@@ -121,11 +122,11 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         activation: spyx.activation function, default is Heaviside with Straight-Through-Estimation.
     """
 
-    def __init__(self, hidden_size, beta=None, threshold=1, 
-                 activation = Heaviside(),
+    def __init__(self, hidden_shape: tuple, beta=None, threshold=1, 
+                 activation = spyx.activation.Heaviside(),
                  name="LIF"):
         super().__init__(name=name)
-        self.hidden_size = hidden_size
+        self.hidden_shape = hidden_shape
         self.beta = beta
         self.threshold = threshold
         self.act = activation
@@ -146,7 +147,7 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         return spikes, V
 
     def initial_state(self, batch_size): # figure out how to make dynamic...
-        return jnp.zeros([batch_size, self.hidden_size], dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + self.hidden_shape, dtype=jnp.float16)
 
 
 class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
@@ -156,11 +157,11 @@ class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     https://snntorch.readthedocs.io/en/latest/snn.neurons_rleaky.html
     """
 
-    def __init__(self, hidden_size, beta=None, threshold=1,
+    def __init__(self, hidden_shape, beta=None, threshold=1,
                  activation = Heaviside(),
                  name="RLIF"):
         super().__init__(name=name)
-        self.hidden_size = hidden_size
+        self.hidden_shape = hidden_shape
         self.beta = beta
         self.threshold = threshold
         self.act = activation
@@ -181,7 +182,7 @@ class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         return spikes, V
 
     def initial_state(self, batch_size):
-        return jnp.zeros([batch_size, self.hidden_size], dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + self.hidden_shape, dtype=jnp.float16)
 
 # Current Based (CuBa)
 class SC(hk.RNNCore): 
@@ -193,11 +194,11 @@ class SC(hk.RNNCore):
     https://snntorch.readthedocs.io/en/latest/snn.neurons_synaptic.html
     """
 
-    def __init__(self, hidden_size, alpha=None, beta=None, threshold=1, 
+    def __init__(self, hidden_shape, alpha=None, beta=None, threshold=1, 
                  activation = Heaviside(),
                  name="SC"):
         super().__init__(name=name)
-        self.hidden_size = hidden_size
+        self.hidden_shape = hidden_shape
         self.alpha = alpha
         self.beta = beta
         self.threshold = threshold
@@ -225,6 +226,7 @@ class SC(hk.RNNCore):
         VI = jnp.concatenate([V,I], axis=-1, dtype=jnp.float16)
         return spikes, VI
     
+    # this is probably borked with the shaping now.
     def initial_state(self, batch_size):
-        return jnp.zeros([batch_size, self.hidden_size*2], dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + self.hidden_size*2, dtype=jnp.float16)
     

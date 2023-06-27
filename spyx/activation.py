@@ -16,9 +16,10 @@ class ActivityRegularization(hk.Module):
     def __init__(self, name="ActReg"):
         super().__init__(name=name)
         
+    @jax.jit
     def __call__(self, spikes):
-        spike_count = hk.get_state("spike_count", [spikes.shape[-1]], init=jnp.zeros)
-        hk.set_state("spike_count", spike_count + jnp.mean(spikes, axis=0)) #maybe wrong????
+        spike_count = hk.get_state("spike_count", [spikes[0].size], init=jnp.zeros)
+        hk.set_state("spike_count", spike_count + jnp.ravel(jnp.mean(spikes, axis=0))) #maybe wrong????
         return spikes
 
 

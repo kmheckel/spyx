@@ -68,24 +68,3 @@ def integral_crossentropy(traces, targets, smoothing=0.3):
     labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
     return optax.softmax_cross_entropy(logits, labels).mean() #change to mean
 
-
-
-# needs fixing.
-@jax.jit
-def exp_integral_crossentropy(spikes, targets):
-    """
-    Integral crossentropy with exponential weighting to promote pushing voltage
-    deflections and therefore spikes to earlier in the network rollout.
-
-    Still under construction.
-
-    Adapted from:
-    
-    Nowotny, T., Turner, J. P., & Knight, J. C. (2022). Loss shaping enhances exact gradient learning with EventProp in Spiking Neural Networks. arXiv preprint arXiv:2212.01232.
-    """
-
-    exp = jnp.exp(-jnp.arange(0,spikes.shape[-2])/spikes.shape[-2])
-    exp = jnp.repeat(jnp.expand_dims(exp, 0).T, repeats=spikes.shape[-1], axis=1)
-    reweighted = exp * spikes
-    preds = jnp.sum(spikes, axis=-2)
-    return optax.softmax_cross_entropy(preds, jax.nn.one_hot(targets, preds.shape[-1])).mean()
