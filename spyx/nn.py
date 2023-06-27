@@ -74,7 +74,7 @@ class LI(hk.RNNCore):
         return Vout, Vout
     
     def initial_state(self, batch_size):
-        return jnp.zeros((batch_size,) + self.layer_size, dtype=jnp.float32)
+        return jnp.zeros((batch_size,) + self.layer_shape, dtype=jnp.float32)
 
 class IF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     """
