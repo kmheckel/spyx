@@ -18,7 +18,7 @@ class ActivityRegularization(hk.Module):
         
     def __call__(self, spikes):
         spike_count = hk.get_state("spike_count", [spikes.shape[-1]], init=jnp.zeros)
-        hk.set_state("spike_count", spike_count + jnp.mean(spikes, axis=0))
+        hk.set_state("spike_count", spike_count + jnp.mean(spikes, axis=0)) #maybe wrong????
         return spikes
 
 
@@ -88,7 +88,7 @@ class Arctan:
         
         # returns value, grad context
         def f_fwd(U):
-            return f(U), ()
+            return f(U), U
             
         # Straight Through Estimator
         def f_bwd(U, grad):

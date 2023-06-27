@@ -24,7 +24,7 @@ requires = (
 # This call to setup() does all the work
 setup(
     name="spyx",
-    version="0.0.12",
+    version="0.0.13",
     description="Spyx: SNNs in JAX",
     long_description=long_description,
     long_description_content_type="text/markdown",
