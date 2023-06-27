@@ -5,16 +5,16 @@ import optax
 # need to make these consistent...
 
 @jax.jit
-def l2_spike_count_reg(avg_spike_counts, target_count):
+def l2_spike_reg(avg_spike_counts, target_count):
     """Spike rate regularization based on mean squared error from target rate."""
 
     flat = jnp.concatenate(jax.tree_util.tree_flatten(avg_spike_counts)[0])
     return jnp.sum(optax.l2_loss(flat, jnp.array([target_count]*flat.shape[0])))
 
 @jax.jit
-def clipped_l2_spike_count_reg(avg_spike_counts, target_count, radius):
+def clipped_sq_err_spike_reg(avg_spike_counts, target_count, radius):
     """
-    Spike rate regularization based on clipped mean squared error from target spike count.
+    Spike rate regularization based on clipped squared error from target spike count.
     
     Attributes:
         avg_spike_counts: array of average spikes per neuron over a batch.
@@ -24,7 +24,7 @@ def clipped_l2_spike_count_reg(avg_spike_counts, target_count, radius):
     """
 
     flat = jnp.concatenate(jax.tree_util.tree_flatten(avg_spike_counts)[0])
-    return jnp.sum(jnp.maximum(0,optax.l2_loss(flat, jnp.array([target_count]*flat.shape[0]))/radius - radius))
+    return jnp.sum(jnp.maximum(0,optax.squared_error(flat, jnp.array([target_count]*flat.shape[0]))/radius - radius))
 
 @jax.jit
 def inverse_spike_count_reg(avg_spike_counts, time_len):
@@ -52,7 +52,7 @@ def integral_accuracy(traces, targets):
 
 # should expose the smoothing rate and allow for users to partial it away or possibly schedule it...
 @jax.jit
-def integral_crossentropy(traces, targets, smoothing=0.3):
+def integral_crossentropy(traces, targets, encode_labels=True, smoothing=0.3):
     """
     Calculate the crossentropy between the integral of membrane potentials.
     Allows for label smoothing to discourage silencing 
@@ -65,7 +65,9 @@ def integral_crossentropy(traces, targets, smoothing=0.3):
     """
 
     logits = jnp.sum(traces, axis=-2) # time axis.
-    labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
+    if encode_labels:
+        targets = jax.nn.one_hot(targets, logits.shape[-1])
+    labels = optax.smooth_labels(targets, smoothing)
     return optax.softmax_cross_entropy(logits, labels).mean() #change to mean
 
 
