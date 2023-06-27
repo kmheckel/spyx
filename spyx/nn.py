@@ -63,7 +63,7 @@ class LI(hk.RNNCore):
         beta: Decay rate on membrane potential (voltage). Set uniformly across the layer.
     """
 
-    def __init__(self, layer_size, beta=0.8, name="LI"):
+    def __init__(self, layer_shape, beta=0.8, name="LI"):
         super().__init__(name=name)
         self.layer_shape = layer_shape
         self.beta = beta

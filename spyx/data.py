@@ -3,7 +3,7 @@ from tonic import datasets, transforms
 import torchvision as tv
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import LeaveOneGroupOut
 from collections import namedtuple
 from itertools import cycle
 
@@ -247,7 +247,7 @@ class SHD_loader():
 
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=128, sample_T = 100, channels=128, holdout=1, binarize=True):        
+    def __init__(self, batch_size=128, sample_T = 100, channels=128, kfold=10, binarize=True):        
         shd_timestep = 1e-6
         shd_channels = 700
         net_channels = channels
@@ -268,9 +268,9 @@ class SHD_loader():
         self.train_val_dataset = datasets.SHD("./data", train=True, transform=transform)
         test_dataset = datasets.SHD("./data", train=False, transform=transform)
         
-        cross_validator = GroupKFold(n_splits=10-holdout)
-        self.cross_validator = cycle(cross_validator.split([*range(len(self.train_val_dataset))], groups=self.train_val_dataset.speaker))
-        train_indices, val_indices = next(self.cross_validator)
+        logo = LeaveOneGroupOut()
+        self.logo = cycle(logo.split([*range(len(self.train_val_dataset))], groups=self.train_val_dataset.speaker))
+        train_indices, val_indices = next(self.logo)
         
         
         train_split = Subset(self.train_val_dataset, train_indices)
@@ -298,7 +298,7 @@ class SHD_loader():
     # This class implements Leave One Group Out, so that each epoch is performed with one
     # speaker being retained for the validation set.
     def train_reset(self):
-        train_indices, val_indices = next(self.cross_validator)
+        train_indices, val_indices = next(self.logo)
         self.train_len = len(train_indices)
         self.val_len = len(val_indices)
         train_split = Subset(self.train_val_dataset, train_indices)
