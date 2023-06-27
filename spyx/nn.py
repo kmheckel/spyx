@@ -123,7 +123,7 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     """
 
     def __init__(self, hidden_shape: tuple, beta=None, threshold=1, 
-                 activation = spyx.activation.Heaviside(),
+                 activation = Heaviside(),
                  name="LIF"):
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
