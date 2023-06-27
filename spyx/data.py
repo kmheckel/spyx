@@ -268,9 +268,9 @@ class SHD_loader():
         self.train_val_dataset = datasets.SHD("./data", train=True, transform=transform)
         test_dataset = datasets.SHD("./data", train=False, transform=transform)
         
-        cross_validator = GroupKFold(n_splits=holdout)
+        cross_validator = GroupKFold(n_splits=10-holdout)
         self.cross_validator = cycle(cross_validator.split([*range(len(self.train_val_dataset))], groups=self.train_val_dataset.speaker))
-        train_indices, val_indices = next(self.logo)
+        train_indices, val_indices = next(self.cross_validator)
         
         
         train_split = Subset(self.train_val_dataset, train_indices)
