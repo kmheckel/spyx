@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
+from jax import tree_util as tree
 # need to make these consistent...
 
 
