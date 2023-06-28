@@ -15,7 +15,7 @@ class l1_reg:
         loss_vectors = tree.tree_map(self.l1_loss, spikes)
         clipped_error = tree.tree_map(self.clip, loss_vectors)
         loss_vectors = tree.tree_map(jnp.ravel, clipped_error)
-        return jnp.mean(jnp.concatenate(tree.tree_flatten(clipped_error)[0]))
+        return jnp.mean(jnp.concatenate(tree.tree_flatten(loss_vectors)[0]))
 
 class l2_reg:
 
