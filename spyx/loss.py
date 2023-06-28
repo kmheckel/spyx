@@ -12,10 +12,10 @@ class l1_reg:
         self.clip = lambda x: jnp.maximum(0, x - tolerance)
         
     def __call__(self, spikes):
-        loss_vectors = tree.tree_map(self.l1_loss, spikes)
+        flat_spikes = tree.tree_map(jnp.ravel, spikes)
+        loss_vectors = tree.tree_map(self.l1_loss, flat_spikes)
         clipped_error = tree.tree_map(self.clip, loss_vectors)
-        loss_vectors = tree.tree_map(jnp.ravel, clipped_error)
-        return jnp.mean(jnp.concatenate(tree.tree_flatten(loss_vectors)[0]))
+        return jnp.mean(jnp.concatenate(tree.tree_flatten(clipped_error)[0]))
 
 class l2_reg:
 
@@ -26,11 +26,11 @@ class l2_reg:
         self.clip = lambda x: jnp.maximum(0, (x/tolerance) - tolerance)
     
     def __call__(self, spikes):
-        avg_neuron_activity = tree.tree_map(self.rate_map, spikes)
+        flat_spikes = tree.tree_map(jnp.ravel, spikes)
+        avg_neuron_activity = tree.tree_map(self.rate_map, flat_spikes)
         activity_error = tree.tree_map(self.sq_err_map, avg_neuron_activity)
         clipped_error = tree.tree_map(self.clip, activity_error)
-        loss_vectors = tree.tree_map(jnp.ravel, clipped_error)
-        return jnp.mean(jnp.concatenate(tree.tree_flatten(loss_vectors)[0]))
+        return jnp.mean(jnp.concatenate(tree.tree_flatten(clipped_error)[0]))
 
         
 class lasso_reg:
