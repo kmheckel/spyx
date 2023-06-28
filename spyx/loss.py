@@ -4,40 +4,40 @@ import optax
 
 # need to make these consistent...
 
-@jax.jit
-def l2_spike_reg(avg_spike_counts, target_count):
-    """Spike rate regularization based on mean squared error from target rate."""
 
-    flat = jnp.concatenate(jax.tree_util.tree_flatten(avg_spike_counts)[0])
-    return jnp.sum(optax.l2_loss(flat, jnp.array([target_count]*flat.shape[0])))
+class l1_reg:
+    def __init__(self, target_rate, tolerance, time_steps, num_classes):
+        self.l1_loss = lambda x: jnp.abs(jnp.sum(x,axis=1)/time_steps - (x.shape[1]/num_classes)*target_rate)
+        self.clip = lambda x: jnp.maximum(0, x - tolerance)
+        
+    def __call__(self, spikes):
+        loss_vectors = tree.tree_map(self.l1_loss, spikes)
+        clipped_error = tree.tree_map(self.clip, loss_vectors)
+        return jnp.mean(jnp.concatenate(tree.tree_flatten(clipped_error)[0]))
 
-@jax.jit
-def clipped_sq_err_spike_reg(avg_spike_counts, target_count, radius):
-    """
-    Spike rate regularization based on clipped squared error from target spike count.
+class l2_reg:
+
+    def __init__(self, target_rate, tolerance, time_steps, num_classes):
+        #                          spikes  per  expected number of samples
+        self.rate_map = lambda x: (jnp.sum(x, axis=0) / num_classes) / time_steps
+        self.sq_err_map = lambda x: optax.squared_error(x, jnp.array([target_rate]*x.size))
+        self.clip = lambda x: jnp.maximum(0, (x/tolerance) - tolerance)
     
-    Attributes:
-        avg_spike_counts: array of average spikes per neuron over a batch.
-        target_count: the target number of spikes to be emitted by a neuron
-        radius: the tolerance +/- r from the target count where loss is clipped to zero
-    
-    """
+    def __call__(self, spikes):
+        avg_neuron_activity = tree.tree_map(self.rate_map, spikes)
+        activity_error = tree.tree_map(self.sq_err_map, avg_neuron_activity)
+        clipped_error = tree.tree_map(self.clip, activity_error)
+        return jnp.mean(jnp.concatenate(tree.tree_flatten(clipped_error)[0]))
 
-    flat = jnp.concatenate(jax.tree_util.tree_flatten(avg_spike_counts)[0])
-    return jnp.sum(jnp.maximum(0,optax.squared_error(flat, jnp.array([target_count]*flat.shape[0]))/radius - radius))
+        
+class lasso_reg:
+    def __init__(self, target_rate, tolerance, time_steps, num_classes):
+        self.l1 = l1_reg(target_rate, tolerance, time_steps, num_classes)
+        self.l2 = l2_reg(target_rate, tolerance, time_steps, num_classes)
+        
+    def __call__(self, spikes):
+        return self.l1(spikes) + self.l2(spikes)
 
-@jax.jit
-def inverse_spike_count_reg(avg_spike_counts, time_len):
-    """
-    Spike rate regularization based on an inverse function that strongly
-    discourages neurons from silencing and gradually penalizes higher spike rates.
-    
-    """
-
-    flat = jnp.concatenate(jax.tree_util.tree_flatten(avg_spike_counts)[0])
-    k = jnp.sqrt(time_len)
-    loss = jnp.mean((flat/k) + (k/(flat+1)) )
-    return loss
 
 @jax.jit
 def integral_accuracy(traces, targets):

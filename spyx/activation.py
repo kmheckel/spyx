@@ -16,49 +16,39 @@ class ActivityRegularization(hk.Module):
     def __init__(self, name="ActReg"):
         super().__init__(name=name)
         
-    @jax.jit
     def __call__(self, spikes):
-        spike_count = hk.get_state("spike_count", [spikes[0].size], init=jnp.zeros)
-        hk.set_state("spike_count", spike_count + jnp.ravel(jnp.mean(spikes, axis=0))) #maybe wrong????
+        spike_count = hk.get_state("spike_count", spikes.shape, init=jnp.zeros, dtype=spikes.dtype)
+        hk.set_state("spike_count", spike_count + spikes) #maybe wrong????
         return spikes
 
 
-class AdaSpike:
+class Triangular:
     """
-    Simplified version of SuperSpike, dropping the power from the denominator.
-    Features an increasing scale factor with linear schedule, increasing the
-    sharpness of the surrogate gradient over time.
+        Triangular activation. Very simple.
 
-    $$\frac{\delta S}{\delta U} = \frac{1}{1+k|U|}$$
-
-    Attributes:
-        growth_rate: The amount the scale factor k is incremented by after each batch.
     """
 
-    def __init__(self, growth_rate=0.5):
-        self.k = 1
-        self.gr = growth_rate
+    def __init__(self):
         
         @jax.custom_vjp
-        def f(U, k): # primal function
+        def f(U): # primal function
             return (U>0).astype(jnp.float16)
         
         # returns value, grad context
-        def f_fwd(U, k):
-            return f(U, k), (U, k)
+        def f_fwd(U):
+            return f(U), U
             
         # accepts context, primal val
         # not sure if k actually changes or it gets jit'ed and stays static..
-        def f_bwd(context, grad):
-            U, k = context
-            return (grad / (1+k*jnp.abs(U)) , 0)
+        def f_bwd(U, grad):
+            mask = (U > 1).astype(jnp.float16)
+            return (grad * U*(-mask) , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
         
     def __call__(self, U):
-        self.k += self.gr
-        return self.f(U, self.k)
+        return self.f(U)
 
 # Surrogate functions
 class Arctan:
@@ -80,8 +70,7 @@ class Arctan:
     
 
     def __init__(self, scale_factor=2):
-        self.k = scale_factor
-        self.pi = jnp.array(jnp.pi)
+        self.k = scale_factor / 2
         
         @jax.custom_vjp
         def f(U): # primal function
@@ -93,7 +82,10 @@ class Arctan:
             
         # Straight Through Estimator
         def f_bwd(U, grad):
-            return ( (grad / (self.pi * (1+(self.pi*U*self.k/2)**2))), ) 
+            denom = jnp.pi * U * self.k
+            denom = 1 + denom**2
+            denom = jnp.pi * denom
+            return ( grad / denom, ) 
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
