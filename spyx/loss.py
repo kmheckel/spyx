@@ -10,9 +10,10 @@ class l1_reg:
     def __init__(self, target_rate, tolerance, time_steps, num_classes):
         self.l1_loss = lambda x: jnp.abs(jnp.sum(x,axis=1)/time_steps - (x.shape[1]/num_classes)*target_rate)
         self.clip = lambda x: jnp.maximum(0, x - tolerance)
+        self.flatten = lambda x: jnp.reshape(x, (x.shape[0], -1))
         
     def __call__(self, spikes):
-        flat_spikes = tree.tree_map(jnp.ravel, spikes)
+        flat_spikes = tree.tree_map(self.flatten, spikes)
         loss_vectors = tree.tree_map(self.l1_loss, flat_spikes)
         clipped_error = tree.tree_map(self.clip, loss_vectors)
         return jnp.mean(jnp.concatenate(tree.tree_flatten(clipped_error)[0]))
@@ -24,9 +25,11 @@ class l2_reg:
         self.rate_map = lambda x: (jnp.sum(x, axis=0) / num_classes) / time_steps
         self.sq_err_map = lambda x: optax.squared_error(x, jnp.array([target_rate]*x.size))
         self.clip = lambda x: jnp.maximum(0, (x/tolerance) - tolerance)
+        self.flatten = lambda x: jnp.reshape(x, (x.shape[0], -1))
+
     
     def __call__(self, spikes):
-        flat_spikes = tree.tree_map(jnp.ravel, spikes)
+        flat_spikes = tree.tree_map(self.flatten, spikes)
         avg_neuron_activity = tree.tree_map(self.rate_map, flat_spikes)
         activity_error = tree.tree_map(self.sq_err_map, avg_neuron_activity)
         clipped_error = tree.tree_map(self.clip, activity_error)
