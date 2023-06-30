@@ -14,17 +14,18 @@ long_description = "Spyx is a compact library built on top of DeepMind's Haiku l
 
 requires = (
     [
-        "jax>=0.3.0",
-        "jaxlib>=0.3.0",
         "dm-haiku",
-        "numpy",
+        "optax",
+        "tonic",
+        "torch",
+        "torchvision"
     ],
 )
 
 # This call to setup() does all the work
 setup(
     name="spyx",
-    version="0.0.26",
+    version="0.0.27",
     description="Spyx: SNNs in JAX",
     long_description=long_description,
     long_description_content_type="text/markdown",

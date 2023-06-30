@@ -1,3 +1,5 @@
 dm-haiku
+optax
+tonic
 torch
 torchvision
