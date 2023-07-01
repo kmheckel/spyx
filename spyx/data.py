@@ -39,37 +39,6 @@ class shift_augment:
         return shifted
 
 
-class time_dilation_augment:
-    """
-        Time dilation augmentation tool. Randomly stretches or compresses data along the time axis.
-    """
-
-    def __init__(self, sample_data, max_dilation=10, key=0):
-        self.rng = jax.random.PRNGKey(key)
-        self.max_dilation = max_dilation
-        self.padding_shape = ((0, max_dilation),) + ((0,0),) * (len(sample_data.shape)-1)
-        self.data_shape = sample_data.shape[1:]
-        self.time_steps = sample_data.shape[0]
-        print(self.data_shape, self.time_steps)
-
-        def _dilate(data, rng):
-            rng, dilate_rng = jax.random.split(rng)
-            
-            padded_data = jnp.pad(data, self.padding_shape, constant_values=0)
-            
-            dilation = np.array(jax.random.randint(dilate_rng, (1,), -self.max_dilation, self.max_dilation))[0]
-            dilated_shape = (padded_data.shape[0] + dilation,) + self.data_shape
-            
-            dilated_data = jax.image.resize(data, dilated_shape, "nearest")
-
-            return dilated_data[:self.time_steps, :], rng
-            
-        self._dilate = _dilate
-
-
-    def __call__(self, data):
-        dilated, self.rng = self._dilate(data, self.rng)
-        return dilated
 
 
 
