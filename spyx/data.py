@@ -98,11 +98,11 @@ class MNIST_loader():
         
         # change this to just dl and add if statement based on test=T/F
         self._train_dl = DataLoader(train_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
         self.train_dl = iter(self._train_dl)
         
         self._val_dl = DataLoader(val_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
         self.val_dl = iter(self._val_dl) 
         
         self._test_dl = DataLoader(test_dataset, batch_size=self.batch_size,
@@ -180,11 +180,11 @@ class NMNIST_loader():
         
         # change this to just dl and add if statement based on test=T/F
         self._train_dl = DataLoader(train_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
         self.train_dl = iter(self._train_dl)
         
         self._val_dl = DataLoader(val_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
         self.val_dl = iter(self._val_dl) 
         
         self._test_dl = DataLoader(test_dataset, batch_size=self.batch_size,
