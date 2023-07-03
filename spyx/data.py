@@ -246,7 +246,7 @@ class SHD_loader():
 
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=128, sample_T = 100, channels=128, pin_mem=False, binarize=True):        
+    def __init__(self, batch_size=128, sample_T = 100, channels=128, binarize=True):        
         shd_timestep = 1e-6
         shd_channels = 700
         net_channels = channels
@@ -255,7 +255,6 @@ class SHD_loader():
         self.batch_size = batch_size
         self.obs_shape = tuple([net_channels,])
         self.act_shape = tuple([20,])
-        self.pin_mem = pin_mem
         
         transform = transforms.Compose([
         transforms.Downsample(
@@ -283,11 +282,11 @@ class SHD_loader():
         
         # change this to just dl and add if statement based on test=T/F
         self._train_dl = DataLoader(train_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True, pin_memory=pin_mem)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
         self.train_dl = iter(self._train_dl)
         
         self._val_dl = DataLoader(val_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True, pin_memory=pin_mem)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False)
         self.val_dl = iter(self._val_dl) 
         
         self._test_dl = DataLoader(test_dataset, batch_size=self.batch_size,
@@ -305,9 +304,9 @@ class SHD_loader():
         val_split = Subset(self.train_val_dataset, val_indices)
         
         self._train_dl = DataLoader(train_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True, pin_memory=self.pin_mem)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True)
         self._val_dl = DataLoader(val_split, batch_size=self.batch_size,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True, pin_memory=self.pin_mem)
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False)
         
         self.val_dl = iter(self._val_dl)
         self.train_dl = iter(self._train_dl)
