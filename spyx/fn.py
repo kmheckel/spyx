@@ -35,6 +35,21 @@ class l2_reg:
         clipped_error = tree.tree_map(self.clip, activity_error)
         return jnp.mean(jnp.concatenate(tree.tree_flatten(clipped_error)[0]))
 
+class huber_reg:
+
+    def __init__(self, target_rate, tolerance, time_steps, num_classes):
+        #                          spikes  per  expected number of samples
+        self.rate_map = lambda x: (jnp.sum(x, axis=0) / num_classes) / time_steps
+        self.sq_err_map = lambda x: optax.huber_loss(x, jnp.array([target_rate]*x.size), tolerance)
+        self.flatten = lambda x: jnp.reshape(x, (x.shape[0], -1))
+
+    
+    def __call__(self, spikes):
+        flat_spikes = tree.tree_map(self.flatten, spikes)
+        avg_neuron_activity = tree.tree_map(self.rate_map, flat_spikes)
+        activity_error = tree.tree_map(self.sq_err_map, avg_neuron_activity)
+        return jnp.mean(jnp.concatenate(tree.tree_flatten(activity_error)[0]))
+
         
 class lasso_reg:
     def __init__(self, target_rate, tolerance, time_steps, num_classes):
