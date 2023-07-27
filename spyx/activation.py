@@ -199,8 +199,8 @@ class Sigmoid:
         f.defvjp(f_fwd, f_bwd)
         self.f = f
         
-    def __call__(self, V, T):
-        return self.f(V, T)
+    def __call__(self, V):
+        return self.f(V)
 
 class SuperSpike:
     """
