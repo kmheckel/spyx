@@ -171,7 +171,7 @@ class NMNIST_loader():
     """
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=32, sample_T = 64, val_size=0.3, download_dir='./NMNIST'):
+    def __init__(self, batch_size=32, sample_T = 40, val_size=0.3, download_dir='./NMNIST'):
            
         self.val_size = val_size
         self.batch_size = batch_size
@@ -273,7 +273,7 @@ class NMNIST_loader():
             return State(obs=obs, labels=labels)
         
         self.test_epoch = _test_epoch
-
+        
 ###########################################################
 
 # Builds 2D tensors from data, with the time axis being packed to save memory. 
