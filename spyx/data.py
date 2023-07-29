@@ -55,7 +55,7 @@ class MNIST_loader():
     """
 
     # Change this to allow a config dictionary of 
-    def __init__(self, time_steps=64, max_rate = 0.5, batch_size=32, val_size=0.3, key=0, download_dir='./MNIST'):
+    def __init__(self, time_steps=64, max_rate = 0.75, batch_size=32, val_size=0.3, key=0, download_dir='./MNIST'):
            
         self.key = jax.random.PRNGKey(key)
         self.sample_T = time_steps
@@ -111,7 +111,7 @@ class MNIST_loader():
         ##########################
         self.test_len = len(test_dataset)
         test_dl = iter(DataLoader(test_dataset, batch_size=self.test_len,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False))
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True))
                 
         x_test, y_test = next(test_dl)
         self.x_test = jnp.array(x_test, dtype=jnp.uint8)
@@ -171,8 +171,7 @@ class NMNIST_loader():
     """
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=32, val_size=0.3, download_dir='./NMNIST'):
-        sample_T = 64
+    def __init__(self, batch_size=32, sample_T = 64, val_size=0.3, download_dir='./NMNIST'):
            
         self.val_size = val_size
         self.batch_size = batch_size
@@ -182,7 +181,7 @@ class NMNIST_loader():
         transform =  transforms.Compose([
             transforms.ToFrame(sensor_size=self.obs_shape, 
                                        n_time_bins=sample_T),
-            lambda x: np.packbits(x, axis=1)
+            lambda x: np.packbits(x, axis=0)
 
         ])
         
@@ -224,7 +223,7 @@ class NMNIST_loader():
         ##########################
         self.test_len = len(test_dataset)
         test_dl = iter(DataLoader(test_dataset, batch_size=self.test_len,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False))
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True))
                 
         x_test, y_test = next(test_dl)
         self.x_test = jnp.array(x_test, dtype=jnp.uint8)
@@ -374,7 +373,7 @@ class SHD_loader():
         ##########################
         self.test_len = len(test_dataset)
         test_dl = iter(DataLoader(test_dataset, batch_size=self.test_len,
-                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False))
+                          collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True))
                 
         x_test, y_test = next(test_dl)
         self.x_test = jnp.array(x_test, dtype=jnp.uint8)
