@@ -171,7 +171,7 @@ class NMNIST_loader():
     """
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=32, sample_T = 40, val_size=0.3, download_dir='./NMNIST'):
+    def __init__(self, batch_size=32, sample_T = 40, data_frac = .33, val_size=0.3, download_dir='./NMNIST'):
            
         self.val_size = val_size
         self.batch_size = batch_size
@@ -193,10 +193,12 @@ class NMNIST_loader():
         train_indices, val_indices = train_test_split(
         range(len(train_val_dataset)),
         test_size=self.val_size,
-        random_state=0,
+        random_state=314159,
         shuffle=True
         )
     
+        train_indices = train_indices[:int(len(train_indices)*data_frac)]
+        val_indices = val_indices[:int(len(val_indices)*data_frac)]
     
         train_split = Subset(train_val_dataset, train_indices)
         self.train_len = len(train_indices)
@@ -300,7 +302,7 @@ class SHD2Raster():
 class SHD_loader():
     """
     Dataloading wrapper for the Spiking Heidelberg Dataset. The entire dataset is loaded to vRAM in a temporally compressed format. The user must
-    apply jnp.unpackbits(events, axis=<time axis>) prior to feeding to an SNN. Right now the timescaling is suited for windows of about 100 timesteps.
+    apply jnp.unpackbits(events, axis=<time axis>) prior to feeding to an SNN. 
 
     https://zenkelab.org/resources/spiking-heidelberg-datasets-shd/
     """

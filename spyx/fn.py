@@ -3,10 +3,18 @@ import jax.numpy as jnp
 import optax
 
 from jax import tree_util as tree
-# need to make these consistent...
 
 
 class l1_reg:
+    """
+    L1-Norm layer activation normalization:
+
+    Attributes:
+        target_rate: The target number of spikes to be emitted per neuron
+        tolerance: The amount of unpenalized deviation from the target rate which is clipped to zero
+        time_steps: The number of time steps being simulated
+        num_classes: The number of different target classes for the output
+    """
     def __init__(self, target_rate, tolerance, time_steps, num_classes):
         self.l1_loss = lambda x: jnp.abs(jnp.sum(x,axis=1)/time_steps - (x.shape[1]/num_classes)*target_rate)
         self.clip = lambda x: jnp.maximum(0, x - tolerance)

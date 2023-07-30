@@ -16,9 +16,9 @@ https://github.com/kmheckel/spyx
    
    introduction
    quickstart
-   source/api/activation
    source/api/data
    source/api/loss
+   source/api/fn
    source/api/nn
 
 

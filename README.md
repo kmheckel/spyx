@@ -9,7 +9,7 @@ Spyx is a compact library built on top of DeepMind's Haiku library, enabling eas
 
 The goal of Spyx is to provide similar capabilities as SNNTorch for the JAX ecosystem, opening up the possibility to incorporate SNNs into a number of GPU-accelerated reinforcement learning environments. Additionally, JAX has become home to several libraries for neuroevolution, and the aim is for Spyx to provide a common framework to compare modern neuroevolution algorithms with surrogate gradient and ANN2SNN conversion techniques.
 
-In the future the aim for Spyx is to include more detailed neuron models such as Hodgkin-Huxley and to incorporate support for executing models trained in Spyx on neuromorphic hardware such as Intel's Loihi architecture.
+In the future the aim for Spyx is to include tools for building and training spiking phasor networks and building an interface for exporting models to the emerging Neuromorphic Intermediate Representation for deployment on efficient hardware.
 
 Installation
 ============

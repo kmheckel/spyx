@@ -1,7 +1,7 @@
-spyx.activation
+spyx.fn
 ===============
 
-.. currentmodule:: spyx.activation
+.. currentmodule:: spyx.fn
 
 
 .. autoclass:: Heaviside
