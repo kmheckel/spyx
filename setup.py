@@ -17,14 +17,13 @@ requires = (
         "dm-haiku",
         "optax",
         "jax_tqdm",
-        "tonic"
     ],
 )
 
 # This call to setup() does all the work
 setup(
     name="spyx",
-    version="0.0.38",
+    version="0.0.39",
     description="Spyx: SNNs in JAX",
     long_description=long_description,
     long_description_content_type="text/markdown",
