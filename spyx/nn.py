@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import haiku as hk
-from .activation import Heaviside
+from .axn import Heaviside
 
 
 class ALIF(hk.RNNCore): 
@@ -33,11 +33,11 @@ class ALIF(hk.RNNCore):
         beta = self.beta
         # threshold adaptation
         if not gamma:
-            gamma = hk.get_parameter("w", self.hidden_shape, 
+            gamma = hk.get_parameter("gamma", self.hidden_shape, 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
             gamma = jax.nn.hard_sigmoid(gamma)
         if not beta:
-            beta = hk.get_parameter("b", self.hidden_shape, 
+            beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jax.nn.hard_sigmoid(beta)
         # calculate whether spike is generated, and update membrane potential
@@ -136,7 +136,7 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         # numerical stability gremlin...
         beta = self.beta
         if not beta:
-            beta = hk.get_parameter("b", self.hidden_shape, dtype=jnp.float16,
+            beta = hk.get_parameter("beta", self.hidden_shape, dtype=jnp.float16,
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jax.nn.hard_sigmoid(beta)
             
@@ -172,7 +172,7 @@ class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         
         beta = self.beta
         if not beta:
-            beta = hk.get_parameter("b", self.hidden_shape, 
+            beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jax.nn.hard_sigmoid(beta)
         
@@ -211,11 +211,11 @@ class SC(hk.RNNCore):
         beta = self.beta
         # threshold adaptation
         if not alpha:
-            alpha = hk.get_parameter("w", self.hidden_shape, 
+            alpha = hk.get_parameter("alpha", self.hidden_shape, 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
             alpha = jax.nn.hard_sigmoid(alpha)
         if not beta:
-            beta = hk.get_parameter("b", self.hidden_shape, 
+            beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta =jax.nn.hard_sigmoid(beta)
         # calculate whether spike is generated, and update membrane potential

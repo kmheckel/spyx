@@ -22,13 +22,14 @@ class ActivityRegularization(hk.Module):
         return spikes
 
 
-class Triangular:
+class Tanh:
     """
-        Triangular activation. Very simple.
+        Hyperbolic Tangent activation. Very simple.
 
     """
-
-    def __init__(self):
+    def __init__(self, scale_factor=1):
+        self.k = scale_factor
+        self._grad = jax.vmap(jax.vmap(jax.grad(jnp.tanh)))
         
         @jax.custom_vjp
         def f(U): # primal function
@@ -39,16 +40,42 @@ class Triangular:
             return f(U), U
             
         # accepts context, primal val
-        # not sure if k actually changes or it gets jit'ed and stays static..
         def f_bwd(U, grad):
-            mask = (U > 1).astype(jnp.float16)
-            return (grad * U*(-mask) , )
+            return (grad * self._grad(self.k * U) , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
         
     def __call__(self, U):
         return self.f(U)
+
+class Boxcar:
+    """
+        Boxcar activation. Very simple.
+
+    """
+    def __init__(self, scale_factor=0.5):
+        self.k = scale_factor
+        self._grad = jax.vmap(jax.vmap(jax.grad(jax.nn.hard_tanh)))
+        
+        @jax.custom_vjp
+        def f(U): # primal function
+            return (U>0).astype(jnp.float16)
+        
+        # returns value, grad context
+        def f_fwd(U):
+            return f(U), U
+            
+        # accepts context, primal val
+        def f_bwd(U, grad):
+            return (grad * self.k * self._grad(self.k * U) , )
+            
+        f.defvjp(f_fwd, f_bwd)
+        self.f = f
+        
+    def __call__(self, U):
+        return self.f(U)
+
 
 # Surrogate functions
 class Arctan:
@@ -71,6 +98,7 @@ class Arctan:
 
     def __init__(self, scale_factor=2):
         self.k = scale_factor / 2
+        self._grad = jax.vmap(jax.vmap(jax.grad(jnp.arctan)))
         
         @jax.custom_vjp
         def f(U): # primal function
@@ -80,44 +108,16 @@ class Arctan:
         def f_fwd(U):
             return f(U), U
             
-        # Straight Through Estimator
+        # accepts context, primal val
         def f_bwd(U, grad):
-            denom = jnp.pi * U * self.k
-            denom = 1 + denom**2
-            denom = jnp.pi * denom
-            return ( grad / denom, ) 
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U) 
-
-class Boxcar:
-    """
-    Boxcar surrogate gradient activation function. Under construction.
-    """
-
-    def __init__(self, scale_factor=1):
-        self.k = scale_factor
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return (U>0).astype(jnp.float16)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
-            
-        # Needs fixed.
-        def f_bwd(U, grad):
-            return ( (jnp.abs(U) <= 0.5).astype(jnp.float16) * 0.5 * grad, )
+            return (grad * self._grad(jnp.pi * U * self.k) / jnp.pi , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
         
     def __call__(self, U):
         return self.f(U)
+
 
 class Heaviside:
     """
@@ -153,7 +153,7 @@ class Heaviside:
             
         # Straight Through Estimator
         def f_bwd(U, grad):
-            return ( grad*U, ) 
+            return ( grad, ) 
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
@@ -181,8 +181,9 @@ class Sigmoid:
     
 
 
-    def __init__(self, scale_factor=25):
-        self.k = scale_factor
+    def __init__(self, scale_factor=4):
+        self.k = scale_factor        
+        self._grad = jax.vmap(jax.vmap(jax.grad(jax.nn.sigmoid)))
         
         @jax.custom_vjp
         def f(U): # primal function
@@ -193,14 +194,14 @@ class Sigmoid:
             return f(U), U
             
         # accepts context, primal val
-        def f_bwd(U, grad): # is spk needed at all???
-            return ((self.k*jnp.exp(-self.k*U) / (jnp.exp(-self.k*U)+1)**2) * grad, )
+        def f_bwd(U, grad):
+            return (grad * self._grad(self.k * U) , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
         
-    def __call__(self, V):
-        return self.f(V)
+    def __call__(self, U):
+        return self.f(U)
 
 class SuperSpike:
     """
@@ -229,6 +230,7 @@ class SuperSpike:
 
     def __init__(self, scale_factor=25):
         self.k = scale_factor
+        self._grad = jax.vmap(jax.vmap(jax.grad(jax.nn.soft_sign)))
         
         @jax.custom_vjp
         def f(U): # primal function
@@ -240,7 +242,7 @@ class SuperSpike:
             
         # accepts context, primal val
         def f_bwd(U, grad):
-            return (grad / (1+self.k*jnp.abs(U))**2 , )
+            return (grad * self._grad(self.k * U) , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
