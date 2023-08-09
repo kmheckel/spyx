@@ -86,8 +86,9 @@ class Triangular:
         self.k = scale_factor
 
         @jax.jit
-        def _grad(x):
+        def g(x):
             return jnp.maximum(0, 1-jnp.abs(x))
+        self._grad = g
         
         @jax.custom_vjp
         def f(U): # primal function
