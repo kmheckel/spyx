@@ -5,67 +5,57 @@ import optax
 from jax import tree_util as tree
 
 
-class l1_reg:
+class silence_reg:
     """
-    L1-Norm layer activation normalization:
+    L2-Norm per-neuron activation normalization for spiking less than a target number of times.
 
     Attributes:
-        target_rate: The target number of spikes to be emitted per neuron
-        tolerance: The amount of unpenalized deviation from the target rate which is clipped to zero
-        time_steps: The number of time steps being simulated
-        num_classes: The number of different target classes for the output
+        min_spikes: neurons which spike below this value on average
+        over the batch incur quadratic penalty.
     """
-    def __init__(self, target_rate, tolerance, time_steps, num_classes):
-        self.l1_loss = lambda x: jnp.abs(jnp.sum(x,axis=1)/time_steps - (x.shape[1]/num_classes)*target_rate)
-        self.clip = lambda x: jnp.maximum(0, x - tolerance)
-        self.flatten = lambda x: jnp.reshape(x, (x.shape[0], -1))
+    def __init__(self, min_spikes):
+        def _loss(x):
+            return (jnp.maximum(0, min_spikes-jnp.mean(x, axis=0)))**2
+        
+        def _flatten(x):
+            return jnp.reshape(x, (x.shape[0], -1))
+        
+        def _call(spikes):
+            flat_spikes = tree.tree_map(_flatten, spikes)
+            loss_vectors = tree.tree_map(_loss, flat_spikes)
+            return jnp.mean(jnp.concatenate(tree.tree_flatten(loss_vectors)[0]))
+        
+        self.call = jax.jit(_call)
         
     def __call__(self, spikes):
-        flat_spikes = tree.tree_map(self.flatten, spikes)
-        loss_vectors = tree.tree_map(self.l1_loss, flat_spikes)
-        clipped_error = tree.tree_map(self.clip, loss_vectors)
-        return jnp.mean(jnp.concatenate(tree.tree_flatten(clipped_error)[0]))
-
-class l2_reg:
-
-    def __init__(self, target_rate, tolerance, time_steps, num_classes):
-        #                          spikes  per  expected number of samples
-        self.rate_map = lambda x: (jnp.sum(x, axis=0) / num_classes) / time_steps
-        self.sq_err_map = lambda x: optax.squared_error(x, jnp.array([target_rate]*x.size))
-        self.clip = lambda x: jnp.maximum(0, (x/tolerance) - tolerance)
-        self.flatten = lambda x: jnp.reshape(x, (x.shape[0], -1))
-
-    
-    def __call__(self, spikes):
-        flat_spikes = tree.tree_map(self.flatten, spikes)
-        avg_neuron_activity = tree.tree_map(self.rate_map, flat_spikes)
-        activity_error = tree.tree_map(self.sq_err_map, avg_neuron_activity)
-        clipped_error = tree.tree_map(self.clip, activity_error)
-        return jnp.mean(jnp.concatenate(tree.tree_flatten(clipped_error)[0]))
-
-class huber_reg:
-
-    def __init__(self, target_rate, tolerance, time_steps, num_classes):
-        #                          spikes  per  expected number of samples
-        self.rate_map = lambda x: (jnp.sum(x, axis=0) / num_classes) / time_steps
-        self.sq_err_map = lambda x: optax.huber_loss(x, jnp.array([target_rate]*x.size), tolerance)
-        self.flatten = lambda x: jnp.reshape(x, (x.shape[0], -1))
-
-    
-    def __call__(self, spikes):
-        flat_spikes = tree.tree_map(self.flatten, spikes)
-        avg_neuron_activity = tree.tree_map(self.rate_map, flat_spikes)
-        activity_error = tree.tree_map(self.sq_err_map, avg_neuron_activity)
-        return jnp.mean(jnp.concatenate(tree.tree_flatten(activity_error)[0]))
-
+        return self.call(spikes)
         
-class lasso_reg:
-    def __init__(self, target_rate, tolerance, time_steps, num_classes):
-        self.l1 = l1_reg(target_rate, tolerance, time_steps, num_classes)
-        self.l2 = l2_reg(target_rate, tolerance, time_steps, num_classes)
+class sparsity_reg:
+    """
+    Layer activation normalization that seeks to discourage all neurons having a high firing rate.
+
+    Attributes:
+        max_spikes: Threshold for which penalty is incurred if the average number of
+        spikes in the layer exceeds it.
+
+        norm: an Optax loss function. Default is Huber loss.
+    """
+    def __init__(self, max_spikes, norm=optax.huber_loss):
+        def _loss(x):
+            return norm(jnp.maximum(0, jnp.mean(x, axis=-1) - max_spikes))
+        
+        def _flatten(x):
+            return jnp.reshape(x, (x.shape[0], -1))
+        
+        def _call(spikes):
+            flat_spikes = tree.tree_map(_flatten, spikes)
+            loss_vectors = tree.tree_map(_loss, flat_spikes)
+            return jnp.mean(jnp.concatenate(tree.tree_flatten(loss_vectors)[0]))
+        
+        self.call = jax.jit(_call)
         
     def __call__(self, spikes):
-        return self.l1(spikes) + self.l2(spikes)
+        return self.call(spikes) 
 
 
 @jax.jit
@@ -81,7 +71,7 @@ def integral_accuracy(traces, targets):
 
 # should expose the smoothing rate and allow for users to partial it away or possibly schedule it...
 @jax.jit
-def integral_crossentropy(traces, targets, smoothing=0.3):
+def integral_crossentropy(traces, targets, smoothing=0.2):
     """
     Calculate the crossentropy between the integral of membrane potentials.
     Allows for label smoothing to discourage silencing 
@@ -95,5 +85,5 @@ def integral_crossentropy(traces, targets, smoothing=0.3):
 
     logits = jnp.sum(traces, axis=-2) # time axis.
     labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
-    return optax.softmax_cross_entropy(logits, labels).mean() #change to mean
+    return optax.softmax_cross_entropy(logits, labels).mean() 
 

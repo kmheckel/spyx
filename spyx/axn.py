@@ -18,7 +18,7 @@ class ActivityRegularization(hk.Module):
         
     def __call__(self, spikes):
         spike_count = hk.get_state("spike_count", spikes.shape, init=jnp.zeros, dtype=spikes.dtype)
-        hk.set_state("spike_count", spike_count + spikes) #maybe wrong????
+        hk.set_state("spike_count", spike_count + spikes) 
         return spikes
 
 
@@ -207,7 +207,7 @@ class Sigmoid:
     
     Attributes:
         scale_factor: A scaling factor that can be used to adjust the steepness of the 
-                      Sigmoid function. Default is 25.
+                      Sigmoid function. Default is 4.
     """
     
 
