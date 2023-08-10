@@ -49,6 +49,40 @@ class Tanh:
     def __call__(self, U):
         return self.f(U)
 
+
+class Ptanh:
+    """
+        Parameterized Hyperbolic Tangent activation.
+
+    """
+    def __init__(self, alpha=2, beta=25):
+        self.a = alpha
+        self.b = beta
+
+        def g(x):
+            num = jnp.exp(x/alpha) - jnp.exp(-x/beta)
+            den = jnp.exp(x*alpha) + jnp.exp(-x*beta)
+
+        self._grad = jax.jit(g)
+        
+        @jax.custom_vjp
+        def f(U): # primal function
+            return (U>0).astype(jnp.float16)
+        
+        # returns value, grad context
+        def f_fwd(U):
+            return f(U), U
+            
+        # accepts context, primal val
+        def f_bwd(U, grad):
+            return (grad * self._grad(self.k * U) , )
+            
+        f.defvjp(f_fwd, f_bwd)
+        self.f = f
+        
+    def __call__(self, U):
+        return self.f(U)
+
 class Boxcar:
     """
         Boxcar activation. Very simple.

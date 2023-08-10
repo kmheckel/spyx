@@ -23,7 +23,7 @@ class silence_reg:
         def _call(spikes):
             flat_spikes = tree.tree_map(_flatten, spikes)
             loss_vectors = tree.tree_map(_loss, flat_spikes)
-            return jnp.mean(jnp.concatenate(tree.tree_flatten(loss_vectors)[0]))
+            return jnp.sum(jnp.concatenate(tree.tree_flatten(loss_vectors)[0]))
         
         self.call = jax.jit(_call)
         
@@ -50,7 +50,7 @@ class sparsity_reg:
         def _call(spikes):
             flat_spikes = tree.tree_map(_flatten, spikes)
             loss_vectors = tree.tree_map(_loss, flat_spikes)
-            return jnp.mean(jnp.concatenate(tree.tree_flatten(loss_vectors)[0]))
+            return jnp.sum(jnp.concatenate(tree.tree_flatten(loss_vectors)[0]))
         
         self.call = jax.jit(_call)
         
