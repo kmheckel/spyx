@@ -16,10 +16,10 @@ https://github.com/kmheckel/spyx
    
    introduction
    quickstart
-   spyx.axn
-   spyx.fn
-   spyx.nn
-   spyx.data
+   source/api/axn
+   source/api/fn
+   source/api/nn
+   source/api/data
 
 
 Indices and tables
