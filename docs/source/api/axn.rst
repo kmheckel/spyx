@@ -1,35 +1,30 @@
-spyx.fn
+spyx.axn
 ===============
 
-.. currentmodule:: spyx.fn
+.. currentmodule:: spyx.axn
 
 
-.. autoclass:: Heaviside
+.. autofunc:: Boxcar
     :members:
     :undoc-members:
     :show-inheritance:
 
-.. autoclass:: Boxcar
+.. autofunc:: Sigmoid
     :members:
     :undoc-members:
     :show-inheritance:
 
-.. autoclass:: Sigmoid
+.. autofunc:: Arctan
     :members:
     :undoc-members:
     :show-inheritance:
 
-.. autoclass:: Arctan
+.. autofunc:: SuperSpike
     :members:
     :undoc-members:
     :show-inheritance:
 
-.. autoclass:: SuperSpike
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-.. autoclass:: AdaSpike
+.. autofunc:: AdaSpike
     :members:
     :undoc-members:
     :show-inheritance:

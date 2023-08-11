@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import haiku as hk
-from .axn import Heaviside
+from .axn import Axon
 
 
 class ALIF(hk.RNNCore): 
@@ -16,7 +16,7 @@ class ALIF(hk.RNNCore):
 
 
     def __init__(self, hidden_shape, beta=None, gamma=None, threshold=1,
-                 activation = Heaviside(),
+                 activation = Axon(),
                  name="ALIF"):
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
@@ -88,7 +88,7 @@ class IF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     """
 
     def __init__(self, hidden_shape, threshold=1, 
-                 activation = Heaviside(),
+                 activation = Axon(),
                  name="LIF"):
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
@@ -123,7 +123,7 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     """
 
     def __init__(self, hidden_shape: tuple, beta=None, threshold=1, 
-                 activation = Heaviside(),
+                 activation = Axon(),
                  name="LIF"):
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
@@ -158,7 +158,7 @@ class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     """
 
     def __init__(self, hidden_shape, beta=None, threshold=1,
-                 activation = Heaviside(),
+                 activation = Axon(),
                  name="RLIF"):
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
@@ -195,7 +195,7 @@ class SC(hk.RNNCore):
     """
 
     def __init__(self, hidden_shape, alpha=None, beta=None, threshold=1, 
-                 activation = Heaviside(),
+                 activation = Axon(),
                  name="SC"):
         super().__init__(name=name)
         self.hidden_shape = hidden_shape

@@ -1,7 +1,7 @@
-spyx.loss
+spyx.fn
 =========
 
-.. currentmodule:: spyx.loss
+.. currentmodule:: spyx.fn
 
 .. autofunc:: integral_xentropy
 

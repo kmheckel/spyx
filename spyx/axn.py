@@ -32,89 +32,28 @@ class ActivityRegularization(hk.Module):
         return spikes
 
 
-class Tanh:
+
+def tanh(k=1):
     """
         Hyperbolic Tangent activation. Very simple.
 
     """
-    def __init__(self, scale_factor=1):
-        self.k = scale_factor
-
-        def g(x):
-            kx = self.k * x
-            return 4 / (jnp.exp(-kx) + jnp.exp(kx))**2
-
-        self._grad = jax.jit(g)
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return jnp.heaviside(U,0)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
-            
-        # accepts context, primal val
-        def f_bwd(U, grad):
-            return (grad * self._grad(U) , )
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
-
-
-def tanh(k=1):
     def g(x):
         kx = k * x
         return 4 / (jnp.exp(-kx) + jnp.exp(kx))**2
     return jax.jit(g)
 
 
-class PTanh:
+
+
+
+def ptanh(a=2, b=25):
     """
         Parameterized Hyperbolic Tangent activation.
 
         \frac{e^{x/a} - e^{-x/b}}{e^{ax} + e^{-bx}}
 
     """
-    def __init__(self, alpha=2, beta=25):
-        a = alpha
-        b = beta
-
-        def g(x):
-            exa = jnp.exp(x/a)
-            exb = jnp.exp(-x/b)
-            eax = jnp.exp(a*x)
-            ebx = jnp.exp(-b*x)
-
-            term1 = ( (exa/a) + (exb/b) ) / (eax + ebx)
-            term2 = ( (exa-exb) * ((a*eax) - (b*ebx)) ) / (eax+ebx)**2
-            return term1 - term2
-
-        self._grad = jax.jit(g)
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return jnp.heaviside(U,0)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
-            
-        # accepts context, primal val
-        def f_bwd(U, grad):
-            return (grad * self._grad(U) , )
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
-
-
-def ptanh(a=2, b=25):
     def g(x):
         exa = jnp.exp(x/a)
         exb = jnp.exp(-x/b)
@@ -127,87 +66,37 @@ def ptanh(a=2, b=25):
 
     return jax.jit(g)
 
-class Boxcar:
+
+
+
+def boxcar(width=1, height=0.5):
     """
         Boxcar activation. Very simple.
 
     """
-    def __init__(self, width=1, height=0.5):
-        self.k = width/2
-        self.h = height
-
-        def g(x):
-            return self.h * jnp.heaviside(-(jnp.abs(x) - self.k), 0)
-
-        self._grad = jax.jit(g)
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return jnp.heaviside(U,0)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
-            
-        # accepts context, primal val
-        def f_bwd(U, grad):
-            return (grad * self._grad(U) , )
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
-
-
-def boxcar(width=1, height=0.5):
     k = width / 2
     h = height
     def g(x):
-        return self.h * jnp.heaviside(-(jnp.abs(x) - self.k), 0)
+        return h * jnp.heaviside(-(jnp.abs(x) - k), 0)
     return jax.jit(g)
 
 
-class Triangular:
+
+
+def triangular(k=0.5):
     """
         Triangular activation inspired by Esser et. al. Very simple. https://arxiv.org/abs/1603.08270
 
     """
-    def __init__(self, scale_factor=0.5):
-        self.k = scale_factor
-
-        def g(x):
-            return jnp.maximum(0, 1-jnp.abs(self.k*x))
-
-        self._grad = jax.jit(g)
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return jnp.heaviside(U,0)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
-            
-        # accepts context, primal val
-        def f_bwd(U, grad):
-            return (grad * self._grad(U) , )
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
-
-
-def triangular(k=0.5):
     def g(x):
         return jnp.maximum(0, 1-jnp.abs(k*x))
     return jax.jit(g)
 
 
-# Surrogate functions
-class Arctan:
+
+
+
+def arctan(k=2):
     """
     This class implements the Arctangent surrogate gradient activation function for a spiking neuron.
     
@@ -223,86 +112,16 @@ class Arctan:
         scale_factor: A scaling factor that can be used to adjust the steepness of the 
                       Arctangent function. Default is 2.
     """
-    
-
-    def __init__(self, scale_factor=2):
-        self.k = scale_factor / 2
-        
-        def g(x):
-            return 1 / (1+x**2)
-        
-        self._grad = jax.jit(g)
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return jnp.heaviside(U,0)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
-            
-        # accepts context, primal val
-        def f_bwd(U, grad):
-            return (grad * self._grad(jnp.pi * U * self.k) / jnp.pi , )
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
-
-
-def arctan(k=2):
     def g(U):
         x = jnp.pi * U * k
         return (1 / (1+x**2)) / jnp.pi
 
     return jax.jit(g)
 
-class Heaviside:
-    """
-    This class implements the Heaviside activation function for a spiking neuron.
-    
-    The Heaviside function is a step function that takes a single argument. 
-    It returns 0 if the input is less than 0, and 1 if the input is greater than 0.
-    
-    The Heaviside function is often used in the context of spiking neurons because 
-    it can be used to model the firing of a neuron. When the input to the neuron 
-    (the sum of the weighted inputs) exceeds a certain threshold, the neuron fires, 
-    producing a spike of activity. This can be modeled as the Heaviside function, 
-    where the output is 0 when the input is below the threshold, and 1 when the input 
-    is above the threshold.
-    
-    Attributes:
-        scale_factor: A scaling factor that can be used to adjust the steepness of the 
-                      step function. Default is 25.
-    """
-    
-    
-    
-    def __init__(self, scale_factor=25):
-        self.k = scale_factor
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return jnp.heaviside(U,0)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), ()
-            
-        # Straight Through Estimator
-        def f_bwd(U, grad):
-            return ( grad, ) 
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
 
 
-class Sigmoid:
+
+def sigmoid(k=4):
     """
     This class implements the Sigmoid surrogate gradient activation function for a spiking neuron.
     
@@ -318,40 +137,6 @@ class Sigmoid:
         scale_factor: A scaling factor that can be used to adjust the steepness of the 
                       Sigmoid function. Default is 4.
     """
-    
-
-
-    def __init__(self, scale_factor=4):
-        self.k = scale_factor
-
-        def g(x):
-            kx = -self.k * x
-            num = self.k * jnp.exp(kx)
-            den = (jnp.exp(kx)+1)**2
-            return num / den
-
-        self._grad = jax.jit(g)
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return jnp.heaviside(U,0)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
-            
-        # accepts context, primal val
-        def f_bwd(U, grad):
-            return (grad * self._grad(U) , )
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
-
-
-def sigmoid(k=4):
     def g(x):
         kx = -k * x
         num = k * jnp.exp(kx)
@@ -360,8 +145,7 @@ def sigmoid(k=4):
     return jax.jit(g)
 
 
-
-class SuperSpike:
+def superspike(k=25):
     """
     This class implements the SuperSpike surrogate gradient activation function for a spiking neuron.
     
@@ -384,36 +168,6 @@ class SuperSpike:
                       SuperSpike function. Default is 25.
     """
 
-
-
-    def __init__(self, scale_factor=25):
-        self.k = scale_factor
-
-        def g(x):
-            return 1 / (1 + self.k*jnp.abs(x))**2
-
-        self._grad = jax.jit(g)
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return jnp.heaviside(U,0)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
-            
-        # accepts context, primal val
-        def f_bwd(U, grad):
-            return (grad * self._grad(U) , )
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
-
-
-def superspike(k=25):
     def g(x):
         return 1 / (1 + k*jnp.abs(x))**2
     return jax.jit(g)
