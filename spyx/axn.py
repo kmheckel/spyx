@@ -136,7 +136,7 @@ def sigmoid(k=4):
 
 def superspike(k=25):
     """
-    This class implements the SuperSpike surrogate gradient activation function for a spiking neuron.
+    This function implements the SuperSpike surrogate gradient activation function for a spiking neuron.
     
     The SuperSpike function is a smooth function that approximates the step function. 
     It is used as a surrogate gradient for the step function in the context of spiking neurons. 
@@ -162,7 +162,18 @@ def superspike(k=25):
     return jax.jit(g)
 
 
+# This could also just be changed to be a function which yields the proper VJP func...
 class Axon:
+    """
+    This class serves as the activation function for the SNNs, allowing for custom definitions of both surrogate gradients for backwards
+    passes as well as substitution of the Heaviside function for relaxations such as sigmoids. 
+
+    The default behavior is a Heaviside forward activation with a stragiht through estimator surrogate gradient.
+    The other functions within the axn module can be called to build surrogate functions for use in approximating the SNN's
+    derivative during the backward pass. It is also possible to replace the Heaviside function with a hard sigmoid or other smooth function
+    to facilitate neuroevolution or conversion from ANN to SNN. The user can also define and JIT their own function to use as a surrogate, or
+    even use more dynamic functions that change over the course of training. 
+    """
 
     def __init__(self, bwd=jax.jit(lambda x: x), fwd=jnp.heaviside):
         self._grad = bwd
