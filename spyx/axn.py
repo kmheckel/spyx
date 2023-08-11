@@ -2,9 +2,19 @@ import jax
 import jax.numpy as jnp
 import haiku as hk
 
-# eventually, it would be good to make an abstract class that all activations below extend...
+# This entire file should be restructured
+# There should be a single synapse class that has a default surrogate gradient
+# of straight through estimation and then the constructor can take an argument
+# to override that with either a premade surrogate such as tanh, sigmoid, etc
+# or a user defined function. This would allow easier experimentation as 
+# You could just define a lambda function and pass it in rather than rewriting
+# a whole class to redefine the gradient function. each of the surrogate classes 
+# should be replaced by second order functions that take the parameters of 
+# their respective function and return the associated JIT'ed func.
+# 
+# This would also open the door up to easier parameterization of surrogates,
+# facilitating evolution/meta learning. 
 
-# should this be added to nn?
 class ActivityRegularization(hk.Module):
     """
     Add state to the SNN to track the average number of spikes emitted per neuron per batch.
@@ -29,45 +39,16 @@ class Tanh:
     """
     def __init__(self, scale_factor=1):
         self.k = scale_factor
-        self._grad = jax.vmap(jax.vmap(jax.grad(jnp.tanh)))
-        
-        @jax.custom_vjp
-        def f(U): # primal function
-            return (U>0).astype(jnp.float16)
-        
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
-            
-        # accepts context, primal val
-        def f_bwd(U, grad):
-            return (grad * self._grad(self.k * U) , )
-            
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
-
-
-class Ptanh:
-    """
-        Parameterized Hyperbolic Tangent activation.
-
-    """
-    def __init__(self, alpha=2, beta=25):
-        self.a = alpha
-        self.b = beta
 
         def g(x):
-            num = jnp.exp(x/alpha) - jnp.exp(-x/beta)
-            den = jnp.exp(x*alpha) + jnp.exp(-x*beta)
+            kx = self.k * x
+            return 4 / (jnp.exp(-kx) + jnp.exp(kx))**2
 
         self._grad = jax.jit(g)
         
         @jax.custom_vjp
         def f(U): # primal function
-            return (U>0).astype(jnp.float16)
+            return jnp.heaviside(U,0)
         
         # returns value, grad context
         def f_fwd(U):
@@ -75,26 +56,94 @@ class Ptanh:
             
         # accepts context, primal val
         def f_bwd(U, grad):
-            return (grad * self._grad(self.k * U) , )
+            return (grad * self._grad(U) , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
         
     def __call__(self, U):
         return self.f(U)
+
+
+def tanh(k=1):
+    def g(x):
+        kx = k * x
+        return 4 / (jnp.exp(-kx) + jnp.exp(kx))**2
+    return jax.jit(g)
+
+
+class PTanh:
+    """
+        Parameterized Hyperbolic Tangent activation.
+
+        \frac{e^{x/a} - e^{-x/b}}{e^{ax} + e^{-bx}}
+
+    """
+    def __init__(self, alpha=2, beta=25):
+        a = alpha
+        b = beta
+
+        def g(x):
+            exa = jnp.exp(x/a)
+            exb = jnp.exp(-x/b)
+            eax = jnp.exp(a*x)
+            ebx = jnp.exp(-b*x)
+
+            term1 = ( (exa/a) + (exb/b) ) / (eax + ebx)
+            term2 = ( (exa-exb) * ((a*eax) - (b*ebx)) ) / (eax+ebx)**2
+            return term1 - term2
+
+        self._grad = jax.jit(g)
+        
+        @jax.custom_vjp
+        def f(U): # primal function
+            return jnp.heaviside(U,0)
+        
+        # returns value, grad context
+        def f_fwd(U):
+            return f(U), U
+            
+        # accepts context, primal val
+        def f_bwd(U, grad):
+            return (grad * self._grad(U) , )
+            
+        f.defvjp(f_fwd, f_bwd)
+        self.f = f
+        
+    def __call__(self, U):
+        return self.f(U)
+
+
+def ptanh(a=2, b=25):
+    def g(x):
+        exa = jnp.exp(x/a)
+        exb = jnp.exp(-x/b)
+        eax = jnp.exp(a*x)
+        ebx = jnp.exp(-b*x)
+
+        term1 = ( (exa/a) + (exb/b) ) / (eax + ebx)
+        term2 = ( (exa-exb) * ((a*eax) - (b*ebx)) ) / (eax+ebx)**2
+        return term1 - term2
+
+    return jax.jit(g)
 
 class Boxcar:
     """
         Boxcar activation. Very simple.
 
     """
-    def __init__(self, scale_factor=0.5):
-        self.k = scale_factor
-        self._grad = jax.vmap(jax.vmap(jax.grad(jax.nn.hard_tanh)))
+    def __init__(self, width=1, height=0.5):
+        self.k = width/2
+        self.h = height
+
+        def g(x):
+            return self.h * jnp.heaviside(-(jnp.abs(x) - self.k), 0)
+
+        self._grad = jax.jit(g)
         
         @jax.custom_vjp
         def f(U): # primal function
-            return (U>0).astype(jnp.float16)
+            return jnp.heaviside(U,0)
         
         # returns value, grad context
         def f_fwd(U):
@@ -102,13 +151,21 @@ class Boxcar:
             
         # accepts context, primal val
         def f_bwd(U, grad):
-            return (grad * self.k * self._grad(self.k * U) , )
+            return (grad * self._grad(U) , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
         
     def __call__(self, U):
         return self.f(U)
+
+
+def boxcar(width=1, height=0.5):
+    k = width / 2
+    h = height
+    def g(x):
+        return self.h * jnp.heaviside(-(jnp.abs(x) - self.k), 0)
+    return jax.jit(g)
 
 
 class Triangular:
@@ -119,14 +176,14 @@ class Triangular:
     def __init__(self, scale_factor=0.5):
         self.k = scale_factor
 
-        @jax.jit
         def g(x):
-            return jnp.maximum(0, 1-jnp.abs(x))
-        self._grad = g
+            return jnp.maximum(0, 1-jnp.abs(self.k*x))
+
+        self._grad = jax.jit(g)
         
         @jax.custom_vjp
         def f(U): # primal function
-            return (U>0).astype(jnp.float16)
+            return jnp.heaviside(U,0)
         
         # returns value, grad context
         def f_fwd(U):
@@ -134,13 +191,20 @@ class Triangular:
             
         # accepts context, primal val
         def f_bwd(U, grad):
-            return (grad * self._grad(self.k * U) , )
+            return (grad * self._grad(U) , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
         
     def __call__(self, U):
         return self.f(U)
+
+
+def triangular(k=0.5):
+    def g(x):
+        return jnp.maximum(0, 1-jnp.abs(k*x))
+    return jax.jit(g)
+
 
 # Surrogate functions
 class Arctan:
@@ -163,11 +227,15 @@ class Arctan:
 
     def __init__(self, scale_factor=2):
         self.k = scale_factor / 2
-        self._grad = jax.vmap(jax.vmap(jax.grad(jnp.arctan)))
+        
+        def g(x):
+            return 1 / (1+x**2)
+        
+        self._grad = jax.jit(g)
         
         @jax.custom_vjp
         def f(U): # primal function
-            return (U>0).astype(jnp.float16)
+            return jnp.heaviside(U,0)
         
         # returns value, grad context
         def f_fwd(U):
@@ -183,6 +251,13 @@ class Arctan:
     def __call__(self, U):
         return self.f(U)
 
+
+def arctan(k=2):
+    def g(U):
+        x = jnp.pi * U * k
+        return (1 / (1+x**2)) / jnp.pi
+
+    return jax.jit(g)
 
 class Heaviside:
     """
@@ -210,7 +285,7 @@ class Heaviside:
         
         @jax.custom_vjp
         def f(U): # primal function
-            return (U>0).astype(jnp.float16)
+            return jnp.heaviside(U,0)
         
         # returns value, grad context
         def f_fwd(U):
@@ -247,12 +322,19 @@ class Sigmoid:
 
 
     def __init__(self, scale_factor=4):
-        self.k = scale_factor        
-        self._grad = jax.vmap(jax.vmap(jax.grad(jax.nn.sigmoid)))
+        self.k = scale_factor
+
+        def g(x):
+            kx = -self.k * x
+            num = self.k * jnp.exp(kx)
+            den = (jnp.exp(kx)+1)**2
+            return num / den
+
+        self._grad = jax.jit(g)
         
         @jax.custom_vjp
         def f(U): # primal function
-            return (U>0).astype(jnp.float16)
+            return jnp.heaviside(U,0)
         
         # returns value, grad context
         def f_fwd(U):
@@ -260,13 +342,24 @@ class Sigmoid:
             
         # accepts context, primal val
         def f_bwd(U, grad):
-            return (grad * self._grad(self.k * U) , )
+            return (grad * self._grad(U) , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
         
     def __call__(self, U):
         return self.f(U)
+
+
+def sigmoid(k=4):
+    def g(x):
+        kx = -k * x
+        num = k * jnp.exp(kx)
+        den = (jnp.exp(kx)+1)**2
+        return num / den
+    return jax.jit(g)
+
+
 
 class SuperSpike:
     """
@@ -295,11 +388,15 @@ class SuperSpike:
 
     def __init__(self, scale_factor=25):
         self.k = scale_factor
-        self._grad = jax.vmap(jax.vmap(jax.grad(jax.nn.soft_sign)))
+
+        def g(x):
+            return 1 / (1 + self.k*jnp.abs(x))**2
+
+        self._grad = jax.jit(g)
         
         @jax.custom_vjp
         def f(U): # primal function
-            return (U>0).astype(jnp.float16)
+            return jnp.heaviside(U,0)
         
         # returns value, grad context
         def f_fwd(U):
@@ -307,7 +404,37 @@ class SuperSpike:
             
         # accepts context, primal val
         def f_bwd(U, grad):
-            return (grad * self._grad(self.k * U) , )
+            return (grad * self._grad(U) , )
+            
+        f.defvjp(f_fwd, f_bwd)
+        self.f = f
+        
+    def __call__(self, U):
+        return self.f(U)
+
+
+def superspike(k=25):
+    def g(x):
+        return 1 / (1 + k*jnp.abs(x))**2
+    return jax.jit(g)
+
+
+class Axon:
+
+    def __init__(self, bwd=jax.jit(lambda x: x), fwd=jnp.heaviside):
+        self._grad = bwd
+        
+        @jax.custom_vjp
+        def f(U): # primal function
+            return fwd(U,0)
+        
+        # returns value, grad context
+        def f_fwd(U):
+            return f(U), U
+            
+        # accepts context, primal val
+        def f_bwd(U, grad):
+            return (grad * self._grad(U) , )
             
         f.defvjp(f_fwd, f_bwd)
         self.f = f
