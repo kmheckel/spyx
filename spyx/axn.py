@@ -2,18 +2,7 @@ import jax
 import jax.numpy as jnp
 import haiku as hk
 
-# This entire file should be restructured
-# There should be a single synapse class that has a default surrogate gradient
-# of straight through estimation and then the constructor can take an argument
-# to override that with either a premade surrogate such as tanh, sigmoid, etc
-# or a user defined function. This would allow easier experimentation as 
-# You could just define a lambda function and pass it in rather than rewriting
-# a whole class to redefine the gradient function. each of the surrogate classes 
-# should be replaced by second order functions that take the parameters of 
-# their respective function and return the associated JIT'ed func.
-# 
-# This would also open the door up to easier parameterization of surrogates,
-# facilitating evolution/meta learning. 
+
 
 class ActivityRegularization(hk.Module):
     """

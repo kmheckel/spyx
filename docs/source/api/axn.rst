@@ -1,5 +1,5 @@
 spyx.axn
-===============
+========
 
 .. automodule:: spyx.axn
    :members:
