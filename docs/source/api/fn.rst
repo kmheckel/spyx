@@ -1,14 +1,6 @@
 spyx.fn
 =========
 
-.. currentmodule:: spyx.fn
-
-.. autofunc:: integral_xentropy
-
-.. autofunc:: integral_accuracy
-
-.. autofunc:: regularized_xentropy
-
-.. autofunc:: SRR_MSE
-
-.. autofunc:: SRR_INV
+.. automodule:: spyx.fn
+   :members:
+   :undoc-members:
