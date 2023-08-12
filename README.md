@@ -1,5 +1,5 @@
-⚡🧠⚡ Welcome to Spyx! ⚡🧠⚡
-==========================
+⚡🧠💻 Welcome to Spyx! 💻🧠⚡
+============================
 [![DOI](https://zenodo.org/badge/656877506.svg)](https://zenodo.org/badge/latestdoi/656877506)
 ![README Art](spyx.png "Spyx")
 
