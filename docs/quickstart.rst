@@ -1,4 +1,4 @@
 Quickstart
 ==========
 
-Here's a fast tutorial for using Spyx to train your first SNN!
+Check out the examples folder on the GitHub for now, quickstart coming soon.

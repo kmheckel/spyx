@@ -6,12 +6,12 @@
 Welcome to Spyx's documentation!
 ================================
 
-This library is under construction! Be sure to go give it a star on Github:
+Spyx is a compact spiking neural network library built on top of DeepMind's Haiku library.
 
-https://github.com/kmheckel/spyx
+Be sure to go give it a star on Github: https://github.com/kmheckel/spyx
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Contents:
    
    introduction
