@@ -1,6 +1,6 @@
 ⚡🧠⚡ Welcome to Spyx! ⚡🧠⚡
 ==========================
-
+[![DOI](https://zenodo.org/badge/656877506.svg)](https://zenodo.org/badge/latestdoi/656877506)
 ![README Art](spyx.png "Spyx")
 
 Spyx is a compact spiking neural network library built on top of DeepMind's Haiku library.
