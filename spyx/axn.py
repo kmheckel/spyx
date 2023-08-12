@@ -163,35 +163,37 @@ def superspike(k=25):
 
 
 # This could also just be changed to be a function which yields the proper VJP func...
-class Axon:
+def Axon(bwd=jax.jit(lambda x: x), 
+         fwd=jax.jit(lambda x: jnp.heaviside(x,0))):
     """
-    This class serves as the activation function for the SNNs, allowing for custom definitions of both surrogate gradients for backwards
+    This function serves as the activation function for the SNNs, allowing for custom definitions of both surrogate gradients for backwards
     passes as well as substitution of the Heaviside function for relaxations such as sigmoids. 
 
-    The default behavior is a Heaviside forward activation with a stragiht through estimator surrogate gradient.
-    The other functions within the axn module can be called to build surrogate functions for use in approximating the SNN's
-    derivative during the backward pass. It is also possible to replace the Heaviside function with a hard sigmoid or other smooth function
-    to facilitate neuroevolution or conversion from ANN to SNN. The user can also define and JIT their own function to use as a surrogate, or
-    even use more dynamic functions that change over the course of training. 
-    """
+    In short, this function takes functions that define the backward and forward passes for the spiking activation function and fuses them
+    into a single function using VJP, allowing for surrogate gradient methods as well as for using alternative forward activations when performing
+    neuroevolution or ANN to SNN conversion. The user can also define and JIT their own function to use as a surrogate, or
+    even use more dynamic functions that change over the course of training.
 
-    def __init__(self, bwd=jax.jit(lambda x: x), fwd=jnp.heaviside):
-        self._grad = bwd
+    The default behavior is a Heaviside forward activation with a stragiht through estimator surrogate gradient.
+
+    Attributes:
+        bwd: Function that calculates the gradient to be used in the backwards pass.
+        fwd: Function that returns a value between 0 and 1. Default is Heaviside.
+     
+    """
         
-        @jax.custom_vjp
-        def f(U): # primal function
-            return fwd(U,0)
+    @jax.custom_vjp
+    def f(U): # primal function
+        return fwd(U)
         
-        # returns value, grad context
-        def f_fwd(U):
-            return f(U), U
+    # returns value, grad context
+    def f_fwd(U):
+        return f(U), U
             
-        # accepts context, primal val
-        def f_bwd(U, grad):
-            return (grad * self._grad(U) , )
+    # accepts context, primal val
+    def f_bwd(U, grad):
+        return (grad * bwd(U) , )
             
-        f.defvjp(f_fwd, f_bwd)
-        self.f = f
-        
-    def __call__(self, U):
-        return self.f(U)
+    f.defvjp(f_fwd, f_bwd)
+    
+    return jax.jit(f)
