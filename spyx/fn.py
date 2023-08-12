@@ -69,9 +69,9 @@ def integral_accuracy(traces, targets):
     preds = jnp.argmax(jnp.sum(traces, axis=-2), axis=-1)
     return jnp.sum(preds == targets) / traces.shape[0], preds
 
-# should expose the smoothing rate and allow for users to partial it away or possibly schedule it...
+# smoothing can be critical to the performance of your model...
 @jax.jit
-def integral_crossentropy(traces, targets, smoothing=0.2):
+def integral_crossentropy(traces, targets, smoothing=0.3):
     """
     Calculate the crossentropy between the integral of membrane potentials.
     Allows for label smoothing to discourage silencing 

@@ -35,30 +35,7 @@ def tanh(k=1):
 
 
 
-
-def ptanh(a=2, b=25):
-    """
-        Parameterized Hyperbolic Tangent activation.
-
-        \frac{e^{x/a} - e^{-x/b}}{e^{ax} + e^{-bx}}
-
-    """
-    def g(x):
-        exa = jnp.exp(x/a)
-        exb = jnp.exp(-x/b)
-        eax = jnp.exp(a*x)
-        ebx = jnp.exp(-b*x)
-
-        term1 = ( (exa/a) + (exb/b) ) / (eax + ebx)
-        term2 = ( (exa-exb) * ((a*eax) - (b*ebx)) ) / (eax+ebx)**2
-        return term1 - term2
-
-    return jax.jit(g)
-
-
-
-
-def boxcar(width=1, height=0.5):
+def boxcar(width=2, height=0.5):
     """
         Boxcar activation. Very simple.
 
@@ -126,12 +103,14 @@ def sigmoid(k=4):
         scale_factor: A scaling factor that can be used to adjust the steepness of the 
                       Sigmoid function. Default is 4.
     """
+    sig = jax.grad(jax.nn.sigmoid)
     def g(x):
-        kx = -k * x
-        num = k * jnp.exp(kx)
-        den = (jnp.exp(kx)+1)**2
-        return num / den
-    return jax.jit(g)
+        v = sig # development found a really weird numerical instability with computing the derivative outright
+        for axis in x.shape: # where the model wouldn't learn, but using jax.grad of the sigmoid function
+            v = jax.vmap(v) # would learn despite the differences being < 1e-7 without a bias +/1.
+        return v(4*x) # to make the grad transformed func work on any shape input, we have to use this ugly
+    return jax.jit(g) # hack which vmaps to accomodate the shape. Luckily, it appears to not impact the compiled func.
+
 
 
 def superspike(k=25):
@@ -163,7 +142,7 @@ def superspike(k=25):
 
 
 # This could also just be changed to be a function which yields the proper VJP func...
-def Axon(bwd=jax.jit(lambda x: x), 
+def Axon(bwd=jax.jit(lambda x: 1), 
          fwd=jax.jit(lambda x: jnp.heaviside(x,0))):
     """
     This function serves as the activation function for the SNNs, allowing for custom definitions of both surrogate gradients for backwards
