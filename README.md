@@ -29,3 +29,23 @@ Why use Spyx?
 =============
 
 Other frameworks such as SNNTorch and Norse offer a nice range of features such as training with adjoint gradients or support for IPUs in addition to their wonderful tutorials. Spyx is designed to maximize performance by achieving maximum GPU utilizattion, allowing the training of networks for hundreds of epochs at incredible speed.
+
+
+Citation:
+=========
+
+For now, use the Bibtex entry below or click the badge above the title image to get other formats from Zenodo.
+
+
+```
+@software{kade_heckel_2023_8241588,
+  author       = {Kade Heckel},
+  title        = {kmheckel/spyx: v0.1.0-beta},
+  month        = aug,
+  year         = 2023,
+  publisher    = {Zenodo},
+  version      = {beta},
+  doi          = {10.5281/zenodo.8241588},
+  url          = {https://doi.org/10.5281/zenodo.8241588}
+}
+```
