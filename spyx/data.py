@@ -98,7 +98,7 @@ class MNIST_loader(): # change this so that it just returns either rate or tempo
                           collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False))
         
         x_train, y_train = next(train_dl)
-        self.x_train = jnp.packbits(rate_code(jnp.array(x_train, dtype=jnp.uint8), self.sample_T, key), axis=2)
+        self.x_train = jnp.packbits(rate_code(jnp.array(x_train, dtype=jnp.uint8), self.sample_T, key), axis=1)
         self.y_train = jnp.array(y_train, dtype=jnp.uint8)
         ############################
         
