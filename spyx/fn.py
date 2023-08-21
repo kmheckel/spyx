@@ -101,7 +101,7 @@ def mse_spikerate(traces, targets, sparsity=0.25, smoothing=0.0):
         targets: the integer labels for each class
         smoothing: [optional] rate at which to smooth labels.
     """
-
+    t = traces.shape[1]
     logits = jnp.mean(traces, axis=-2) # time axis.
     labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
-    return jnp.mean(optax.squared_error(logits, labels * sparsity))
+    return jnp.mean(optax.squared_error(logits, labels * sparsity * t))
