@@ -58,7 +58,7 @@ class MNIST_loader(): # change this so that it just returns either rate or tempo
 
     # Change this to allow a config dictionary of 
     def __init__(self, time_steps=64, max_rate = 0.75, batch_size=32, val_size=0.3, subsample_data=1, key=jax.random.PRNGKey(0), download_dir='./MNIST'):
-           
+        key1, key2, key3 = jax.random.split(key, 3)
         self.sample_T = time_steps
         self.max_rate = max_rate
         self.val_size = val_size
@@ -98,7 +98,7 @@ class MNIST_loader(): # change this so that it just returns either rate or tempo
                           collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False))
         
         x_train, y_train = next(train_dl)
-        self.x_train = jnp.packbits(rate_code(jnp.array(x_train, dtype=jnp.uint8), self.sample_T, key), axis=1)
+        self.x_train = jnp.packbits(rate_code(jnp.array(x_train, dtype=jnp.uint8), self.sample_T, key1), axis=1)
         self.y_train = jnp.array(y_train, dtype=jnp.uint8)
         ############################
         
@@ -109,7 +109,7 @@ class MNIST_loader(): # change this so that it just returns either rate or tempo
                           collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False))
         
         x_val, y_val = next(val_dl)
-        self.x_val = jnp.array(x_val, dtype=jnp.uint8)
+        self.x_val = jnp.packbits(rate_code(jnp.array(x_val, dtype=jnp.uint8), self.sample_T, key2), axis=1)
         self.y_val = jnp.array(y_val, dtype=jnp.uint8)
         ##########################
         # Test set setup
@@ -119,7 +119,7 @@ class MNIST_loader(): # change this so that it just returns either rate or tempo
                           collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=True))
                 
         x_test, y_test = next(test_dl)
-        self.x_test = jnp.array(x_test, dtype=jnp.uint8)
+        self.x_test = jnp.packbits(rate_code(jnp.array(x_test, dtype=jnp.uint8), self.sample_T, key3), axis=1)
         self.y_test = jnp.array(y_test, dtype=jnp.uint8)
 
 
