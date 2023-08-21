@@ -3,6 +3,15 @@ import jax.numpy as jnp
 import haiku as hk
 from .axn import Axon
 
+# need to add shape checking/warning
+def PopulationCode(num_classes):
+    """
+    Add population coding to the preceding neuron layer. Preceding layer's output shape must be a multiple of
+    the number of classes. Use this for rate coded SNNs where the time steps are too few to get a good spike count.
+    """
+    def _pop_code(x):
+        return jnp.sum(jnp.reshape(x, (-1,num_classes)), axis=-1)
+    return jax.jit(_pop_code)
 
 class ALIF(hk.RNNCore): 
     """

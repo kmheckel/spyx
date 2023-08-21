@@ -4,6 +4,7 @@ import optax
 
 from jax import tree_util as tree
 
+### Change all of these to H.O.F.s
 
 class silence_reg:
     """
@@ -42,7 +43,7 @@ class sparsity_reg:
     """
     def __init__(self, max_spikes, norm=optax.huber_loss):
         def _loss(x):
-            return norm(jnp.maximum(0, jnp.mean(x, axis=-1) - max_spikes))
+            return norm(jnp.maximum(0, jnp.mean(x, axis=-1) - max_spikes)) # this may not work for convolution layers....
         
         def _flatten(x):
             return jnp.reshape(x, (x.shape[0], -1))
@@ -70,6 +71,7 @@ def integral_accuracy(traces, targets):
     return jnp.sum(preds == targets) / traces.shape[0], preds
 
 # smoothing can be critical to the performance of your model...
+# change this to be a higher-order function yielding a func with a set smoothing rate.
 @jax.jit
 def integral_crossentropy(traces, targets, smoothing=0.3):
     """
@@ -87,3 +89,19 @@ def integral_crossentropy(traces, targets, smoothing=0.3):
     labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
     return optax.softmax_cross_entropy(logits, labels).mean() 
 
+# convert to function that returns compiled function
+def mse_spikerate(traces, targets, sparsity=0.25, smoothing=0.0):
+    """
+    Calculate the mean squared error of the mean spike rate.
+    Allows for label smoothing to discourage silencing 
+    the other neurons in the readout layer.
+
+    Attributes:
+        traces: the output of the final layer of the SNN
+        targets: the integer labels for each class
+        smoothing: [optional] rate at which to smooth labels.
+    """
+
+    logits = jnp.mean(traces, axis=-2) # time axis.
+    labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
+    return jnp.mean(optax.squared_error(logits, labels * sparsity))

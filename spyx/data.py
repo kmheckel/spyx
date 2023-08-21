@@ -3,9 +3,7 @@ from tonic import datasets, transforms
 import torchvision as tv
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import LeaveOneGroupOut
 from collections import namedtuple
-from itertools import cycle
 
 import numpy as np
 import jax
@@ -14,7 +12,9 @@ import jax.numpy as jnp
 
 State = namedtuple("State", "obs labels")
 
+# should add a class that takes a numpy dataset and reshapes it and compresses it...
 
+# This should be changed to a higher-order function
 class shift_augment:
     """
         Shift data augmentation tool. Rolls data along specified axes randomly up to a certain amount.
@@ -45,17 +45,19 @@ def rate_code(data, steps, key, max_r=0.75):
 
     data = jnp.array(data, dtype=jnp.float16)
     unrolled_data = jnp.repeat(data, steps, axis=1)
-    return jax.random.bernoulli(key, unrolled_data*max_r).astype(jnp.int8)
+    return jax.random.bernoulli(key, unrolled_data*max_r).astype(jnp.uint8)
 
 
-class MNIST_loader():
+class MNIST_loader(): # change this so that it just returns either rate or temporal mnist...
     """
-    Dataloader for the MNIST dataset, right now it is rate encoded.
+    Dataloader for the MNIST dataset. The data is returned in a  non-temporal format so instead of applying
+    jnp.unpack_bits on the data you need to apply the spyx.data.rate_code function to generate the SNN input.
+
     
     """
 
     # Change this to allow a config dictionary of 
-    def __init__(self, time_steps=64, max_rate = 0.75, batch_size=32, val_size=0.3, key=0, download_dir='./MNIST'):
+    def __init__(self, time_steps=64, max_rate = 0.75, batch_size=32, val_size=0.3, subsample_data=1, key=0, download_dir='./MNIST'):
            
         self.key = jax.random.PRNGKey(key)
         self.sample_T = time_steps
@@ -84,6 +86,10 @@ class MNIST_loader():
         random_state=0,
         shuffle=True
         )
+
+        # to help with trying to do neuroevolution since the full dataset is a bit much for evolving convnets...
+        train_indices = train_indices[:int(len(train_indices)*subsample_data)]
+        val_indicies  = val_indices[:int(len(val_indices)*subsample_data)]
     
     
         train_split = Subset(train_val_dataset, train_indices)
@@ -93,7 +99,7 @@ class MNIST_loader():
                           collate_fn=tonic.collation.PadTensors(batch_first=True), drop_last=True, shuffle=False))
         
         x_train, y_train = next(train_dl)
-        self.x_train = jnp.array(x_train, dtype=jnp.uint8)
+        self.x_train = jnp.packbits(rate_code(jnp.array(x_train, dtype=jnp.uint8), self.sample_T, key), axis=2)
         self.y_train = jnp.array(y_train, dtype=jnp.uint8)
         ############################
         
