@@ -59,7 +59,6 @@ class MNIST_loader(): # change this so that it just returns either rate or tempo
     # Change this to allow a config dictionary of 
     def __init__(self, time_steps=64, max_rate = 0.75, batch_size=32, val_size=0.3, subsample_data=1, key=jax.random.PRNGKey(0), download_dir='./MNIST'):
            
-        self.key = jax.random.PRNGKey(key)
         self.sample_T = time_steps
         self.max_rate = max_rate
         self.val_size = val_size
