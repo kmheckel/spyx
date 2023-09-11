@@ -90,6 +90,7 @@ def integral_crossentropy(traces, targets, smoothing=0.3):
     return optax.softmax_cross_entropy(logits, labels).mean() 
 
 # convert to function that returns compiled function
+@jax.jit
 def mse_spikerate(traces, targets, sparsity=0.25, smoothing=0.0):
     """
     Calculate the mean squared error of the mean spike rate.

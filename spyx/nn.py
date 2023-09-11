@@ -35,7 +35,6 @@ class ALIF(hk.RNNCore):
         self.act = activation
     
     def __call__(self, x, VT):
-        # this probably needs changed to be spltting an array
         V, T = jnp.split(VT, 2, -1)
         
         gamma = self.gamma
@@ -85,7 +84,7 @@ class LI(hk.RNNCore):
     def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + self.layer_shape, dtype=jnp.float32)
 
-class IF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
+class IF(hk.RNNCore): 
     """
     Integrate and Fire neuron model 
     
@@ -111,11 +110,11 @@ class IF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         
         return spikes, V
 
-    def initial_state(self, batch_size): # figure out how to make dynamic...
+    def initial_state(self, batch_size): 
         return jnp.zeros((batch_size,) + self.hidden_shape, dtype=jnp.float16)
 
 
-class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
+class LIF(hk.RNNCore):
     """
     Leaky Integrate and Fire neuron model inspired by the implementation in
     snnTorch:
@@ -142,7 +141,6 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     
     def __call__(self, x, V):
         
-        # numerical stability gremlin...
         beta = self.beta
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape, dtype=jnp.float16,
@@ -155,11 +153,11 @@ class LIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
         
         return spikes, V
 
-    def initial_state(self, batch_size): # figure out how to make dynamic...
+    def initial_state(self, batch_size): 
         return jnp.zeros((batch_size,) + self.hidden_shape, dtype=jnp.float16)
 
 
-class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
+class RLIF(hk.RNNCore): 
     """
     Recurrent LIF Neuron adapted from snnTorch:
 
@@ -193,49 +191,3 @@ class RLIF(hk.RNNCore): # bfloat16 covers a wide range of unused values...
     def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + self.hidden_shape, dtype=jnp.float16)
 
-# Current Based (CuBa)
-class SC(hk.RNNCore): 
-    """
-    Conductance based neuron modeling synaptic conductance.
-
-    Adapted from snnTorch:
-
-    https://snntorch.readthedocs.io/en/latest/snn.neurons_synaptic.html
-    """
-
-    def __init__(self, hidden_shape, alpha=None, beta=None, threshold=1, 
-                 activation = Axon(),
-                 name="SC"):
-        super().__init__(name=name)
-        self.hidden_shape = hidden_shape
-        self.alpha = alpha
-        self.beta = beta
-        self.threshold = threshold
-        self.act = activation
-    
-    def __call__(self, x, VI):
-        V, I = jnp.split(VI, 2, -1)
-        
-        alpha = self.alpha
-        beta = self.beta
-        # threshold adaptation
-        if not alpha:
-            alpha = hk.get_parameter("alpha", self.hidden_shape, 
-                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            alpha = jax.nn.hard_sigmoid(alpha)
-        if not beta:
-            beta = hk.get_parameter("beta", self.hidden_shape, 
-                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta =jax.nn.hard_sigmoid(beta)
-        # calculate whether spike is generated, and update membrane potential
-        spikes = self.act(V - self.threshold)
-        I = alpha*I + x
-        V = (beta*V + I - spikes*self.threshold).astype(jnp.float16) # cast may not be needed?
-        
-        VI = jnp.concatenate([V,I], axis=-1, dtype=jnp.float16)
-        return spikes, VI
-    
-    # this is probably borked with the shaping now.
-    def initial_state(self, batch_size):
-        return jnp.zeros((batch_size,) + tuple(2*s for s in self.hidden_shape), dtype=jnp.float16)
-    
