@@ -8,9 +8,9 @@ from jax import tree_util as tree
 def silence_reg(min_spikes):
     """L2-Norm per-neuron activation normalization for spiking less than a target number of times.
 
-    :min_spikes: neurons which spike below this value on average over the batch incur quadratic penalty.
-
-    :return: JIT compiled regularization function.
+    Attributes:
+        :min_spikes: neurons which spike below this value on average over the batch incur quadratic penalty.
+        :return: JIT compiled regularization function.
     """
     def _loss(x):
         return (jnp.maximum(0, min_spikes-jnp.mean(x, axis=0)))**2
@@ -29,12 +29,10 @@ def silence_reg(min_spikes):
 def sparsity_reg(max_spikes, norm=optax.huber_loss):
     """Layer activation normalization that seeks to discourage all neurons having a high firing rate.
 
-    :max_spikes: Threshold for which penalty is incurred if the average number of
-        spikes in the layer exceeds it.
-
-    :norm: an Optax loss function. Default is Huber loss.
-
-    :return: JIT compiled regularization function. 
+    Attributes:
+        :max_spikes: Threshold for which penalty is incurred if the average number of spikes in the layer exceeds it.
+        :norm: an Optax loss function. Default is Huber loss.
+        :return: JIT compiled regularization function. 
     """
     def _loss(x):
         return norm(jnp.maximum(0, jnp.mean(x, axis=-1) - max_spikes)) # this may not work for convolution layers....
@@ -55,9 +53,10 @@ def sparsity_reg(max_spikes, norm=optax.huber_loss):
 def integral_accuracy(traces, targets):
     """Calculate the accuracy of a network's predictions based on the voltage traces. Used in combination with a Leaky-Integrate neuron model as the final layer.
 
-    :traces: the output of the final layer of the SNN
-    :targets: the integer labels for each class
-    :return: Accuract score
+    Attributes:
+        :traces: the output of the final layer of the SNN
+        :targets: the integer labels for each class
+        :return: Accuract score
     """
 
     preds = jnp.argmax(jnp.sum(traces, axis=-2), axis=-1)
@@ -69,10 +68,11 @@ def integral_accuracy(traces, targets):
 def integral_crossentropy(traces, targets, smoothing=0.3):
     """Calculate the crossentropy between the integral of membrane potentials. Allows for label smoothing to discourage silencing the other neurons in the readout layer.
 
-    :traces: the output of the final layer of the SNN
-    :targets: the integer labels for each class
-    :smoothing: [optional] rate at which to smooth labels.
-    :return: Optionally smoothed crossentropy loss of the integrated membrane potential.
+    Attributes:
+        :traces: the output of the final layer of the SNN
+        :targets: the integer labels for each class
+        :smoothing: [optional] rate at which to smooth labels.
+        :return: Optionally smoothed crossentropy loss of the integrated membrane potential.
     """
 
     logits = jnp.sum(traces, axis=-2) # time axis.
@@ -84,10 +84,11 @@ def integral_crossentropy(traces, targets, smoothing=0.3):
 def mse_spikerate(traces, targets, sparsity=0.25, smoothing=0.0):
     """Calculate the mean squared error of the mean spike rate. Allows for label smoothing to discourage silencing the other neurons in the readout layer.
 
-    :traces: the output of the final layer of the SNN
-    :targets: the integer labels for each class
-    :smoothing: [optional] rate at which to smooth labels.
-    :return: Mean-Squared-Error loss on the spike rate.
+    Attributes:
+        :traces: the output of the final layer of the SNN
+        :targets: the integer labels for each class
+        :smoothing: [optional] rate at which to smooth labels.
+        :return: Mean-Squared-Error loss on the spike rate.
     """
     t = traces.shape[1]
     logits = jnp.mean(traces, axis=-2) # time axis.
