@@ -16,12 +16,11 @@ State = namedtuple("State", "obs labels")
 
 # This should be changed to a higher-order function
 class shift_augment:
-    """
-        Shift data augmentation tool. Rolls data along specified axes randomly up to a certain amount.
+    """Shift data augmentation tool. Rolls data along specified axes randomly up to a certain amount.
 
-        Attributes:
-            :max_shift: maximum to which values can be shifted
-            :axes: the data axis or axes along which the input will be randomly shifted.
+        
+    :max_shift: maximum to which values can be shifted
+    :axes: the data axis or axes along which the input will be randomly shifted.
     """
 
     def __init__(self, max_shift=10, axes=(-1,)):
@@ -57,14 +56,13 @@ class MNIST_loader(): # change this so that it just returns either rate or tempo
     Dataloader for the MNIST dataset. The data is returned in a packed format after using the pixel intensities as the p-value for sampling from
     a Bernoulli distribution.
 
-    Atrributes:
-        :batch_size: Number of samples per batch.
-        :sample_T: Length of the time axis for each sample.
-        :max_rate: Maximum number of spikes possible. 
-        :val_size: Fraction of the training set to set aside for validation.
-        :data_subsample: use a subsample of the training/validation data to reduce computational demand.
-        :key: An integer for setting the dataset loading random state.
-        :download_dir: The directory to download the dataset to.
+    :batch_size: Number of samples per batch.
+    :sample_T: Length of the time axis for each sample.
+    :max_rate: Maximum number of spikes possible. 
+    :val_size: Fraction of the training set to set aside for validation.
+    :data_subsample: use a subsample of the training/validation data to reduce computational demand.
+    :key: An integer for setting the dataset loading random state.
+    :download_dir: The directory to download the dataset to.
 
     """
 
@@ -187,13 +185,12 @@ class NMNIST_loader():
     """
     Dataloading wrapper for the Neuromorphic MNIST dataset.
 
-    Attributes:
-        :batch_size: Samples per batch.
-        :sample_T: Timesteps per sample/length of time axis.
-        :data_subsample: Use a fraction of the training/validation sets to reduce computational demand.
-        :val_size: Proportion of dataset to set aside for validation.
-        :key: Integer specifying the random seed for the train/val split.
-        :download_dir: The local directory to save the data to. 
+    :batch_size: Samples per batch.
+    :sample_T: Timesteps per sample/length of time axis.
+    :data_subsample: Use a fraction of the training/validation sets to reduce computational demand.
+    :val_size: Proportion of dataset to set aside for validation.
+    :key: Integer specifying the random seed for the train/val split.
+    :download_dir: The local directory to save the data to. 
     """
 
     # Change this to allow a config dictionary of 
@@ -333,11 +330,11 @@ class SHD_loader():
 
     https://zenkelab.org/resources/spiking-heidelberg-datasets-shd/
 
-    Attributes:
-        :batch_size: Number of samples per batch.
-        :sample_T: Number of time steps per sample.
-        :channels: Number of frequency channels used.
-        :val_size: Fraction of the training dataset to set aside for validation.
+    
+    :batch_size: Number of samples per batch.
+    :sample_T: Number of time steps per sample.
+    :channels: Number of frequency channels used.
+    :val_size: Fraction of the training dataset to set aside for validation.
     """
 
 
