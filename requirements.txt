@@ -1,3 +1,4 @@
 dm-haiku
 optax
 jax_tqdm
+tonic
