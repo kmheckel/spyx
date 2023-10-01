@@ -8,7 +8,7 @@ from jax import tree_util as tree
 def silence_reg(min_spikes):
     """L2-Norm per-neuron activation normalization for spiking less than a target number of times.
 
-    :param min_spikes: neurons which spike below this value on average over the batch incur quadratic penalty.
+    :min_spikes: neurons which spike below this value on average over the batch incur quadratic penalty.
 
     :return: JIT compiled regularization function.
     """
@@ -29,10 +29,10 @@ def silence_reg(min_spikes):
 def sparsity_reg(max_spikes, norm=optax.huber_loss):
     """Layer activation normalization that seeks to discourage all neurons having a high firing rate.
 
-    :param max_spikes: Threshold for which penalty is incurred if the average number of
+    :max_spikes: Threshold for which penalty is incurred if the average number of
         spikes in the layer exceeds it.
 
-    :param norm: an Optax loss function. Default is Huber loss.
+    :norm: an Optax loss function. Default is Huber loss.
 
     :return: JIT compiled regularization function. 
     """
@@ -55,8 +55,8 @@ def sparsity_reg(max_spikes, norm=optax.huber_loss):
 def integral_accuracy(traces, targets):
     """Calculate the accuracy of a network's predictions based on the voltage traces. Used in combination with a Leaky-Integrate neuron model as the final layer.
 
-    :param traces: the output of the final layer of the SNN
-    :param targets: the integer labels for each class
+    :traces: the output of the final layer of the SNN
+    :targets: the integer labels for each class
     :return: Accuract score
     """
 
@@ -69,9 +69,9 @@ def integral_accuracy(traces, targets):
 def integral_crossentropy(traces, targets, smoothing=0.3):
     """Calculate the crossentropy between the integral of membrane potentials. Allows for label smoothing to discourage silencing the other neurons in the readout layer.
 
-    :param traces: the output of the final layer of the SNN
-    :param targets: the integer labels for each class
-    :param smoothing: [optional] rate at which to smooth labels.
+    :traces: the output of the final layer of the SNN
+    :targets: the integer labels for each class
+    :smoothing: [optional] rate at which to smooth labels.
     :return: Optionally smoothed crossentropy loss of the integrated membrane potential.
     """
 
@@ -84,9 +84,9 @@ def integral_crossentropy(traces, targets, smoothing=0.3):
 def mse_spikerate(traces, targets, sparsity=0.25, smoothing=0.0):
     """Calculate the mean squared error of the mean spike rate. Allows for label smoothing to discourage silencing the other neurons in the readout layer.
 
-    :param traces: the output of the final layer of the SNN
-    :param targets: the integer labels for each class
-    :param smoothing: [optional] rate at which to smooth labels.
+    :traces: the output of the final layer of the SNN
+    :targets: the integer labels for each class
+    :smoothing: [optional] rate at which to smooth labels.
     :return: Mean-Squared-Error loss on the spike rate.
     """
     t = traces.shape[1]

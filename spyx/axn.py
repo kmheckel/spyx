@@ -45,8 +45,8 @@ def boxcar(width=2, height=0.5):
         Boxcar activation.
 
         Attributes:
-            :param width: Total width of non-zero gradient flow, centered on 0.
-            :param height: Value for gradient within the specified window.
+            :width: Total width of non-zero gradient flow, centered on 0.
+            :height: Value for gradient within the specified window.
 
         :return: JIT compiled boxcar surrogate gradient function.
 
