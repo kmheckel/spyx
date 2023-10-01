@@ -26,8 +26,7 @@ def tanh(k=1):
     """
         Hyperbolic Tangent activation.
 
-        .. math::
-        4 / (e^{-kx} + e^{kx})^2
+        .. math:: 4 / (e^{-kx} + e^{kx})^2
 
         :return: JIT compiled tanh surrogate gradient function.
 
@@ -47,8 +46,7 @@ def boxcar(width=2, height=0.5):
         Attributes:
             :width: Total width of non-zero gradient flow, centered on 0.
             :height: Value for gradient within the specified window.
-
-        :return: JIT compiled boxcar surrogate gradient function.
+            :return: JIT compiled boxcar surrogate gradient function.
 
     """
     k = width / 2
@@ -67,7 +65,9 @@ def triangular(k=0.5):
         .. math::
             max(0, 1-|kx|)
 
-        :return: JIT compiled triangular surrogate gradient function.
+        Attributes:
+            :k: scale factor
+            :return: JIT compiled triangular surrogate gradient function.
 
     """
     def g(x):
@@ -93,7 +93,7 @@ def arctan(k=2):
         scale_factor: A scaling factor that can be used to adjust the steepness of the 
                       Arctangent function. Default is 2.
     
-    :return: JIT compiled arctangent-derived surrogate gradient function.
+        :return: JIT compiled arctangent-derived surrogate gradient function.
     """
     def g(U):
         x = jnp.pi * U * k
@@ -120,7 +120,7 @@ def sigmoid(k=4):
         scale_factor: A scaling factor that can be used to adjust the steepness of the 
                       Sigmoid function. Default is 4.
 
-    :return: JIT compiled sigmoid-derived surrogate gradient function. 
+        :return: JIT compiled sigmoid-derived surrogate gradient function. 
     """
     sig = jax.grad(jax.nn.sigmoid)
     def g(x):
@@ -154,7 +154,7 @@ def superspike(k=25):
         scale_factor: A scaling factor that can be used to adjust the steepness of the 
                       SuperSpike function. Default is 25.
 
-    :return: JIT compiled SuperSpike surrogate gradient function.
+        :return: JIT compiled SuperSpike surrogate gradient function.
     """
 
     def g(x):
@@ -180,7 +180,7 @@ def Axon(bwd=jax.jit(lambda x: 1),
         bwd: Function that calculates the gradient to be used in the backwards pass.
         fwd: Function that returns a value between 0 and 1. Default is Heaviside.
      
-    :return: A JIT compiled activation function comprised of the specified forward and backward functions.
+        :return: A JIT compiled activation function comprised of the specified forward and backward functions.
     """
         
     @jax.custom_vjp
