@@ -80,12 +80,8 @@ def arctan(k=2):
     The Arctangent function returns a value between -pi/2 and pi/2 for inputs in the range of -Infinity to Infinity.
     It is often used in the context of spiking neurons because it provides a smooth approximation to the step function 
     that is differentiable everywhere, which is a requirement for gradient-based optimization methods.
-
-    .. math::
-            frac{∂S}{∂U}&=\\frac{1}{π}\\frac{1}{(1+(πU\\frac{α}{2})^2)}
     
-    
-    :scale_factor: A scaling factor that can be used to adjust the steepness of the 
+    :k: A scaling factor that can be used to adjust the steepness of the 
                       Arctangent function. Default is 2.
     :return: JIT compiled arctangent-derived surrogate gradient function.
     """
@@ -102,16 +98,13 @@ def sigmoid(k=4):
     """
     This class implements the Sigmoid surrogate gradient activation function for a spiking neuron.
     
-    The Sigmoid function is a smooth function that approximates the step function. 
-    It is used as a surrogate gradient for the step function in the context of spiking neurons. 
-    The surrogate gradient is used during the backpropagation process to update the weights of the neuron.
-    
     The Sigmoid function returns a value between 0 and 1 for inputs in the range of -Infinity to Infinity.
     It is often used in the context of spiking neurons because it provides a smooth approximation to the step function 
-    that is differentiable everywhere, which is a requirement for gradient-based optimization methods.
+    that is differentiable everywhere, which is a requirement for gradient-based optimization methods. 
+    As a surrogate gradient, the derivative of sigmoid family functions are used as substitutes for the non-differentiable Heaviside.
     
     
-    :scale_factor: A scaling factor that can be used to adjust the steepness of the 
+    :k: A scaling factor that can be used to adjust the steepness of the 
                       Sigmoid function. Default is 4.
     :return: JIT compiled sigmoid-derived surrogate gradient function. 
     """
@@ -128,10 +121,6 @@ def sigmoid(k=4):
 def superspike(k=25):
     """
     This function implements the SuperSpike surrogate gradient activation function for a spiking neuron.
-    
-    The SuperSpike function is a smooth function that approximates the step function. 
-    It is used as a surrogate gradient for the step function in the context of spiking neurons. 
-    The surrogate gradient is used during the backpropagation process to update the weights of the neuron.
     
     The SuperSpike function is defined as 1/(1+k|U|)^2, where U is the input to the function and k is a scaling factor.
     It returns a value between 0 and 1 for inputs in the range of -Infinity to Infinity.
