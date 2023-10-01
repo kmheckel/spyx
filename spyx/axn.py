@@ -24,7 +24,12 @@ class ActivityRegularization(hk.Module):
 
 def tanh(k=1):
     """
-        Hyperbolic Tangent activation. Very simple.
+        Hyperbolic Tangent activation.
+
+        .. math::
+        4 / (e^{-kx} + e^{kx})^2
+
+        :return: JIT compiled tanh surrogate gradient function.
 
     """
     def g(x):
@@ -37,7 +42,13 @@ def tanh(k=1):
 
 def boxcar(width=2, height=0.5):
     """
-        Boxcar activation. Very simple.
+        Boxcar activation.
+
+        Attributes:
+            :param width: Total width of non-zero gradient flow, centered on 0.
+            :param height: Value for gradient within the specified window.
+
+        :return: JIT compiled boxcar surrogate gradient function.
 
     """
     k = width / 2
@@ -51,7 +62,12 @@ def boxcar(width=2, height=0.5):
 
 def triangular(k=0.5):
     """
-        Triangular activation inspired by Esser et. al. Very simple. https://arxiv.org/abs/1603.08270
+        Triangular activation inspired by Esser et. al. https://arxiv.org/abs/1603.08270
+
+        .. math::
+            max(0, 1-|kx|)
+
+        :return: JIT compiled triangular surrogate gradient function.
 
     """
     def g(x):
@@ -66,17 +82,18 @@ def arctan(k=2):
     """
     This class implements the Arctangent surrogate gradient activation function for a spiking neuron.
     
-    The Arctangent function is a smooth function that approximates the step function. 
-    It is used as a surrogate gradient for the step function in the context of spiking neurons. 
-    The surrogate gradient is used during the backpropagation process to update the weights of the neuron.
-    
     The Arctangent function returns a value between -pi/2 and pi/2 for inputs in the range of -Infinity to Infinity.
     It is often used in the context of spiking neurons because it provides a smooth approximation to the step function 
     that is differentiable everywhere, which is a requirement for gradient-based optimization methods.
+
+    .. math::
+            frac{∂S}{∂U}&=\\frac{1}{π}\\frac{1}{(1+(πU\\frac{α}{2})^2)}
     
     Attributes:
         scale_factor: A scaling factor that can be used to adjust the steepness of the 
                       Arctangent function. Default is 2.
+    
+    :return: JIT compiled arctangent-derived surrogate gradient function.
     """
     def g(U):
         x = jnp.pi * U * k
@@ -102,6 +119,8 @@ def sigmoid(k=4):
     Attributes:
         scale_factor: A scaling factor that can be used to adjust the steepness of the 
                       Sigmoid function. Default is 4.
+
+    :return: JIT compiled sigmoid-derived surrogate gradient function. 
     """
     sig = jax.grad(jax.nn.sigmoid)
     def g(x):
@@ -134,6 +153,8 @@ def superspike(k=25):
     Attributes:
         scale_factor: A scaling factor that can be used to adjust the steepness of the 
                       SuperSpike function. Default is 25.
+
+    :return: JIT compiled SuperSpike surrogate gradient function.
     """
 
     def g(x):
@@ -159,6 +180,7 @@ def Axon(bwd=jax.jit(lambda x: 1),
         bwd: Function that calculates the gradient to be used in the backwards pass.
         fwd: Function that returns a value between 0 and 1. Default is Heaviside.
      
+    :return: A JIT compiled activation function comprised of the specified forward and backward functions.
     """
         
     @jax.custom_vjp

@@ -18,6 +18,10 @@ State = namedtuple("State", "obs labels")
 class shift_augment:
     """
         Shift data augmentation tool. Rolls data along specified axes randomly up to a certain amount.
+
+        Attributes:
+            :param max_shift: maximum to which values can be shifted
+            :param axes: the data axis or axes along which the input will be randomly shifted.
     """
 
     def __init__(self, max_shift=10, axes=(-1,)):
@@ -50,16 +54,25 @@ def rate_code(data, steps, key, max_r=0.75):
 
 class MNIST_loader(): # change this so that it just returns either rate or temporal mnist...
     """
-    Dataloader for the MNIST dataset. The data is returned in a  non-temporal format so instead of applying
-    jnp.unpack_bits on the data you need to apply the spyx.data.rate_code function to generate the SNN input.
+    Dataloader for the MNIST dataset. The data is returned in a packed format after using the pixel intensities as the p-value for sampling from
+    a Bernoulli distribution.
 
-    
+    Atrributes:
+        :batch_size: Number of samples per batch.
+        :param sample_T: Length of the time axis for each sample.
+        :param max_rate: Maximum number of spikes possible. 
+        :param val_size: Fraction of the training set to set aside for validation.
+        :param data_subsample: use a subsample of the training/validation data to reduce computational demand.
+        :param key: An integer for setting the dataset loading random state.
+        :param download_dir: The directory to download the dataset to.
+
     """
 
     # Change this to allow a config dictionary of 
-    def __init__(self, time_steps=64, max_rate = 0.75, batch_size=32, val_size=0.3, subsample_data=1, key=jax.random.PRNGKey(0), download_dir='./MNIST'):
-        key1, key2, key3 = jax.random.split(key, 3)
-        self.sample_T = time_steps
+    def __init__(self, batch_size=32, sample_T=64, max_rate = 0.75, val_size=0.3, data_subsample=1, key=0, download_dir='./MNIST'):
+        jax_key = jax.random.PRNGKey(0)
+        key1, key2, key3 = jax.random.split(jax_key, 3)
+        self.sample_T = sample_T
         self.max_rate = max_rate
         self.val_size = val_size
         self.batch_size = batch_size
@@ -82,13 +95,13 @@ class MNIST_loader(): # change this so that it just returns either rate or tempo
         train_indices, val_indices = train_test_split(
         range(len(train_val_dataset)),
         test_size=self.val_size,
-        random_state=0,
+        random_state=key,
         shuffle=True
         )
 
         # to help with trying to do neuroevolution since the full dataset is a bit much for evolving convnets...
-        train_indices = train_indices[:int(len(train_indices)*subsample_data)]
-        val_indicies  = val_indices[:int(len(val_indices)*subsample_data)]
+        train_indices = train_indices[:int(len(train_indices)*data_subsample)]
+        val_indicies  = val_indices[:int(len(val_indices)*data_subsample)]
     
     
         train_split = Subset(train_val_dataset, train_indices)
@@ -173,10 +186,18 @@ class MNIST_loader(): # change this so that it just returns either rate or tempo
 class NMNIST_loader():
     """
     Dataloading wrapper for the Neuromorphic MNIST dataset.
+
+    Attributes:
+        :param batch_size: Samples per batch.
+        :param sample_T: Timesteps per sample/length of time axis.
+        :param data_subsample: Use a fraction of the training/validation sets to reduce computational demand.
+        :param val_size: Proportion of dataset to set aside for validation.
+        :param key: Integer specifying the random seed for the train/val split.
+        :param download_dir: The local directory to save the data to. 
     """
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=32, sample_T = 40, data_frac = .33, val_size=0.3, download_dir='./NMNIST'):
+    def __init__(self, batch_size=32, sample_T = 40, data_subsample = 1, val_size=0.3, key=0, download_dir='./NMNIST'):
            
         self.val_size = val_size
         self.batch_size = batch_size
@@ -198,12 +219,12 @@ class NMNIST_loader():
         train_indices, val_indices = train_test_split(
         range(len(train_val_dataset)),
         test_size=self.val_size,
-        random_state=314159,
+        random_state=key,
         shuffle=True
         )
     
-        train_indices = train_indices[:int(len(train_indices)*data_frac)]
-        val_indices = val_indices[:int(len(val_indices)*data_frac)]
+        train_indices = train_indices[:int(len(train_indices)*data_subsample)]
+        val_indices = val_indices[:int(len(val_indices)*data_subsample)]
     
         train_split = Subset(train_val_dataset, train_indices)
         self.train_len = len(train_indices)
@@ -284,8 +305,9 @@ class NMNIST_loader():
 ###########################################################
 
 # Builds 2D tensors from data, with the time axis being packed to save memory. 
-class SHD2Raster():
-    """ Tool for rastering SHD samples into frames. Packs bits along the temporal axis for memory efficiency. This means
+class _SHD2Raster():
+    """ 
+    Tool for rastering SHD samples into frames. Packs bits along the temporal axis for memory efficiency. This means
         that the used will have to apply jnp.unpackbits(events, axis=<time axis>) prior to feeding the data to the network.
     """
 
@@ -310,11 +332,17 @@ class SHD_loader():
     apply jnp.unpackbits(events, axis=<time axis>) prior to feeding to an SNN. 
 
     https://zenkelab.org/resources/spiking-heidelberg-datasets-shd/
+
+    Attributes:
+        :param batch_size: Number of samples per batch.
+        :param sample_T: Number of time steps per sample.
+        :param channels: Number of frequency channels used.
+        :param val_size: Fraction of the training dataset to set aside for validation.
     """
 
 
     # Change this to allow a config dictionary of 
-    def __init__(self, batch_size=256, sample_T = 100, channels=128, val_size=0.2):
+    def __init__(self, batch_size=256, sample_T = 128, channels=128, val_size=0.2):
         #####################################
         # Load datasets and process them using tonic.
         #####################################
@@ -333,7 +361,7 @@ class SHD_loader():
             time_factor=shd_timestep / net_dt,
             spatial_factor=net_channels / shd_channels
             ),
-            SHD2Raster(net_channels, sample_T = sample_T)
+            _SHD2Raster(net_channels, sample_T = sample_T)
         ])
         
         train_val_dataset = datasets.SHD("./data", train=True, transform=transform)

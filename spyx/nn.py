@@ -27,6 +27,17 @@ class ALIF(hk.RNNCore):
     def __init__(self, hidden_shape, beta=None, gamma=None, threshold=1,
                  activation = Axon(),
                  name="ALIF"):
+
+        """
+        Attributes:
+            :param hidden_shape: Hidden layer shape.
+            :param beta: Membrane decay/inverse time constant.
+            :param gamma: Threshold adaptation constant.
+            :param threshold: Neuron firing threshold.
+            :param activation: spyx.axn.Axon object determining forward function and surrogate gradient function.
+
+        """
+
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
         self.beta = beta
@@ -35,6 +46,12 @@ class ALIF(hk.RNNCore):
         self.act = activation
     
     def __call__(self, x, VT):
+        """
+        Attributes:
+            :param x: Tensor from previous layer.
+            :param VT: Neuron state vector.
+        """
+
         V, T = jnp.split(VT, 2, -1)
         
         gamma = self.gamma
@@ -65,18 +82,26 @@ class LI(hk.RNNCore):
     """
     Leaky-Integrate (Non-spiking) neuron model.
 
-    Attributes:
-        layer_size: Number of output neurons from the previous linear layer.
-
-        beta: Decay rate on membrane potential (voltage). Set uniformly across the layer.
+ 
     """
 
     def __init__(self, layer_shape, beta=0.8, name="LI"):
+        """
+        Attributes:
+            :param layer_size: Number of output neurons from the previous linear layer.
+
+            :param beta: Decay rate on membrane potential (voltage). Set uniformly across the layer.
+        """
         super().__init__(name=name)
         self.layer_shape = layer_shape
         self.beta = beta
     
     def __call__(self, x, Vin):
+        """
+        Attributes:
+            :param x: Input tensor from previous layer.
+            :param Vin: Neuron state tensor. 
+        """
         # calculate whether spike is generated, and update membrane potential
         Vout = self.beta*Vin + x
         return Vout, Vout
@@ -86,24 +111,30 @@ class LI(hk.RNNCore):
 
 class IF(hk.RNNCore): 
     """
-    Integrate and Fire neuron model 
+    Integrate and Fire neuron model. While not being as powerful/rich as other neuron models, they are very easy to implement in hardware.
     
-
-    Attributes:
-        hidden_size: Size of preceding layer's outputs
-        threshold: threshold for reset. Defaults to 1.
-        activation: spyx.activation function, default is Heaviside with Straight-Through-Estimation.
     """
 
     def __init__(self, hidden_shape, threshold=1, 
                  activation = Axon(),
                  name="LIF"):
+        """
+        Attributes:
+            :param hidden_size: Size of preceding layer's outputs
+            :param threshold: threshold for reset. Defaults to 1.
+            :param activation: spyx.activation function, default is Heaviside with Straight-Through-Estimation.
+        """
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.act = activation
     
     def __call__(self, x, V):
+        """
+        Attributes:
+            :param x: Vector coming from previous layer.
+            :param V: Neuron state tensor.
+        """
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
         V = (V + x - spikes*self.threshold).astype(jnp.float16)
@@ -121,18 +152,21 @@ class LIF(hk.RNNCore):
 
     https://snntorch.readthedocs.io/en/latest/snn.neurons_leaky.html
     
-
-    Attributes:
-        hidden_size: Size of preceding layer's outputs
-        beta: decay rate. Set to float in range (0,1] for uniform decay across layer, otherwise it will be a normal
-            distribution centered on 0.5 with stddev of 0.25
-        threshold: threshold for reset. Defaults to 1.
-        activation: spyx.activation function, default is Heaviside with Straight-Through-Estimation.
     """
 
     def __init__(self, hidden_shape: tuple, beta=None, threshold=1, 
                  activation = Axon(),
                  name="LIF"):
+
+        """
+        Attributes:
+            :param hidden_size: Size of preceding layer's outputs
+            :param beta: decay rate. Set to float in range (0,1] for uniform decay across layer, otherwise it will be a normal
+                distribution centered on 0.5 with stddev of 0.25
+            :param threshold: threshold for reset. Defaults to 1.
+            :param activation: spyx.axn.Axon object, default is Heaviside with Straight-Through-Estimation.
+
+        """
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
         self.beta = beta
@@ -140,7 +174,12 @@ class LIF(hk.RNNCore):
         self.act = activation
     
     def __call__(self, x, V):
-        
+        """
+        Attributes:
+            :param x: input vector coming from previous layer.
+            :param V: neuron state tensor.
+
+        """
         beta = self.beta
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape, dtype=jnp.float16,
@@ -159,7 +198,7 @@ class LIF(hk.RNNCore):
 
 class RLIF(hk.RNNCore): 
     """
-    Recurrent LIF Neuron adapted from snnTorch:
+    Recurrent LIF Neuron adapted from snnTorch. 
 
     https://snntorch.readthedocs.io/en/latest/snn.neurons_rleaky.html
     """
@@ -167,6 +206,18 @@ class RLIF(hk.RNNCore):
     def __init__(self, hidden_shape, beta=None, threshold=1,
                  activation = Axon(),
                  name="RLIF"):
+
+        """
+        Initialization function.
+
+        Attributes:
+            :param hidden_shape: The tuple describing the layer's shape. Can accomodate varying shapes to directly stack on convolution layers without flattening.
+            :param beta: Decay constant. Unless explicitly set to a float of range [0,1], it is treated as a learnable parameter.
+            :param threshold: Firing threshold for the layer. Does not currently support learning/trainable thresholds.
+            :param activation: A spyx.axn.Axon object specifying the forward and reverse activation function. By default it is Heaviside with Straight Through Estimation.
+
+        """
+
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
         self.beta = beta
@@ -174,7 +225,14 @@ class RLIF(hk.RNNCore):
         self.act = activation
     
     def __call__(self, x, V):
-        # calculate whether spike is generated, and update membrane potential
+        """
+        
+        Attributes:
+            :param x: The input data/latent vector from another layer.
+            :param V: The state tensor.
+
+        """
+
         recurrent = hk.get_parameter("w", self.hidden_shape, init=hk.initializers.TruncatedNormal())
         
         beta = self.beta
