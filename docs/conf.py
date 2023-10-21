@@ -51,7 +51,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_book_theme"
-html_title = "Spyx"
+html_title = f"Spyx {release}"
 html_logo = "../spyx.png"
 html_show_sourcelink = True
 html_sourcelink_suffix = ""
