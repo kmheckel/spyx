@@ -65,15 +65,15 @@ class ALIF(hk.RNNCore):
         # calculate whether spike is generated, and update membrane potential
         thresh = self.init_threshold + T
         spikes = self.act(V - thresh)
-        V = (beta*V + x - spikes*thresh).astype(jnp.float16)
+        V = beta*V + x - spikes*thresh
         T = gamma*T + (1-gamma)*spikes
         
-        VT = jnp.concatenate([V,T], axis=-1, dtype=jnp.float16)
+        VT = jnp.concatenate([V,T], axis=-1)
         return spikes, VT
     
     # not sure if this is borked.
     def initial_state(self, batch_size):
-        return jnp.zeros((batch_size,) + tuple(2*s for s in self.hidden_shape), dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + tuple(2*s for s in self.hidden_shape))
          
 class LI(hk.RNNCore):
     """
@@ -102,7 +102,7 @@ class LI(hk.RNNCore):
         return Vout, Vout
     
     def initial_state(self, batch_size):
-        return jnp.zeros((batch_size,) + self.layer_shape, dtype=jnp.float32)
+        return jnp.zeros((batch_size,) + self.layer_shape)
 
 class IF(hk.RNNCore): 
     """
@@ -130,12 +130,12 @@ class IF(hk.RNNCore):
         """
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
-        V = (V + x - spikes*self.threshold).astype(jnp.float16)
+        V = V + x - spikes*self.threshold
         
         return spikes, V
 
     def initial_state(self, batch_size): 
-        return jnp.zeros((batch_size,) + self.hidden_shape, dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + self.hidden_shape)
 
 
 class LIF(hk.RNNCore):
@@ -173,18 +173,18 @@ class LIF(hk.RNNCore):
         """
         beta = self.beta
         if not beta:
-            beta = hk.get_parameter("beta", self.hidden_shape, dtype=jnp.float16,
+            beta = hk.get_parameter("beta", self.hidden_shape,
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jax.nn.hard_sigmoid(beta)
             
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
-        V = (beta*V + x - spikes*self.threshold).astype(jnp.float16)
+        V = beta*V + x - spikes*self.threshold
         
         return spikes, V
 
     def initial_state(self, batch_size): 
-        return jnp.zeros((batch_size,) + self.hidden_shape, dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + self.hidden_shape)
 
 
 class RLIF(hk.RNNCore): 
@@ -228,10 +228,10 @@ class RLIF(hk.RNNCore):
             beta = jax.nn.hard_sigmoid(beta)
         
         spikes = self.act(V - self.threshold)
-        V = (beta*V + x + recurrent*spikes - spikes*self.threshold).astype(jnp.float16)
+        V = beta*V + x + recurrent*spikes - spikes*self.threshold
         
         return spikes, V
 
     def initial_state(self, batch_size):
-        return jnp.zeros((batch_size,) + self.hidden_shape, dtype=jnp.float16)
+        return jnp.zeros((batch_size,) + self.hidden_shape)
 
