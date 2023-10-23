@@ -21,8 +21,6 @@ As with other libraries built on top of JAX, you need to install jax with GPU if
 
 The best way to install and run Spyx is if you install it into a container/environment that already has JAX and PyTorch installed.
 
- https://tonic.readthedocs.io/en/latest/getting_started/install.html
-
 Hardware Requirements:
 ======================
 
