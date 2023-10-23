@@ -6,7 +6,10 @@
 Welcome to Spyx's documentation!
 ================================
 
-Spyx is a compact spiking neural network library built on top of DeepMind's Haiku library.
+Spyx is a compact spiking neural network library built on top of DeepMind's Haiku package.
+
+Spyx promises the flexibility and extensibility offered by PyTorch-based SNN libraries while enabling extremely efficient training on high-performance hardware at speeds comparable to or faster than SNN frameworks that have custom CUDA implementataions.
+
 
 Be sure to go give it a star on Github: https://github.com/kmheckel/spyx
 
@@ -16,7 +19,7 @@ Be sure to go give it a star on Github: https://github.com/kmheckel/spyx
    
    introduction
    quickstart
-   examples/neuroevolution/cartpole_evo
+   examples/surrogate_gradient/SurrogateGradientTutorial
    examples/surrogate_gradient/shd_sg_neuron_model_comparison
    examples/surrogate_gradient/shd_sg_surrogate_comparison
    examples/surrogate_gradient/shd_sg_template

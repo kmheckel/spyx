@@ -18,7 +18,7 @@ Installation:
 
 As with other libraries built on top of JAX, you need to install jax with GPU if you want to get the full benefit of this library. Directions for installing JAX with GPU support can be found at the following: https://github.com/google/jax#installation
 
-Additionally, the data loading is dependent on Tonic, a library for neuromorphic datasets. You will have to install it seperately to avoid creating headaches between dependencies for JAX and PyTorch. 
+The best way to install and run Spyx is if you install it into a container/environment that already has JAX and PyTorch installed.
 
  https://tonic.readthedocs.io/en/latest/getting_started/install.html
 
