@@ -61,9 +61,19 @@ def _nir_node_to_spyx_node(node: nir.NIRNode):
         pass
 
 
-def to_nir(spyx_graph) -> nir.NIRGraph:
+def to_nir(spyx_params) -> nir.NIRGraph:
     """Converts a Spyx network to a NIR graph."""
-    pass
+    nir_graph = []
+
+    for layer, weights in spyx_params.items():
+        layer_type = layer.split("_")[0]
+        if layer_type == "linear":
+            nir_graph.append(nir.Linear(weights["w"])) # think this is about correct
+        elif layer_type == "IF":
+            nir_graph.append(nir.IF(r=, v_threshold=)) # I think I might have to move the thresholds in Spyx into the parameter tree for this to work. Usually they're assumed to be 1 but are user controlled.
+        elif layer_type == "LIF":
+            nir_graph.append(nir.LIF())
+    
 
 
 def from_nir(nir_graph: nir.NIRGraph):
