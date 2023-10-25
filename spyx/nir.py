@@ -63,16 +63,34 @@ def _nir_node_to_spyx_node(node: nir.NIRNode):
 
 def to_nir(spyx_params) -> nir.NIRGraph:
     """Converts a Spyx network to a NIR graph."""
-    nir_graph = []
+    nodes = {}
 
-    for layer, weights in spyx_params.items():
-        layer_type = layer.split("_")[0]
-        if layer_type == "linear":
-            nir_graph.append(nir.Linear(weights["w"])) # think this is about correct
-        elif layer_type == "IF":
-            nir_graph.append(nir.IF(r=, v_threshold=)) # I think I might have to move the thresholds in Spyx into the parameter tree for this to work. Usually they're assumed to be 1 but are user controlled.
-        elif layer_type == "LIF":
-            nir_graph.append(nir.LIF())
+    # construct the edge list for the NIRGraph
+    keys = list(params.keys())
+    edges = [(keys[i], keys[i + 1]) for i in range(len(keys) - 1)]
+    edges.insert(("input", edges[0][0]), 0)
+    edges.append((edges[-1][1], "output"))
+
+    try:
+        for layer, weights in spyx_params.items():
+            layer_type = layer.split("_")[0]
+            if layer_type == "linear":
+                if "b" in weights:
+                    nodes[layer] = nir.Affine(weights["w"], weights["b"])
+                else:
+                    nodes[layer] = nir.Linear(weights["w"])
+            elif layer_type == "IF":
+                pass
+                #nodes[layer] = nir.IF(r=, v_threshold=)
+            elif layer_type == "LIF":
+                pass
+                #nodes[layer] = nir.LIF()
+            else:
+                raise
+    except:
+        print("Attempted exportation of a model which contains a layer not support by NIR.")
+
+    return NIRGraph(nodes, edges)
     
 
 
