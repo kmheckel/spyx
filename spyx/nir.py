@@ -84,14 +84,16 @@ def to_nir(spyx_pytree, input_shape, output_shape) -> nir.NIRGraph:
                 else:
                     nodes[layer] = nir.Linear(params["w"])
             elif layer_type == "conv2d":
-                pass
-                # nodes[layer] = nir.Conv2d()
+                pass # nodes[layer] = nir.Conv2d()
             elif layer_type == "IF":
-                pass
-                #nodes[layer] = nir.IF(r=, v_threshold=)
+                nodes[layer] = nir.IF(r=1, v_threshold=1)
             elif layer_type == "LIF":
-                pass
-                #nodes[layer] = nir.LIF()
+                nodes[layer] = nir.LIF(
+                    tau=1/(1-params["b"]),
+                    v_threshold=1,
+                    v_leak=0,
+                    r=params["b"]
+                )
             else:
                 raise
     except:
