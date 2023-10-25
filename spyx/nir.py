@@ -61,24 +61,31 @@ def _nir_node_to_spyx_node(node: nir.NIRNode):
         pass
 
 
-def to_nir(spyx_params) -> nir.NIRGraph:
+def to_nir(spyx_pytree, input_shape, output_shape) -> nir.NIRGraph:
     """Converts a Spyx network to a NIR graph."""
-    nodes = {}
-
     # construct the edge list for the NIRGraph
-    keys = list(params.keys())
-    edges = [(keys[i], keys[i + 1]) for i in range(len(keys) - 1)]
+    keys = list(spyx_pytree.keys())
+    edges = [(keys[i], keys[i + 1]) for i in range(len(keys) - 1)] # assume linear connectivity
     edges.insert(("input", edges[0][0]), 0)
     edges.append((edges[-1][1], "output"))
 
+    # begin constructing the node list:
+    nodes = {
+        "input" : nir.Input(input_shape),
+        "output" : nir.Output(output_shape)
+    }
+
     try:
-        for layer, weights in spyx_params.items():
+        for layer, params in spyx_pytree.items():
             layer_type = layer.split("_")[0]
             if layer_type == "linear":
-                if "b" in weights:
-                    nodes[layer] = nir.Affine(weights["w"], weights["b"])
+                if "b" in params:
+                    nodes[layer] = nir.Affine(params["w"], params["b"])
                 else:
-                    nodes[layer] = nir.Linear(weights["w"])
+                    nodes[layer] = nir.Linear(params["w"])
+            elif layer_type == "conv2d":
+                pass
+                # nodes[layer] = nir.Conv2d()
             elif layer_type == "IF":
                 pass
                 #nodes[layer] = nir.IF(r=, v_threshold=)
@@ -90,7 +97,7 @@ def to_nir(spyx_params) -> nir.NIRGraph:
     except:
         print("Attempted exportation of a model which contains a layer not support by NIR.")
 
-    return NIRGraph(nodes, edges)
+    return nir.NIRGraph(nodes, edges)
     
 
 
@@ -98,4 +105,5 @@ def from_nir(nir_graph: nir.NIRGraph):
     """Converts a NIR graph to a Spyx network."""
     # NOTE: iterate over nir_graph, convert each node to a Spyx module
     # (using _nir_node_to_spyx_node)
+    # could do this cleanly by using a list comprehension on the NIRGraph and then passing the list to the hk.RNNCore constructor.
     pass
