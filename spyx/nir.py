@@ -1,7 +1,7 @@
 import nir
 import numpy as np
 import haiku as hk
-import .nn
+from .nn import LIF
 
 def _nir_node_to_spyx_node(node: nir.NIRNode):
     """Converts a NIR node to a Spyx node."""
