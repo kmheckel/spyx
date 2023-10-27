@@ -142,7 +142,7 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
         pass
 
 
-def to_nir(spyx_pytree, input_shape, output_shape) -> nir.NIRGraph:
+def to_nir(spyx_pytree, input_shape, output_shape, dt) -> nir.NIRGraph:
     """Converts a Spyx network to a NIR graph."""
     # construct the edge list for the NIRGraph
     keys = list(spyx_pytree.keys())
@@ -176,15 +176,15 @@ def to_nir(spyx_pytree, input_shape, output_shape) -> nir.NIRGraph:
             nodes[layer] = nir.IF(r=1, v_threshold=1)
         elif layer_type == "LIF":
             nodes[layer] = nir.LIF(
-                tau=1/(1-np.array(params["beta"])),
+                tau=dt/(1-np.array(params["beta"])),
                 v_threshold=np.ones_like(params["beta"]),
                 v_leak=np.zeros_like(params["beta"]),
                 r=np.array(params["beta"])
             )
         elif layer_type == "CuBaLIF":
-            nodes[layer] = nir.LIF(
-                tau_mem=1/(1-np.array(params["beta"])),
-                tau_syn=1/(1-np.array(params["alpha"])),
+            nodes[layer] = nir.CubaLIF(
+                tau_mem=dt/(1-np.array(params["beta"])),
+                tau_syn=dt/(1-np.array(params["alpha"])),
                 v_threshold=np.ones_like(params["beta"]),
                 v_leak=np.zeros_like(params["beta"]),
                 r=np.array(params["beta"])

@@ -57,11 +57,11 @@ class ALIF(hk.RNNCore):
         if not gamma:
             gamma = hk.get_parameter("gamma", self.hidden_shape, 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            gamma = jax.nn.hard_sigmoid(gamma)
+            gamma = jnp.minimum(jax.nn.relu(gamma),1)
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jax.nn.hard_sigmoid(beta)
+            beta = jnp.minimum(jax.nn.relu(beta),1)
         # calculate whether spike is generated, and update membrane potential
         thresh = self.init_threshold + T
         spikes = self.act(V - thresh)
@@ -175,7 +175,7 @@ class LIF(hk.RNNCore):
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape,
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jax.nn.hard_sigmoid(beta)
+            beta = jnp.minimum(jax.nn.relu(beta),1)
             
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
@@ -207,11 +207,11 @@ class CuBaLIF(hk.RNNCore):
         if not alpha:
             alpha = hk.get_parameter("alpha", [self.hidden_size], 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            alpha = jax.nn.hard_sigmoid(alpha)
+            alpha = jnp.minimum(jax.nn.relu(alpha),1)
         if not beta:
             beta = hk.get_parameter("beta", [self.hidden_size], 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jax.nn.hard_sigmoid(beta)
+            beta = jnp.minimum(jax.nn.relu(beta),1)
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
         I = alpha*I + x
@@ -262,7 +262,7 @@ class RLIF(hk.RNNCore):
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jax.nn.hard_sigmoid(beta)
+            beta = jnp.minimum(jax.nn.relu(beta),1)
         
         spikes = self.act(V - self.threshold)
         V = beta*V + x + recurrent*spikes - spikes*self.threshold
