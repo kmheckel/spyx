@@ -197,7 +197,7 @@ def to_nir(spyx_pytree, input_shape, output_shape) -> nir.NIRGraph:
     
 
 
-def from_nir(nir_graph: nir.NIRGraph, sample_batch: jnp.array, dt: float, time_major: bool = False):
+def from_nir(nir_graph: nir.NIRGraph, sample_batch: jnp.array, dt: float, time_major: bool = False, return_all_states:bool = False):
     """Converts a NIR graph to a Spyx network."""
     # NOTE: iterate over nir_graph, convert each node to a Spyx module
     # (using _nir_node_to_spyx_node)
@@ -210,7 +210,7 @@ def from_nir(nir_graph: nir.NIRGraph, sample_batch: jnp.array, dt: float, time_m
         core = hk.DeepRNN([ _nir_node_to_spyx_node(nir_graph.nodes[n[0]]) for n in nir_graph.edges[1:] ])
     
         # This takes our SNN core and computes it across the input data.
-        spikes, V = hk.dynamic_unroll(core, x, core.initial_state(x.shape[0]), time_major=time_major)
+        spikes, V = hk.dynamic_unroll(core, x, core.initial_state(x.shape[0]), time_major=time_major, return_all_states=return_all_states)
     
         return spikes, V
 
