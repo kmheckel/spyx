@@ -1,3 +1,6 @@
+import jax
+import jax.numpy as jnp
+
 import nir
 import numpy as np
 import haiku as hk
@@ -16,11 +19,11 @@ def _nir_node_to_spyx_node(node: nir.NIRNode):
 
     elif isinstance(node, nir.Affine):
         # NOTE: node.weight, node.bias are npy arrays
-        return hk.Linear(shape=node.weight.shape, with_bias=True)
+        return hk.Linear(node.weight.shape[-1], with_bias=True)
 
     elif isinstance(node, nir.Linear):
         # NOTE: node.weight
-        return hk.Linear(shape=node.weight.shape, with_bias=False)
+        return hk.Linear(node.weight.shape[-1], with_bias=False)
 
     elif isinstance(node, nir.Conv1d):  # not needed atm
         # NOTE: node.bias, node.weight
@@ -41,21 +44,87 @@ def _nir_node_to_spyx_node(node: nir.NIRNode):
 
     elif isinstance(node, nir.IF): # getting shape is an issue...?
         # NOTE: node.r, node.v_threshold
-        pass #return IF(node.)
+        return IF(node.r.shape, threshold=node.v_threshold)
 
     elif isinstance(node, nir.LIF):
         # NOTE: node.r, node.v_threshold, node.tau, node.v_leak
-        return LIF(node.tau.shape)
+        return LIF(node.tau.shape, threshold=node.v_threshold)
 
     elif isinstance(node, nir.CubaLIF):
         # NOTE: node.r, node.v_threshold, node.v_leak
         # node.tau_mem, node.tau_syn
         # node.w_in
-        return CuBaLIF(node.tau_mem.shape)
+        return CuBaLIF(node.tau_mem.shape, threshold=node.v_threshold)
 
     elif isinstance(node, nir.Flatten):
         # NOTE: node.start_dim, node.end_dim
         return hk.Flatten()
+
+    elif isinstance(node, nir.I):  # not needed atm
+        pass
+
+    elif isinstance(node, nir.Sequence):  # not needed atm
+        pass
+
+    elif isinstance(node, nir.Scale):  # not needed atm
+        pass
+
+    elif isinstance(node, nir.Delay):  # not needed atm
+        pass
+
+    elif isinstance(node, nir.Threshold):  # not needed atm
+        pass
+
+
+def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
+    """Converts a NIR node to a Spyx node."""
+    # NOTE: all nodes have node.input_type and node.output_type
+    # which specify the input and output shape of the node.
+
+    node, next_node = node_pair
+
+    if isinstance(node, (nir.Input, nir.Output)):
+        node.input_type
+        return None
+
+    elif isinstance(node, nir.Affine):
+        # NOTE: node.weight, node.bias are npy arrays
+        w_scale = next_node.r * dt / next_node.tau
+        return {"w":jnp.array(node.weight)*w_scale, "b":jnp.array(node.bias)*w_scale}
+
+    elif isinstance(node, nir.Linear):
+        # NOTE: node.weight
+        w_scale = next_node.r * dt / next_node.tau
+        return {"w":jnp.array(node.weight)*w_scale}
+
+    elif isinstance(node, nir.Conv1d):  # not needed atm
+        # NOTE: node.bias, node.weight
+        # node.dilation, node.groups, node.padding, node.stride
+        pass
+
+    elif isinstance(node, nir.Conv2d):
+        # NOTE: node.bias, node.weight
+        # node.dilation, node.groups, node.padding, node.stride
+        w_scale = next_node.r * dt / next_node.tau # NOTE: cannot support direct pooling of conv layers.
+        return {"w":jnp.array(node.weight)*w_scale, "b":jnp.array(node.bias)*w_scale}
+
+    elif isinstance(node, nir.IF): # getting shape is an issue...?
+        # NOTE: node.r, node.v_threshold
+        return {} # might need to return none/pass here, not sure yet.
+
+    elif isinstance(node, nir.LIF):
+        # NOTE: node.r, node.v_threshold, node.tau, node.v_leak
+        return {"beta":1-(dt/node.tau)}
+
+    elif isinstance(node, nir.CubaLIF):
+        # NOTE: node.r, node.v_threshold, node.v_leak
+        # node.tau_mem, node.tau_syn
+        # node.w_in
+        return {"alpha":1-(dt/node.tau_syn), "beta":1-(dt/node.tau_mem)}
+
+    elif isinstance(node, nir.Flatten):
+        # NOTE: node.start_dim, node.end_dim
+        return {}
 
     elif isinstance(node, nir.I):  # not needed atm
         pass
@@ -128,30 +197,28 @@ def to_nir(spyx_pytree, input_shape, output_shape) -> nir.NIRGraph:
     
 
 
-def from_nir(nir_graph: nir.NIRGraph):
+def from_nir(nir_graph: nir.NIRGraph, sample_batch: jnp.array, dt: float, time_major: bool = False):
     """Converts a NIR graph to a Spyx network."""
     # NOTE: iterate over nir_graph, convert each node to a Spyx module
     # (using _nir_node_to_spyx_node)
     # could do this cleanly by using a list comprehension on the NIRGraph and then passing the list to the hk.RNNCore constructor.
     # actually, this might be more complicated. Might want to create entire haiku function in here and transform it, returning
     # just the pure function object and the associated parameter pytree. Could make things a lot cleaner.
-    pass
-    # for every non-input/output node, convert to a spyx node and return in list form.
 
     def snn(x):
-    
-        x = hk.BatchApply(hk.Linear(64, with_bias=False))(x)
-    
+        
         core = hk.DeepRNN([ _nir_node_to_spyx_node(nir_graph.nodes[n[0]]) for n in nir_graph.edges[1:] ])
     
         # This takes our SNN core and computes it across the input data.
-        spikes, V = hk.dynamic_unroll(core, x, core.initial_state(x.shape[0]), time_major=False, unroll=32)
+        spikes, V = hk.dynamic_unroll(core, x, core.initial_state(x.shape[0]), time_major=time_major)
     
         return spikes, V
 
-    SNN = hk.without_apply_rng(hk.transform_with_state(snn))
+    SNN = hk.without_apply_rng(hk.transform(snn))
+
+    param_names = SNN.init(jax.random.PRNGKey(0), sample_batch).keys()
     
-    params = None
+    params = { k:_nir_node_to_spyx_params((nir_graph.nodes[n[0]], nir_graph.nodes[n[1]]), dt) for k,n in zip(param_names, nir_graph.edges[1:]) }
     
     return SNN, params
 

@@ -189,7 +189,7 @@ class LIF(hk.RNNCore):
 
 class CuBaLIF(hk.RNNCore): 
     def __init__(self, hidden_size, alpha=None, beta=None, threshold=1, 
-                 activation = Heaviside(),
+                 activation = Axon(),
                  name="CuBaLIF"):
         super().__init__(name=name)
         self.hidden_size = hidden_size
