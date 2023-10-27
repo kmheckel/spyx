@@ -3,3 +3,4 @@ optax
 jax_tqdm
 tonic
 torchvision
+nir
