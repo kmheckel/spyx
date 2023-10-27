@@ -187,6 +187,43 @@ class LIF(hk.RNNCore):
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
 
+class CuBaLIF(hk.RNNCore): 
+    def __init__(self, hidden_size, alpha=None, beta=None, threshold=1, 
+                 activation = Heaviside(),
+                 name="CuBaLIF"):
+        super().__init__(name=name)
+        self.hidden_size = hidden_size
+        self.alpha = alpha
+        self.beta = beta
+        self.threshold = threshold
+        self.act = activation
+    
+    def __call__(self, x, VI):
+        V, I = jnp.split(VI, 2, -1)
+        
+        alpha = self.alpha
+        beta = self.beta
+        # threshold adaptation
+        if not alpha:
+            alpha = hk.get_parameter("alpha", [self.hidden_size], 
+                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
+            alpha = jax.nn.hard_sigmoid(alpha)
+        if not beta:
+            beta = hk.get_parameter("beta", [self.hidden_size], 
+                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
+            beta = jax.nn.hard_sigmoid(beta)
+        # calculate whether spike is generated, and update membrane potential
+        spikes = self.act(V - self.threshold)
+        I = alpha*I + x
+        V = beta*V + I - spikes*self.threshold # cast may not be needed?
+        
+        VI = jnp.concatenate([V,I], axis=-1)
+        return spikes, VI
+    
+    def initial_state(self, batch_size):
+        return jnp.zeros([batch_size, self.hidden_size*2])
+    
+
 class RLIF(hk.RNNCore): 
     """
     Recurrent LIF Neuron adapted from snnTorch. 
