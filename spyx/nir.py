@@ -10,6 +10,99 @@ from .nn import IF
 from .nn import CuBaLIF
 
 
+def _create_rnn_subgraph(graph: nir.NIRGraph, lif_nk: str, w_nk: str) -> nir.NIRGraph:
+    """Take a NIRGraph plus the node keys for a LIF and a W_rec, and return a new NIRGraph
+    which has the RNN subgraph replaced with a subgraph (i.e., a single NIRGraph node).
+    """
+    # NOTE: assuming that the LIF and W_rec have keys of form `xyz.abc`
+    sg_key = lif_nk.split('.')[0]  # TODO: make this more general?
+
+    # create subgraph for RNN
+    sg_edges = [
+        (lif_nk, w_nk), (w_nk, lif_nk), (lif_nk, f'{sg_key}.output'), (f'{sg_key}.input', w_nk)
+    ]
+    sg_nodes = {
+        lif_nk: graph.nodes[lif_nk],
+        w_nk: graph.nodes[w_nk],
+        f'{sg_key}.input': nir.Input(graph.nodes[lif_nk].input_type),
+        f'{sg_key}.output': nir.Output(graph.nodes[lif_nk].output_type),
+    }
+    sg = nir.NIRGraph(nodes=sg_nodes, edges=sg_edges)
+
+    # remove subgraph edges from graph
+    graph.edges = [e for e in graph.edges if e not in [(lif_nk, w_nk), (w_nk, lif_nk)]]
+    # remove subgraph nodes from graph
+    graph.nodes = {k: v for k, v in graph.nodes.items() if k not in [lif_nk, w_nk]}
+
+    # change edges of type (x, lif_nk) to (x, sg_key)
+    graph.edges = [(e[0], sg_key) if e[1] == lif_nk else e for e in graph.edges]
+    # change edges of type (lif_nk, x) to (sg_key, x)
+    graph.edges = [(sg_key, e[1]) if e[0] == lif_nk else e for e in graph.edges]
+
+    # insert subgraph into graph and return
+    graph.nodes[sg_key] = sg
+    return graph
+
+
+def _replace_rnn_subgraph_with_nirgraph(graph: nir.NIRGraph) -> nir.NIRGraph:
+    """Take a NIRGraph and replace any RNN subgraphs with a single NIRGraph node."""
+    if len(set(graph.edges)) != len(graph.edges):
+        print('[WARNING] duplicate edges found, removing')
+        graph.edges = list(set(graph.edges))
+
+    # find cycle of LIF <> Dense nodes
+    for edge1 in graph.edges:
+        for edge2 in graph.edges:
+            if not edge1 == edge2:
+                if edge1[0] == edge2[1] and edge1[1] == edge2[0]:
+                    lif_nk = edge1[0]
+                    lif_n = graph.nodes[lif_nk]
+                    w_nk = edge1[1]
+                    w_n = graph.nodes[w_nk]
+                    is_lif = isinstance(lif_n, (nir.LIF, nir.CubaLIF))
+                    is_dense = isinstance(w_n, (nir.Affine, nir.Linear))
+                    # check if the dense only connects to the LIF
+                    w_out_nk = [e[1] for e in graph.edges if e[0] == w_nk]
+                    w_in_nk = [e[0] for e in graph.edges if e[1] == w_nk]
+                    is_rnn = len(w_out_nk) == 1 and len(w_in_nk) == 1
+                    # check if we found an RNN - if so, then parse it
+                    if is_rnn and is_lif and is_dense:
+                        print('[INFO] found RNN subgraph, replacing with NIRGraph node')
+                        print(f'[INFO] subgraph edges: {edge1}, {edge2}')
+                        graph = _create_rnn_subgraph(graph, edge1[0], edge1[1])
+    return graph
+
+
+def _parse_rnn_subgraph(graph: nir.NIRGraph) -> (nir.NIRNode, nir.NIRNode, int):
+    """Try parsing the graph as a RNN subgraph.
+
+    Assumes four nodes: Input, Output, LIF | CubaLIF, Affine | Linear
+    Checks that all nodes have consistent shapes.
+    Will throw an error if either not all nodes are found or consistent shapes are found.
+
+    Returns:
+        lif_node: LIF | CubaLIF node
+        wrec_node: Affine | Linear node
+        lif_size: int, number of neurons in the RNN
+    """
+    sub_nodes = graph.nodes.values()
+    assert len(sub_nodes) == 4, 'only 4-node RNN allowed in subgraph'
+    try:
+        input_node = [n for n in sub_nodes if isinstance(n, nir.Input)][0]
+        output_node = [n for n in sub_nodes if isinstance(n, nir.Output)][0]
+        lif_node = [n for n in sub_nodes if isinstance(n, (nir.LIF, nir.CubaLIF))][0]
+        wrec_node = [n for n in sub_nodes if isinstance(n, (nir.Affine, nir.Linear))][0]
+    except IndexError:
+        raise ValueError('invalid RNN subgraph - could not find all required nodes')
+    lif_size = list(input_node.input_type.values())[0][0]
+    assert lif_size == list(output_node.output_type.values())[0][0], 'output size mismatch'
+    assert lif_size == lif_node.v_threshold.size, 'lif size mismatch (v_threshold)'
+    assert lif_size == wrec_node.weight.shape[0], 'w_rec shape mismatch'
+    assert lif_size == wrec_node.weight.shape[1], 'w_rec shape mismatch'
+
+    return lif_node, wrec_node, lif_size
+
+
 def _nir_node_to_spyx_node(node_pair: nir.NIRNode):
     """Converts a NIR node to a Spyx node."""
     # NOTE: all nodes have node.input_type and node.output_type
@@ -84,6 +177,16 @@ def _nir_node_to_spyx_node(node_pair: nir.NIRNode):
 
     elif isinstance(node, nir.Threshold):  # not needed atm
         pass
+
+    elif isinstance(node, nir.NIRGraph):
+        print('found subgraph, trying to parse as RNN')
+        lif_node, wrec_node, lif_size = _parse_rnn_subgraph(node)
+        # TODO: implement RNN subgraph parsing
+        pass
+
+    else:
+        print("[Warning] Layer not recognized by NIR.")
+        print("Unsupported layer was not added to NIRGraph:", node.__class__)
 
 
 def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
@@ -183,6 +286,15 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
     elif isinstance(node, nir.Threshold):  # not needed atm
         pass
 
+    elif isinstance(node, nir.NIRGraph):
+        print('found subgraph, trying to parse as RNN')
+        lif_node, wrec_node, lif_size = _parse_rnn_subgraph(node)
+        # TODO: implement RNN subgraph parsing
+        pass
+
+    else:
+        print('[Warning] node not recognized:', node.__class__)
+
 
 def to_nir(spyx_pytree, input_shape, output_shape, dt) -> nir.NIRGraph:
     """Converts a Spyx network to a NIR graph."""
@@ -204,10 +316,9 @@ def to_nir(spyx_pytree, input_shape, output_shape, dt) -> nir.NIRGraph:
                 nodes[layer] = nir.Affine(np.array(params["w"]), np.array(params["b"]))
             else:
                 nodes[layer] = nir.Linear(np.array(params["w"]))
-        elif (
-            layer_type == "conv2"
-        ):  # this is hard coded... allow dicts for each layer for more flexible config?
-            p0, p1 = node.padding[0], node.padding[1]
+        elif layer_type == "conv2":
+            # this is hard coded... allow dicts for each layer for more flexible config?
+            p0, p1 = node.padding[0], node.padding[1]  # TODO: fix the node reference
             nodes[layer] = nir.Conv2d(
                 weights=np.array(weight=params["w"]),
                 bias=np.array(params["b"]),
@@ -281,6 +392,9 @@ def from_nir(
     return_all_states: bool = False,
 ):
     """Converts a NIR graph to a Spyx network."""
+    # find valid RNN subgraphs, and replace them with a single NIRGraph node
+    nir_graph = _replace_rnn_subgraph_with_nirgraph(nir_graph)
+
     # NOTE: iterate over nir_graph, convert each node to a Spyx module
     # NOTE: Need to iterate over nirgraph edes and nodes,
     # replacing seperate recurrent layers with merged versions that can then be
