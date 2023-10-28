@@ -137,7 +137,12 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
             tau = 1
 
         w_scale = 1 # dt / tau # NOTE: cannot support direct pooling of conv layers.
-        return {"w":jnp.array(node.weight)*w_scale, "b":jnp.array(node.bias)*w_scale}
+
+        # hk.conv2d expects weights in the format HWIO, NIR is OIHW
+        weight = node.weight.transpose((2, 3, 1, 0)) * w_scale
+        bias = node.bias.reshape(-1, 1, 1) * w_scale
+
+        return {"w": jnp.array(weight), "b": jnp.array(bias)}
 
     elif isinstance(node, nir.IF): # getting shape is an issue...?
         # NOTE: node.r, node.v_threshold
@@ -288,4 +293,3 @@ def from_nir(nir_graph: nir.NIRGraph, sample_batch: jnp.array, dt: float, time_m
     params = { k:_nir_node_to_spyx_params(n, dt) for k,n in zip(param_names, parametrized_layers) }
     
     return SNN, params
-
