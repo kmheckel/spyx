@@ -112,7 +112,7 @@ class IF(hk.RNNCore):
 
     def __init__(self, hidden_shape, threshold=1, 
                  activation = Axon(),
-                 name="LIF"):
+                 name="IF"):
         """
         :hidden_size: Size of preceding layer's outputs
         :threshold: threshold for reset. Defaults to 1.
@@ -203,7 +203,7 @@ class CuBaLIF(hk.RNNCore):
         
         alpha = self.alpha
         beta = self.beta
-        # threshold adaptation
+
         if not alpha:
             alpha = hk.get_parameter("alpha", [self.hidden_size], 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
@@ -223,6 +223,41 @@ class CuBaLIF(hk.RNNCore):
     def initial_state(self, batch_size):
         return jnp.zeros([batch_size, self.hidden_size*2])
     
+class RIF(hk.RNNCore): 
+    """
+    Integrate and Fire neuron model. While not being as powerful/rich as other neuron models, they are very easy to implement in hardware.
+    
+    """
+
+    def __init__(self, hidden_shape, threshold=1, 
+                 activation = Axon(),
+                 name="RIF"):
+        """
+        :hidden_size: Size of preceding layer's outputs
+        :threshold: threshold for reset. Defaults to 1.
+        :activation: spyx.activation function, default is Heaviside with Straight-Through-Estimation.
+        """
+        super().__init__(name=name)
+        self.hidden_shape = hidden_shape
+        self.threshold = threshold
+        self.act = activation
+    
+    def __call__(self, x, V):
+        """
+        :x: Vector coming from previous layer.
+        :V: Neuron state tensor.
+        """
+
+        recurrent = hk.get_parameter("w", self.hidden_shape, init=hk.initializers.TruncatedNormal())
+
+        # calculate whether spike is generated, and update membrane potential
+        spikes = self.act(V - self.threshold)
+        V = V + x + recurrent*spikes - spikes*self.threshold
+        
+        return spikes, V
+
+    def initial_state(self, batch_size): 
+        return jnp.zeros((batch_size,) + self.hidden_shape)
 
 class RLIF(hk.RNNCore): 
     """
@@ -272,3 +307,40 @@ class RLIF(hk.RNNCore):
     def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
+class RCuBaLIF(hk.RNNCore): 
+    def __init__(self, hidden_size, alpha=None, beta=None, threshold=1, 
+                 activation = Axon(),
+                 name="RCuBaLIF"):
+        super().__init__(name=name)
+        self.hidden_size = hidden_size
+        self.alpha = alpha
+        self.beta = beta
+        self.threshold = threshold
+        self.act = activation
+    
+    def __call__(self, x, VI):
+        V, I = jnp.split(VI, 2, -1)
+        
+        alpha = self.alpha
+        beta = self.beta
+
+        recurrent = hk.get_parameter("w", self.hidden_shape, init=hk.initializers.TruncatedNormal())
+
+        if not alpha:
+            alpha = hk.get_parameter("alpha", [self.hidden_size], 
+                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
+            alpha = jnp.minimum(jax.nn.relu(alpha),1)
+        if not beta:
+            beta = hk.get_parameter("beta", [self.hidden_size], 
+                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
+            beta = jnp.minimum(jax.nn.relu(beta),1)
+        # calculate whether spike is generated, and update membrane potential
+        spikes = self.act(V - self.threshold)
+        I = alpha*I + x
+        V = beta*V + I + recurrent*spikes - spikes*self.threshold # cast may not be needed?
+        
+        VI = jnp.concatenate([V,I], axis=-1)
+        return spikes, VI
+    
+    def initial_state(self, batch_size):
+        return jnp.zeros([batch_size, self.hidden_size*2])
