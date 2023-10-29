@@ -188,11 +188,11 @@ class LIF(hk.RNNCore):
 
 
 class CuBaLIF(hk.RNNCore): 
-    def __init__(self, hidden_size, alpha=None, beta=None, threshold=1, 
+    def __init__(self, hidden_shape, alpha=None, beta=None, threshold=1, 
                  activation = Axon(),
                  name="CuBaLIF"):
         super().__init__(name=name)
-        self.hidden_size = hidden_size
+        self.hidden_shape = hidden_shape
         self.alpha = alpha
         self.beta = beta
         self.threshold = threshold
@@ -205,11 +205,11 @@ class CuBaLIF(hk.RNNCore):
         beta = self.beta
 
         if not alpha:
-            alpha = hk.get_parameter("alpha", [self.hidden_size], 
+            alpha = hk.get_parameter("alpha", self.hidden_shape, 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
             alpha = jnp.minimum(jax.nn.relu(alpha),1)
         if not beta:
-            beta = hk.get_parameter("beta", [self.hidden_size], 
+            beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jnp.minimum(jax.nn.relu(beta),1)
         # calculate whether spike is generated, and update membrane potential
@@ -221,7 +221,7 @@ class CuBaLIF(hk.RNNCore):
         return spikes, VI
     
     def initial_state(self, batch_size):
-        return jnp.zeros([batch_size, self.hidden_size*2])
+        return jnp.zeros((batch_size,) + tuple(2*v for v in self.hidden_shape))
     
 class RIF(hk.RNNCore): 
     """
@@ -252,7 +252,7 @@ class RIF(hk.RNNCore):
 
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
-        V = V + x + recurrent*spikes - spikes*self.threshold
+        V = V + x + spikes@recurrent - spikes*self.threshold
         
         return spikes, V
 
@@ -300,7 +300,7 @@ class RLIF(hk.RNNCore):
             beta = jnp.minimum(jax.nn.relu(beta),1)
         
         spikes = self.act(V - self.threshold)
-        V = beta*V + x + recurrent*spikes - spikes*self.threshold
+        V = beta*V + x + spikes@recurrent - spikes*self.threshold
         
         return spikes, V
 
@@ -308,39 +308,41 @@ class RLIF(hk.RNNCore):
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
 class RCuBaLIF(hk.RNNCore): 
-    def __init__(self, hidden_size, alpha=None, beta=None, threshold=1, 
+    def __init__(self, hidden_shape, alpha=None, beta=None, threshold=1, 
                  activation = Axon(),
                  name="RCuBaLIF"):
         super().__init__(name=name)
-        self.hidden_size = hidden_size
+        self.hidden_shape = hidden_shape
         self.alpha = alpha
         self.beta = beta
         self.threshold = threshold
         self.act = activation
     
     def __call__(self, x, VI):
-        V, I = jnp.split(VI, 2, -1)
+        V, I = jnp.split(VI, 2, 0)
         
         alpha = self.alpha
         beta = self.beta
 
-        recurrent = hk.get_parameter("w", self.hidden_shape, init=hk.initializers.TruncatedNormal())
+        recurrent = hk.get_parameter("w", self.hidden_shape*2, init=hk.initializers.TruncatedNormal())
+        bias = hk.get_parameter("b", self.hidden_shape, init=hk.initializers.TruncatedNormal())
 
         if not alpha:
-            alpha = hk.get_parameter("alpha", [self.hidden_size], 
+            alpha = hk.get_parameter("alpha", self.hidden_shape, 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
             alpha = jnp.minimum(jax.nn.relu(alpha),1)
         if not beta:
-            beta = hk.get_parameter("beta", [self.hidden_size], 
+            beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
             beta = jnp.minimum(jax.nn.relu(beta),1)
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
+        feedback = spikes@recurrent + bias
         I = alpha*I + x
-        V = beta*V + I + recurrent*spikes - spikes*self.threshold # cast may not be needed?
+        V = beta*V + I + feedback - spikes*self.threshold # cast may not be needed?
         
-        VI = jnp.concatenate([V,I], axis=-1)
+        VI = jnp.concatenate([V,I], axis=0)
         return spikes, VI
     
     def initial_state(self, batch_size):
-        return jnp.zeros([batch_size, self.hidden_size*2])
+        return jnp.zeros((batch_size*2,) + self.hidden_shape)

@@ -5,9 +5,13 @@ import nir
 import numpy as np
 import haiku as hk
 
-from .nn import LIF
 from .nn import IF
+from .nn import LIF
 from .nn import CuBaLIF
+
+from .nn import RIF
+from .nn import RLIF
+from .nn import RCuBaLIF
 
 
 def _create_rnn_subgraph(graph: nir.NIRGraph, lif_nk: str, w_nk: str) -> nir.NIRGraph:
@@ -157,7 +161,7 @@ def _nir_node_to_spyx_node(node_pair: nir.NIRNode):
         # NOTE: node.r, node.v_threshold, node.v_leak
         # node.tau_mem, node.tau_syn
         # node.w_in
-        return CuBaLIF(node.tau_mem.shape, threshold=node.v_threshold)
+        return CuBaLIF(node.tau_syn.shape, threshold=node.v_threshold)
 
     elif isinstance(node, nir.Flatten):
         # NOTE: node.start_dim, node.end_dim
@@ -182,7 +186,13 @@ def _nir_node_to_spyx_node(node_pair: nir.NIRNode):
         print('found subgraph, trying to parse as RNN')
         lif_node, wrec_node, lif_size = _parse_rnn_subgraph(node)
         # TODO: implement RNN subgraph parsing
-        pass
+        
+        if isinstance(lif_node, nir.IF):
+            pass
+        elif isinstance(lif_node, nir.LIF):
+            pass
+        else:
+            return RCuBaLIF(lif_node.tau_syn.shape, threshold=lif_node.v_threshold)
 
     else:
         print("[Warning] Layer not recognized by NIR.")
@@ -290,6 +300,20 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
         print('found subgraph, trying to parse as RNN')
         lif_node, wrec_node, lif_size = _parse_rnn_subgraph(node)
         # TODO: implement RNN subgraph parsing
+
+        if isinstance(lif_node, nir.IF):
+            pass
+        elif isinstance(lif_node, nir.LIF):
+            pass
+        else: # RCuBaLIF
+            w_scale = dt / lif_node.tau_mem
+            return {
+                "w": jnp.array(wrec_node.weight)*w_scale,
+                "b": jnp.array(wrec_node.bias)*w_scale,
+                "alpha": 1 - (dt / lif_node.tau_syn),
+                "beta":  1 - (dt / lif_node.tau_mem)
+            }
+
         pass
 
     else:
@@ -318,13 +342,13 @@ def to_nir(spyx_pytree, input_shape, output_shape, dt) -> nir.NIRGraph:
                 nodes[layer] = nir.Linear(np.array(params["w"]))
         elif layer_type == "conv2":
             # this is hard coded... allow dicts for each layer for more flexible config?
-            p0, p1 = node.padding[0], node.padding[1]  # TODO: fix the node reference
+            #p0, p1 = node.padding[0], node.padding[1]  # TODO: figure out how to let the user specify this stuff...
             nodes[layer] = nir.Conv2d(
                 weights=np.array(weight=params["w"]),
                 bias=np.array(params["b"]),
                 dilation=1,
                 stride=1,
-                padding=[(p0, p0), (p1, p1)],
+                padding="SAME",#[(p0, p0), (p1, p1)],
                 groups=1,
             )
         elif layer_type == "IF":
@@ -428,7 +452,7 @@ def from_nir(
 
     parametrized_layers = []
     for edge in sorted_edges[1:]:
-        if isinstance(nir_graph.nodes[edge[0]], (nir.Conv2d, nir.Affine, nir.Linear)):
+        if isinstance(nir_graph.nodes[edge[0]], (nir.Conv2d, nir.Affine, nir.Linear, nir.LIF, nir.CubaLIF, nir.NIRGraph)):
             parametrized_layers.append(
                 (nir_graph.nodes[edge[0]], nir_graph.nodes[edge[1]])
             )
