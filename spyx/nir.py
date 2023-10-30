@@ -13,6 +13,8 @@ from .nn import RIF
 from .nn import RLIF
 from .nn import RCuBaLIF
 
+from .nn import SumPool
+
 
 def _create_rnn_subgraph(graph: nir.NIRGraph, lif_nk: str, w_nk: str) -> nir.NIRGraph:
     """Take a NIRGraph plus the node keys for a LIF and a W_rec, and return a new NIRGraph
@@ -145,7 +147,7 @@ def _nir_node_to_spyx_node(node_pair: nir.NIRNode):
         )
 
     elif isinstance(node, nir.SumPool2d):
-        return hk.AvgPool(
+        return SumPool(
             node.kernel_size, node.stride.tolist(), "VALID", channel_axis=1
         )  # hacky...
 
