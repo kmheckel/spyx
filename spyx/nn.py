@@ -177,7 +177,7 @@ class ALIF(hk.RNNCore):
         return spikes, VT
     
     # not sure if this is borked.
-    def initial_state(self, batch_size):
+    def initial_state(self, batch_size): # this might need fixed to match CuBaLIF...
         return jnp.zeros((batch_size,) + tuple(2*s for s in self.hidden_shape))
          
 class LI(hk.RNNCore):
@@ -354,9 +354,11 @@ class RIF(hk.RNNCore):
         """
 
         recurrent = hk.get_parameter("w", self.hidden_shape, init=hk.initializers.TruncatedNormal())
+        bias = hk.get_parameter("b", self.hidden_shape, init=hk.initializers.TruncatedNormal())
 
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
+        feedback = spikes@recurrent + bias
         V = V + x + spikes@recurrent - spikes*self.threshold
         
         return spikes, V
@@ -397,7 +399,8 @@ class RLIF(hk.RNNCore):
         """
 
         recurrent = hk.get_parameter("w", self.hidden_shape, init=hk.initializers.TruncatedNormal())
-        
+        bias = hk.get_parameter("b", self.hidden_shape, init=hk.initializers.TruncatedNormal())
+
         beta = self.beta
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape, 
@@ -405,7 +408,8 @@ class RLIF(hk.RNNCore):
             beta = jnp.minimum(jax.nn.relu(beta),1)
         
         spikes = self.act(V - self.threshold)
-        V = beta*V + x + spikes@recurrent - spikes*self.threshold
+        feedback = spikes@recurrent + bias
+        V = beta*V + x + feedback - spikes*self.threshold
         
         return spikes, V
 
