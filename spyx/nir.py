@@ -187,7 +187,7 @@ def _nir_node_to_spyx_node(node_pair: nir.NIRNode):
     elif isinstance(node, nir.NIRGraph):
         print('found subgraph, trying to parse as RNN')
         lif_node, wrec_node, lif_size = _parse_rnn_subgraph(node)
-        # TODO: implement RNN subgraph parsing
+        # TODO: implement RIF, RLIF generation
         
         if isinstance(lif_node, nir.IF):
             pass
@@ -219,6 +219,14 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
             tau = next_node.tau
         elif isinstance(next_node, nir.CubaLIF):
             tau = next_node.tau_syn
+        elif isinstance(next_node, nir.NIRGraph):
+            next_lif, _, _ = _parse_rnn_subgraph(next_node)
+            if isinstance(next_lif, nir.LIF):
+                tau = next_lif.tau
+            elif isinstance(next_lif, nir.CubaLIF):
+                tau = next_lif.tau_syn
+            else:
+                pass
         else:
             tau = 1
 
@@ -235,6 +243,14 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
             tau = next_node.tau
         elif isinstance(next_node, nir.CubaLIF):
             tau = next_node.tau_syn
+        elif isinstance(next_node, nir.NIRGraph):
+            next_lif, _, _ = _parse_rnn_subgraph(next_node)
+            if isinstance(next_lif, nir.LIF):
+                tau = next_lif.tau
+            elif isinstance(next_lif, nir.CubaLIF):
+                tau = next_lif.tau_syn
+            else:
+                pass
         else:
             tau = 1
 

@@ -330,7 +330,7 @@ class CuBaLIF(hk.RNNCore):
     
 class RIF(hk.RNNCore): 
     """
-    Integrate and Fire neuron model. While not being as powerful/rich as other neuron models, they are very easy to implement in hardware.
+    Recurrent Integrate and Fire neuron model.
     
     """
 
@@ -432,7 +432,7 @@ class RCuBaLIF(hk.RNNCore):
         
         alpha = self.alpha
         beta = self.beta
-
+        # TODO: review this line and make less sketchy...
         recurrent = hk.get_parameter("w", self.hidden_shape*2, init=hk.initializers.TruncatedNormal())
         bias = hk.get_parameter("b", self.hidden_shape, init=hk.initializers.TruncatedNormal())
 
