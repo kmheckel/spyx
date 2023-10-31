@@ -447,8 +447,8 @@ class RCuBaLIF(hk.RNNCore):
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
         feedback = spikes@recurrent + bias
-        I = alpha*I + x
-        V = beta*V + I + feedback - spikes*self.threshold # cast may not be needed?
+        I = alpha*I + x + feedback
+        V = beta*V + I - spikes*self.threshold # cast may not be needed?
         
         VI = jnp.concatenate([V,I], axis=0)
         return spikes, VI
