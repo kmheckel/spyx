@@ -192,7 +192,7 @@ def _nir_node_to_spyx_node(node_pair: nir.NIRNode):
         if isinstance(lif_node, nir.IF):
             return RIF(lif_size, threshold=lif_node.v_leak)
         elif isinstance(lif_node, nir.LIF):
-            return RLIF(lif_nod.tau.shape, threshold=lif_node.v_threshold)
+            return RLIF(lif_node.tau.shape, threshold=lif_node.v_threshold)
         else:
             return RCuBaLIF(lif_node.tau_syn.shape, threshold=lif_node.v_threshold)
 
@@ -327,7 +327,7 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
             return {
                 "w": jnp.array(wrec_node.weight)*w_scale,
                 "b": jnp.array(wrec_node.bias)*w_scale,
-                "beta":  1 - (dt / lif_node.tau_mem)
+                "beta":  1 - (dt / lif_node.tau)
             }
         else: # RCuBaLIF
             w_scale = dt / lif_node.tau_syn
