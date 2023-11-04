@@ -53,7 +53,7 @@ def integral_accuracy(traces, targets):
 
     :param traces: the output of the final layer of the SNN
     :param targets: the integer labels for each class
-    :return: Accuracy score
+    :return: Accuracy score, predictions
     """
 
     preds = jnp.argmax(jnp.sum(traces, axis=-2), axis=-1)
