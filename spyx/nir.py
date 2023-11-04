@@ -190,9 +190,9 @@ def _nir_node_to_spyx_node(node_pair: nir.NIRNode):
         # TODO: implement RIF, RLIF generation
         
         if isinstance(lif_node, nir.IF):
-            pass
+            return RIF(lif_size, threshold=lif_node.v_leak)
         elif isinstance(lif_node, nir.LIF):
-            pass
+            return RLIF(lif_nod.tau.shape, threshold=lif_node.v_threshold)
         else:
             return RCuBaLIF(lif_node.tau_syn.shape, threshold=lif_node.v_threshold)
 
@@ -229,7 +229,7 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
                 pass
         else:
             tau = 1
-
+        
         w_scale = dt / tau
         return {
             "w": jnp.array(node.weight) * w_scale,
@@ -238,7 +238,6 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
 
     elif isinstance(node, nir.Linear):
         # NOTE: node.weight
-        tau = 1
         if isinstance(next_node, nir.LIF):
             tau = next_node.tau
         elif isinstance(next_node, nir.CubaLIF):
@@ -253,7 +252,6 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
                 pass
         else:
             tau = 1
-
         w_scale = dt / tau
         return {"w": jnp.array(node.weight) * w_scale}
 
@@ -265,7 +263,6 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
     elif isinstance(node, nir.Conv2d):
         # NOTE: node.bias, node.weight
         # node.dilation, node.groups, node.padding, node.stride
-        tau = 1
         if isinstance(next_node, nir.LIF):
             tau = next_node.tau
         elif isinstance(next_node, nir.CubaLIF):
@@ -273,7 +270,7 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
         else:
             tau = 1
 
-        w_scale = 1  # dt / tau # NOTE: cannot support direct pooling of conv layers.
+        w_scale = dt / tau # NOTE: cannot support direct pooling of conv layers.
 
         # hk.conv2d expects weights in the format HWIO, NIR is OIHW
         weight = node.weight.transpose((2, 3, 1, 0)) * w_scale
@@ -320,11 +317,20 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
         # TODO: implement RNN subgraph parsing
 
         if isinstance(lif_node, nir.IF):
-            pass
+            w_scale = dt
+            return {
+                "w": jnp.array(wrec_node.weight)*w_scale,
+                "b": jnp.array(wrec_node.bias)*w_scale
+            }
         elif isinstance(lif_node, nir.LIF):
-            pass
+            w_scale = dt / lif_node.tau
+            return {
+                "w": jnp.array(wrec_node.weight)*w_scale,
+                "b": jnp.array(wrec_node.bias)*w_scale,
+                "beta":  1 - (dt / lif_node.tau_mem)
+            }
         else: # RCuBaLIF
-            w_scale = dt / lif_node.tau_mem
+            w_scale = dt / lif_node.tau_syn
             return {
                 "w": jnp.array(wrec_node.weight)*w_scale,
                 "b": jnp.array(wrec_node.bias)*w_scale,
