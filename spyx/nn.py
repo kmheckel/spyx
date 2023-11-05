@@ -428,7 +428,7 @@ class RCuBaLIF(hk.RNNCore):
         self.act = activation
     
     def __call__(self, x, VI):
-        V, I = jnp.split(VI, 2, 0)
+        V, I = jnp.split(VI, 2, -1)
         
         alpha = self.alpha
         beta = self.beta
@@ -450,8 +450,8 @@ class RCuBaLIF(hk.RNNCore):
         I = alpha*I + x + feedback
         V = beta*V + I - spikes*self.threshold # cast may not be needed?
         
-        VI = jnp.concatenate([V,I], axis=0)
+        VI = jnp.concatenate([V,I], axis=-1)
         return spikes, VI
     
     def initial_state(self, batch_size):
-        return jnp.zeros((batch_size*2,) + self.hidden_shape)
+        return jnp.zeros((batch_size,) + tuple(2*v for v in self.hidden_shape))
