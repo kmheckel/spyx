@@ -319,20 +319,20 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
         if isinstance(lif_node, nir.IF):
             w_scale = dt
             return {
-                "w": jnp.array(wrec_node.weight)*w_scale,
+                "w": jnp.array(wrec_node.weight.T)*w_scale,
                 "b": jnp.array(wrec_node.bias)*w_scale
             }
         elif isinstance(lif_node, nir.LIF):
             w_scale = dt / lif_node.tau
             return {
-                "w": jnp.array(wrec_node.weight)*w_scale,
+                "w": jnp.array(wrec_node.weight.T)*w_scale,
                 "b": jnp.array(wrec_node.bias)*w_scale,
                 "beta":  1 - (dt / lif_node.tau)
             }
         else: # RCuBaLIF
             w_scale = dt / lif_node.tau_syn
             return {
-                "w": jnp.array(wrec_node.weight)*w_scale,
+                "w": jnp.array(wrec_node.weight.T)*w_scale,
                 "b": jnp.array(wrec_node.bias)*w_scale,
                 "alpha": 1 - (dt / lif_node.tau_syn),
                 "beta":  1 - (dt / lif_node.tau_mem)
