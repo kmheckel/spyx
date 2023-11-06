@@ -319,6 +319,7 @@ class CuBaLIF(hk.RNNCore):
             beta = jnp.minimum(jax.nn.relu(beta),1)
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
+        V = V - spikes*self.threshold
         I = alpha*I + x
         V = beta*V + I - spikes*self.threshold # cast may not be needed?
         
@@ -446,9 +447,10 @@ class RCuBaLIF(hk.RNNCore):
             beta = jnp.minimum(jax.nn.relu(beta),1)
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
+        V = V - spikes*self.threshold
         feedback = spikes@recurrent + bias
         I = alpha*I + x + feedback
-        V = beta*V + I - spikes*self.threshold # cast may not be needed?
+        V = beta*V + I
         
         VI = jnp.concatenate([V,I], axis=-1)
         return spikes, VI

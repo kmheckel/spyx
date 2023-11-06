@@ -219,18 +219,22 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
             tau = next_node.tau
         elif isinstance(next_node, nir.CubaLIF):
             tau = next_node.tau_syn
+            w_in = next_node.w_in
         elif isinstance(next_node, nir.NIRGraph):
             next_lif, _, _ = _parse_rnn_subgraph(next_node)
             if isinstance(next_lif, nir.LIF):
                 tau = next_lif.tau
             elif isinstance(next_lif, nir.CubaLIF):
                 tau = next_lif.tau_syn
+                w_in = next_lif.w_in
             else:
                 pass
         else:
             tau = 1
         
         w_scale = dt / tau
+        if w_in is not None: # need some treatment for arbitrary R in the future...
+            w_scale *= w_in
         return {
             "w": jnp.array(node.weight) * w_scale,
             "b": jnp.array(node.bias) * w_scale,
@@ -242,17 +246,21 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
             tau = next_node.tau
         elif isinstance(next_node, nir.CubaLIF):
             tau = next_node.tau_syn
+            w_in = next_node.w_in
         elif isinstance(next_node, nir.NIRGraph):
             next_lif, _, _ = _parse_rnn_subgraph(next_node)
             if isinstance(next_lif, nir.LIF):
                 tau = next_lif.tau
             elif isinstance(next_lif, nir.CubaLIF):
                 tau = next_lif.tau_syn
+                w_in = next_lif.w_in
             else:
                 pass
         else:
             tau = 1
         w_scale = dt / tau
+        if w_in is not None: # need some treatment for arbitrary R in the future...
+            w_scale *= w_in
         return {"w": jnp.array(node.weight) * w_scale}
 
     elif isinstance(node, nir.Conv1d):  # not needed atm
@@ -267,11 +275,13 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
             tau = next_node.tau
         elif isinstance(next_node, nir.CubaLIF):
             tau = next_node.tau_syn
+            w_in = next_node.w_in
         else:
             tau = 1
 
         w_scale = dt / tau # NOTE: cannot support direct pooling of conv layers.
-
+        if w_in is not None: # need some treatment for arbitrary R in the future...
+            w_scale *= w_in
         # hk.conv2d expects weights in the format HWIO, NIR is OIHW
         weight = node.weight.transpose((2, 3, 1, 0)) * w_scale
         bias = node.bias.reshape(-1, 1, 1) * w_scale
@@ -322,20 +332,20 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
             bias = wrec_node.bias
 
         if isinstance(lif_node, nir.IF):
-            w_scale = dt
+            w_scale = lif_node.r * dt
             return {
                 "w": jnp.array(wrec_node.weight.T)*w_scale,
                 "b": jnp.array(bias)*w_scale
             }
         elif isinstance(lif_node, nir.LIF):
-            w_scale = dt / lif_node.tau
+            w_scale = lif_node.r * dt / lif_node.tau
             return {
                 "w": jnp.array(wrec_node.weight.T)*w_scale,
                 "b": jnp.array(bias)*w_scale,
                 "beta":  1 - (dt / lif_node.tau)
             }
-        else: # RCuBaLIF
-            w_scale = dt / lif_node.tau_syn
+        else: # RCuBaLIF # need option to enable/disable weight scaling...
+            w_scale = lif_node.w_in * dt / lif_node.tau_syn
             return {
                 "w": jnp.array(wrec_node.weight.T)*w_scale,
                 "b": jnp.array(bias)*w_scale,
