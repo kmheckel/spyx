@@ -20,6 +20,8 @@ Be sure to go give it a star on Github: https://github.com/kmheckel/spyx
    introduction
    quickstart
    examples/surrogate_gradient/SurrogateGradientTutorial
+   examples/neuroevolution/cartpole_evo
+
    examples/surrogate_gradient/shd_sg_neuron_model_comparison
    examples/surrogate_gradient/shd_sg_surrogate_comparison
    examples/surrogate_gradient/shd_sg_template

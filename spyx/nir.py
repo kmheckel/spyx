@@ -360,7 +360,7 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
 
 
 def to_nir(spyx_pytree, input_shape, output_shape, dt) -> nir.NIRGraph:
-    """Converts a Spyx network to a NIR graph."""
+    """Converts a Spyx network to a NIR graph. Under Construction."""
     # construct the edge list for the NIRGraph
     keys = list(spyx_pytree.keys())
     edges = [
