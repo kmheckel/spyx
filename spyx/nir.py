@@ -15,6 +15,14 @@ from .nn import RCuBaLIF
 
 from .nn import SumPool
 
+def reorder_layers(init_params, trained_params):
+    """
+    Some optimization libraries may permute the keys of the network's PyTree; 
+    this is an issue as exporting to NIR assumes the keys are in their original order
+    after initializing the network. This simple function takes the original and trained parameters
+    and returns the trained parameters in the proper order for exportation.
+    """
+    return {k:trained_params[k] for k in init_params.keys() }
 
 def _create_rnn_subgraph(graph: nir.NIRGraph, lif_nk: str, w_nk: str) -> nir.NIRGraph:
     """Take a NIRGraph plus the node keys for a LIF and a W_rec, and return a new NIRGraph
@@ -244,6 +252,8 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
         # NOTE: node.weight
         if isinstance(next_node, nir.LIF):
             tau = next_node.tau
+        elif isinstance(next_node, nir.LI):
+            tau = next_node.tau
         elif isinstance(next_node, nir.CubaLIF):
             tau = next_node.tau_syn
             w_in = next_node.w_in
@@ -360,7 +370,7 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
 
 
 def to_nir(spyx_pytree, input_shape, output_shape, dt) -> nir.NIRGraph:
-    """Converts a Spyx network to a NIR graph. Under Construction."""
+    """Converts a Spyx network to a NIR graph. Under Construction. Currently only supports exporting networks without explicit recurrence/feedback."""
     # construct the edge list for the NIRGraph
     keys = list(spyx_pytree.keys())
     edges = [
@@ -392,6 +402,11 @@ def to_nir(spyx_pytree, input_shape, output_shape, dt) -> nir.NIRGraph:
             )
         elif layer_type == "IF":
             nodes[layer] = nir.IF(r=1, v_threshold=1)
+        elif layer_type == "LI":
+            nodes[layer] = nir.LI(
+                tau=dt / (1 - np.array(params["beta"])),
+                v_leak=np.zeros_like(params["beta"]),
+                r=np.array(params["beta"]),)
         elif layer_type == "LIF":
             nodes[layer] = nir.LIF(
                 tau=dt / (1 - np.array(params["beta"])),
@@ -407,7 +422,7 @@ def to_nir(spyx_pytree, input_shape, output_shape, dt) -> nir.NIRGraph:
                 v_leak=np.zeros_like(params["beta"]),
                 r=np.array(params["beta"]),
             )
-        else:
+        else: # TODO: implement explicit recurrent export via subgraphs...
             print("[Warning] Layer not recognized by NIR.")
             print("Unsupported layer was not added to NIRGraph:", layer)
 

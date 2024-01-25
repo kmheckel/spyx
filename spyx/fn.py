@@ -82,6 +82,7 @@ def mse_spikerate(traces, targets, sparsity=0.25, smoothing=0.0):
 
     :param traces: the output of the final layer of the SNN
     :param targets: the integer labels for each class
+    :param sparsity: the percentage of the time you want the neurons to spike
     :param smoothing: [optional] rate at which to smooth labels.
     :return: Mean-Squared-Error loss on the spike rate.
     """

@@ -8,6 +8,10 @@
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 
+# datasets
+.h5
+.zip
+
 # IPython
 profile_default/
 ipython_config.py
