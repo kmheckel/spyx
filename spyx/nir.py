@@ -423,7 +423,7 @@ def to_nir(spyx_pytree, input_shape, output_shape, dt) -> nir.NIRGraph:
                 r=np.array(params["beta"]),
             )
         else: # TODO: implement explicit recurrent export via subgraphs...
-            print("[Warning] Layer not recognized by NIR.")
+            print("[Warning] Layer not recognized by NIR or export not yet supported (explicit recurrent layers).")
             print("Unsupported layer was not added to NIRGraph:", layer)
 
     return nir.NIRGraph(nodes, edges)

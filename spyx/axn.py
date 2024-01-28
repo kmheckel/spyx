@@ -144,7 +144,7 @@ def superspike(k=25):
 
 
 # This could also just be changed to be a function which yields the proper VJP func...
-def Axon(bwd=jax.jit(lambda x: 1), 
+def Axon(bwd=jax.jit(lambda x: x), 
          fwd=jax.jit(lambda x: jnp.heaviside(x,0))):
     """
     This function serves as the activation function for the SNNs, allowing for custom definitions of both surrogate gradients for backwards
