@@ -381,7 +381,7 @@ class RIF(hk.RNNCore):
 
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
-        feedback = spikes@recurrent + bias
+        feedback = spikes@recurrent + bias # this seems like an error...
         V = V + x + spikes@recurrent - spikes*self.threshold
         
         return spikes, V

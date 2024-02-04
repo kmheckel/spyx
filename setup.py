@@ -21,6 +21,15 @@ requires = (
     ],
 )
 
+extras = {
+    'data' : [
+        'tonic',
+        'torch',
+        'torchvision',
+        'sklearn'
+    ]
+}
+
 # This call to setup() does all the work
 setup(
     name="spyx",
@@ -44,5 +53,6 @@ setup(
     ],
     packages=["spyx"],
     include_package_data=True,
-    install_requires=requires
+    install_requires=requires,
+    extras_require=extras
 )

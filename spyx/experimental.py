@@ -48,6 +48,8 @@ class SPSN(hk.Module):
         """
         
         :hidden_shape: Size of hidden layer for the number of Voltages to track.
+        :threshold: Value for which probability of firing exceeds 50%
+        :k: The slope of the sigmoid function, the higher the value the closer membrane voltage must to the threshold to have a chance of firing but also a higher chance of continuous firing
 
         """
         super().__init__(name=name)
