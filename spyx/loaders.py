@@ -11,6 +11,8 @@ try:
     import torchvision as tv
     from torch.utils.data import DataLoader, Subset
     from sklearn.model_selection import train_test_split
+
+    from .data import rate_code
 except ImportError:
     optional_dependencies_installed = False
 
