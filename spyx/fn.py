@@ -73,7 +73,7 @@ def integral_crossentropy(traces, targets, smoothing=0.3):
 
     logits = jnp.sum(traces, axis=-2) # time axis.
     labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
-    return optax.softmax_cross_entropy(logits, labels).mean() 
+    return jnp.mean(optax.softmax_cross_entropy(logits, labels))
 
 # convert to function that returns compiled function
 @jax.jit

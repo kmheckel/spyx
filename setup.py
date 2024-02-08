@@ -22,9 +22,8 @@ requires = (
 )
 
 extras = {
-    'data' : [
+    'loaders' : [
         'tonic',
-        'torch',
         'torchvision',
         'sklearn'
     ]
@@ -33,7 +32,7 @@ extras = {
 # This call to setup() does all the work
 setup(
     name="spyx",
-    version="0.1.15",
+    version="0.1.16",
     description="Spyx: SNNs in JAX",
     long_description=long_description,
     long_description_content_type="text/markdown",

@@ -31,6 +31,14 @@ Spyx achieves extremely high performance by maintaining the entire dataset in th
 Since Spyx is developed on top of the current JAX version, it does not work on Google Colab's TPUs which use an older version. Cloud TPU support will be tested in the near future.
 
 
+Research and Projects Using Spyx:
+=================================
+
+Master's Thesis: Neuroevolution of Spiking Neural Networks [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10620442.svg)](https://doi.org/10.5281/zenodo.10620442)
+
+*** Your projects and research could be here! ***
+
+
 Contributing:
 =============
 
