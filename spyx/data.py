@@ -59,7 +59,7 @@ def rate_code(num_steps, max_r=0.75):
 
     def _call(data, key):
         data = jnp.array(data, dtype=jnp.float16)
-        unrolled_data = jnp.repeat(data, steps, axis=1)
+        unrolled_data = jnp.repeat(data, num_steps, axis=1)
         return jax.random.bernoulli(key, unrolled_data*max_r).astype(jnp.uint8)
     
     return jax.jit(_call)
