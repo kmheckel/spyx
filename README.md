@@ -51,14 +51,17 @@ For now, use the Bibtex entry below or click the badge above the title image to 
 
 
 ```
-@software{kade_heckel_2023_8241588,
-  author       = {Kade Heckel},
-  title        = {kmheckel/spyx: v0.1.0-beta},
-  month        = aug,
-  year         = 2023,
+@software{kade_heckel_2024_10635178,
+  author       = {Kade Heckel and
+                  Steven Abreu and
+                  Gregor Lenz and
+                  Thomas Nowotny},
+  title        = {kmheckel/spyx: v0.1.17},
+  month        = feb,
+  year         = 2024,
   publisher    = {Zenodo},
-  version      = {beta},
-  doi          = {10.5281/zenodo.8241588},
-  url          = {https://doi.org/10.5281/zenodo.8241588}
+  version      = {camera-ready},
+  doi          = {10.5281/zenodo.10635178},
+  url          = {https://doi.org/10.5281/zenodo.10635178}
 }
 ```
