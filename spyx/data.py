@@ -27,7 +27,7 @@ def shuffler(dataset, batch_size):
     """
     x, y = dataset
     cutoff = y.shape[0] % batch_size
-    data_shape = (-1, batch_size) + obs.shape[1:]
+    data_shape = (-1, batch_size) + x.shape[1:]
 
     def _shuffle(dataset, shuffle_rng):
         """
