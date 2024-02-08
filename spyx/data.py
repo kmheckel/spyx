@@ -25,6 +25,7 @@ def shuffler(dataset, batch_size):
     :dataset: jnp.array [# samples, time, channels...]
     :batch_size: desired batch size.
     """
+    x, y = dataset
     cutoff = y.shape[0] % batch_size
     data_shape = (-1, batch_size) + obs.shape[1:]
 
