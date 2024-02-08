@@ -10,7 +10,7 @@
 Why use Spyx?
 =============
 
-Spyx is a compact spiking neural network library built on top of DeepMind's Haiku package, offering the flexibility and extensibility of PyTorch-based frameworks while enabling the extreme perfomance of SNN libraries which implement custom CUDA kernels for their dynamics. 
+Spyx (pronounced "spikes") is a compact spiking neural network library built on top of DeepMind's Haiku package, offering the flexibility and extensibility of PyTorch-based frameworks while enabling the extreme perfomance of SNN libraries which implement custom CUDA kernels for their dynamics. 
 
 The library currently supports training SNNs via surrogate gradient descent and neuroevolution, with additional capabilities such as ANN2SNN conversion and Phasor Networks being planned for the future. Spyx offers a number of predefined neuron models but is designed for it to be easy to define your own and plug it into a model; the hope is to soon include definitions of SpikingRWKV and other more sophisticated model blocks into the framework.
 

@@ -2,7 +2,6 @@ import jax
 import jax.numpy as jnp
 
 
-# This should be changed to a higher-order function
 def shift_augment(max_shift=10, axes=(-1,)):
     """Shift data augmentation tool. Rolls data along specified axes randomly up to a certain amount.
 
