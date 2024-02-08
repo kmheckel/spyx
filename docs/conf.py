@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath('..'))
 project = 'Spyx'
 copyright = '2023, Kade Heckel'
 author = 'Kade Heckel'
-release = 'v0.1.16'
+release = 'v0.1.17'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
