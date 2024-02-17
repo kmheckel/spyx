@@ -369,7 +369,8 @@ def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
         print('[Warning] node not recognized:', node.__class__)
 
 
-def to_nir(spyx_pytree, input_shape, output_shape, dt) -> nir.NIRGraph:
+# not sure if dt can ever be anything but 1 for exporting from spyx...
+def to_nir(spyx_pytree, input_shape, output_shape, dt=1) -> nir.NIRGraph:
     """Converts a Spyx network to a NIR graph. Under Construction. Currently only supports exporting networks without explicit recurrence/feedback."""
     # construct the edge list for the NIRGraph
     keys = list(spyx_pytree.keys())

@@ -162,11 +162,11 @@ class ALIF(hk.RNNCore):
         if not gamma:
             gamma = hk.get_parameter("gamma", self.hidden_shape, 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            gamma = jnp.minimum(jax.nn.relu(gamma),1)
+            gamma = jnp.clip(gamma, 0, 1)
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
         # calculate whether spike is generated, and update membrane potential
         thresh = self.init_threshold + T
         spikes = self.act(V - thresh)
@@ -206,11 +206,11 @@ class LI(hk.RNNCore):
         if not beta:
             beta = hk.get_parameter("beta", self.layer_shape,
                                 init=hk.initializers.Constant(0.8))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
         else:
-            beta = hk.get_parameter("beta", self.layer_shape,
+            beta = hk.get_parameter("beta", [],
                                 init=hk.initializers.Constant(beta))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
 
         # calculate whether spike is generated, and update membrane potential
         Vout = beta*Vin + x
@@ -290,11 +290,11 @@ class LIF(hk.RNNCore):
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape,
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
         else:
-            beta = hk.get_parameter("beta", self.hidden_shape,
+            beta = hk.get_parameter("beta", [],
                                 init=hk.initializers.Constant(beta))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
             
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
@@ -326,19 +326,19 @@ class CuBaLIF(hk.RNNCore):
         if not alpha:
             alpha = hk.get_parameter("alpha", self.hidden_shape, 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            alpha = jnp.minimum(jax.nn.relu(alpha),1)
+            alpha = jnp.clip(alpha, 0, 1)
         else:
-            alpha = hk.get_parameter("alpha", self.hidden_shape, 
+            alpha = hk.get_parameter("alpha", [], 
                                  init=hk.initializers.Constant(alpha))
-            alpha = jnp.minimum(jax.nn.relu(alpha),1)
+            alpha = jnp.clip(alpha, 0, 1)
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
         else:
-            beta = hk.get_parameter("beta", self.hidden_shape, 
+            beta = hk.get_parameter("beta", [], 
                                 init=hk.initializers.Constant(beta))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
         V = V - spikes*self.threshold
@@ -428,11 +428,11 @@ class RLIF(hk.RNNCore):
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
         else:
-            beta = hk.get_parameter("beta", self.hidden_shape, 
+            beta = hk.get_parameter("beta", [], 
                                 init=hk.initializers.Constant(beta))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
         
         spikes = self.act(V - self.threshold)
         feedback = spikes@recurrent + bias
@@ -466,19 +466,19 @@ class RCuBaLIF(hk.RNNCore):
         if not alpha:
             alpha = hk.get_parameter("alpha", self.hidden_shape, 
                                  init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            alpha = jnp.minimum(jax.nn.relu(alpha),1)
+            alpha = jnp.clip(alpha, 0, 1)
         else:
-            alpha = hk.get_parameter("alpha", self.hidden_shape, 
+            alpha = hk.get_parameter("alpha", [], 
                                  init=hk.initializers.Constant(alpha))
-            alpha = jnp.minimum(jax.nn.relu(alpha),1)
+            alpha = jnp.clip(alpha, 0, 1)
         if not beta:
             beta = hk.get_parameter("beta", self.hidden_shape, 
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
         else:
-            beta = hk.get_parameter("beta", self.hidden_shape, 
+            beta = hk.get_parameter("beta", [], 
                                 init=hk.initializers.Constant(beta))
-            beta = jnp.minimum(jax.nn.relu(beta),1)
+            beta = jnp.clip(beta, 0, 1)
         # calculate whether spike is generated, and update membrane potential
         spikes = self.act(V - self.threshold)
         V = V - spikes*self.threshold
