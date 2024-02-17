@@ -11,6 +11,8 @@
 # datasets
 .h5
 .zip
+.bin
+.h5.zip
 
 # IPython
 profile_default/
