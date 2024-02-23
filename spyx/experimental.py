@@ -2,33 +2,87 @@ import jax
 import jax.numpy as jnp
 import haiku as hk
 
-def _SigmoidBernoulli():
-    """
-    Experimental! This builds a Sigmoid Bernoulli activation function with STE gradient function.
+def sigmoid_bernoulli(k=10, threshold=1., max_prob=0.8):
 
-    Will eventually be removed in favor of a more general stochastic Axon construct. (most probably.)
+    @jax.custom_gradient
+    def activation(x, key):
+        U = x - threshold
+        p_n = jax.nn.sigmoid(k*U) * max_prob
+        return jax.random.bernoulli(key, p_n).astype(U.dtype), lambda g: (g * p_n, None)
 
-    The construction is a tad awkward because the custom VJP requires returning Nones for the rng gradient 
-    (would be nice if it could be ignored but sadly traced values can't be set as nondiff according to the docs.)
-    """
+    return activation
+
+def refractory_sigmoid_bernoulli(k=50, threshold=1):
+
+    freq = 2 * jnp.pi * threshold
+
+    @jax.custom_gradient
+    def activation(x, key):
+        U = x - threshold
+        r = jnp.cos(freq * U)
+        s = jax.nn.sigmoid(k*U)
+        p_n = jnp.maximum(r * s, 0)
+        return jax.random.bernoulli(key, p_n).astype(U.dtype), lambda g: (g * p_n, None)
+
+    return activation
+
+# from S5 paper, simplified structured state space models
+def _binary_operator(element_i, element_j):
+
+    A_i, Bu_i = element_i
+    A_j, Bu_j = element_j
+
+    return A_j * A_i, A_j * Bu_i + Bu_j
+
+def _pscan(tau, x):
+    tau =  jnp.repeat(tau[None, ...], x.shape[0], axis=0)
+    return jax.lax.associative_scan(_binary_operator, (tau, x))
+
+class StochasticAssociativeLIF(hk.Module):
+
+    def __init__(self, hidden_shape, threshold=1, k=100, spike=True, name="SALIF"):
+        super().__init__(name=name)
+        self.hidden_shape = hidden_shape
+        self.threshold = threshold
+        if spike:
+            self.spike = sigmoid_bernoulli(k, threshold)
+        else:
+            self.spike = lambda x, k: x
+
+    # x.shape = B, T, C
+    def __call__(self, key, x):
+        # Beta is our learnable neuron time constant / the diagonal operator.
+        beta = hk.get_parameter("beta", self.hidden_shape,
+                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
+        beta = jnp.clip(beta, 0, 1)
+
+        _, V = jax.vmap(_pscan, in_axes=(None,0))(beta, x)
+
+        return self.spike(V, key), V
+
+# prototype / proof of concept
+class StochasticAssociativeCuBaLIF(hk.Module):
+
+    def __init__(self, hidden_shape, threshold=1, k=100, name="SACuBaLIF"):
+        super().__init__(name=name)
+        self.hidden_shape = hidden_shape
+        self.spike = refractory_sigmoid_bernoulli(k, threshold)
+
+    def __call__(self, key, u):
+        # Beta is our learnable neuron time constant / the diagonal operator.
+        alpha = hk.get_parameter("alpha", self.hidden_shape,
+                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
+        alpha = jnp.clip(alpha, 0, 1)
         
-    @jax.custom_vjp
-    def f(U, key): # primal function
-        return jax.random.bernoulli(key, U) * jnp.ones_like(U), None
-        
-    # returns value, grad context
-    def f_fwd(U, key):
-        return f(U, key), U
-            
-    # accepts context, primal val
-    def f_bwd(U, grad):
-        return (grad[0] * U , None )
-            
-    f.defvjp(f_fwd, f_bwd)
-    
-    return jax.jit(f)
+        beta = hk.get_parameter("beta", self.hidden_shape,
+                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
+        beta = jnp.clip(beta, 0, 1)
 
-
+        # this can probably be condensed.
+        _, x = jax.vmap(_pscan, in_axes=(None,0))(alpha, u)
+        _, V = jax.vmap(_pscan, in_axes=(None,0))(beta, x)
+ 
+        return self.spike(V, key)
 
 class SPSN(hk.Module):
     """
@@ -55,8 +109,7 @@ class SPSN(hk.Module):
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
         self.threshold = threshold
-        self.spike_fn = _SigmoidBernoulli()
-        self.k = k
+        self.spike = sigmoid_bernoulli(k, threshold)
     
     def __call__(self, key, x):
         """
@@ -67,7 +120,7 @@ class SPSN(hk.Module):
 
         beta = hk.get_parameter("beta", self.hidden_shape,
                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-        beta = jnp.minimum(jax.nn.relu(beta),1)
+        beta = jnp.clip(beta, 0, 1)
 
         B = jnp.power(beta, jnp.arange(x.shape[1])) * (1-beta)
 
@@ -78,6 +131,6 @@ class SPSN(hk.Module):
         V = jnp.fft.irfft(fft_X*fft_B, n=2*x.shape[1], axis=1)[:,:x.shape[1]:,]
 
         # calculate whether spike is generated, and update membrane potential
-        spikes, _ = self.spike_fn(jax.nn.sigmoid(self.k*(V-self.threshold)), key)
+        spikes = self.spike(key, V)
         
         return spikes, V

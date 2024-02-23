@@ -13,6 +13,7 @@ try:
     from sklearn.model_selection import train_test_split
 
     from .data import rate_code
+    optional_dependencies_installed = True
 except ImportError:
     optional_dependencies_installed = False
 

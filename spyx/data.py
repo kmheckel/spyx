@@ -25,7 +25,7 @@ def shuffler(dataset, batch_size):
     :batch_size: desired batch size.
     """
     x, y = dataset
-    cutoff = y.shape[0] % batch_size
+    cutoff = (y.shape[0] // batch_size) * batch_size
     data_shape = (-1, batch_size) + x.shape[1:]
 
     def _shuffle(dataset, shuffle_rng):
@@ -37,8 +37,8 @@ def shuffler(dataset, batch_size):
         """
         x, y = dataset
 
-        obs = jax.random.permutation(shuffle_rng, x, axis=0)[:-cutoff]
-        labels = jax.random.permutation(shuffle_rng, y, axis=0)[:-cutoff]
+        indices = jax.random.permutation(shuffle_rng, y.shape[0])[:cutoff]
+        obs, labels = x[indices], y[indices]
 
         obs = jnp.reshape(obs, data_shape)
         labels = jnp.reshape(labels, (-1, batch_size)) # should make batch size a global

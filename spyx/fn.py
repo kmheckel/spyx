@@ -47,46 +47,51 @@ def sparsity_reg(max_spikes, norm=optax.huber_loss):
         
 
 
-@jax.jit
-def integral_accuracy(traces, targets):
+def integral_accuracy(time_axis=1):
     """Calculate the accuracy of a network's predictions based on the voltage traces. Used in combination with a Leaky-Integrate neuron model as the final layer.
 
     :param traces: the output of the final layer of the SNN
     :param targets: the integer labels for each class
-    :return: Accuracy score, predictions
+    :return: function which computes Accuracy score and predictions that takes SNN output traces and integer index labels.
     """
-
-    preds = jnp.argmax(jnp.sum(traces, axis=-2), axis=-1)
-    return jnp.sum(preds == targets) / traces.shape[0], preds
+    def _integral_accuracy(traces, targets):
+        preds = jnp.argmax(jnp.sum(traces, axis=time_axis), axis=-1)
+        return jnp.mean(preds == targets), preds
+        
+    return jax.jit(_integral_accuracy)
 
 # smoothing can be critical to the performance of your model...
 # change this to be a higher-order function yielding a func with a set smoothing rate.
-@jax.jit
-def integral_crossentropy(traces, targets, smoothing=0.3):
+
+def integral_crossentropy(smoothing=0.3, time_axis=1):
     """Calculate the crossentropy between the integral of membrane potentials. Allows for label smoothing to discourage silencing the other neurons in the readout layer.
 
-    :param traces: the output of the final layer of the SNN
-    :param targets: the integer labels for each class
-    :param smoothing: [optional] rate at which to smooth labels.
-    :return: Optionally smoothed crossentropy loss of the integrated membrane potential.
+    :param smoothing: rate at which to smooth labels.
+    :param time_axis: temporal axis of data
+    :return: crossentropy loss function that takes SNN output traces and integer index labels.
     """
 
-    logits = jnp.sum(traces, axis=-2) # time axis.
-    labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
-    return jnp.mean(optax.softmax_cross_entropy(logits, labels))
+    def _integral_crossentropy(traces, targets):
+        logits = jnp.sum(traces, axis=time_axis) # time axis.
+        one_hot = jax.nn.one_hot(targets, logits.shape[-1])
+        labels = optax.smooth_labels(one_hot, smoothing)
+        return jnp.mean(optax.softmax_cross_entropy(logits, labels))
+
+    return _integral_crossentropy
 
 # convert to function that returns compiled function
-@jax.jit
-def mse_spikerate(traces, targets, sparsity=0.25, smoothing=0.0):
+def mse_spikerate(sparsity=0.25, smoothing=0.0, time_axis=1):
     """Calculate the mean squared error of the mean spike rate. Allows for label smoothing to discourage silencing the other neurons in the readout layer.
 
-    :param traces: the output of the final layer of the SNN
-    :param targets: the integer labels for each class
     :param sparsity: the percentage of the time you want the neurons to spike
     :param smoothing: [optional] rate at which to smooth labels.
-    :return: Mean-Squared-Error loss on the spike rate.
+    :return: Mean-Squared-Error loss function on the spike rate that takes SNN output traces and integer index labels.
     """
-    t = traces.shape[1]
-    logits = jnp.mean(traces, axis=-2) # time axis.
-    labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
-    return jnp.mean(optax.squared_error(logits, labels * sparsity * t))
+    def _mse_spikerate(traces, targets):
+
+        t = traces.shape[1]
+        logits = jnp.mean(traces, axis=time_axis) # time axis.
+        labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
+        return jnp.mean(optax.squared_error(logits, labels * sparsity * t))
+
+    return jax.jit(_mse_spikerate)
