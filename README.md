@@ -34,6 +34,8 @@ Since Spyx is developed on top of the current JAX version, it does not work on G
 Research and Projects Using Spyx:
 =================================
 
+Experiments/Benchmarks used in the Spyx Paper: [Benchmark Notebooks](https://github.com/kmheckel/spyx/tree/main/research/paper)
+
 Master's Thesis: Neuroevolution of Spiking Neural Networks [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10620442.svg)](https://doi.org/10.5281/zenodo.10620442)
 
 *** Your projects and research could be here! ***
