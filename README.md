@@ -1,6 +1,6 @@
 ⚡🧠💻 Welcome to Spyx! 💻🧠⚡
 ============================
-[![DOI](https://zenodo.org/badge/656877506.svg)](https://zenodo.org/badge/latestdoi/656877506) [![PyPI version](https://badge.fury.io/py/spyx.svg)](https://badge.fury.io/py/spyx)
+[![arXiv](https://img.shields.io/badge/arXiv-2402.18994-b31b1b.svg)](https://arxiv.org/abs/2402.18994) [![DOI](https://zenodo.org/badge/656877506.svg)](https://zenodo.org/badge/latestdoi/656877506) [![PyPI version](https://badge.fury.io/py/spyx.svg)](https://badge.fury.io/py/spyx)
 
 [![](https://dcbadge.vercel.app/api/server/TCYQFWsBwj)](https://discord.gg/TCYQFWsBwj)
 
