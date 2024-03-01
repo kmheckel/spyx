@@ -47,8 +47,18 @@ If you'd like to contribute, head on over to the issues page to find proposed en
 Citation:
 =========
 
-For now, use the Bibtex entry below or click the badge above the title image to get other formats from Zenodo.
+If you find Spyx useful in your work please cite it using the following Bibtex entries:
 
+```
+@misc{heckel2024spyx,
+    title={Spyx: A Library for Just-In-Time Compiled Optimization of Spiking Neural Networks},
+    author={Kade M. Heckel and Thomas Nowotny},
+    year={2024},
+    eprint={2402.18994},
+    archivePrefix={arXiv},
+    primaryClass={cs.NE}
+}
+```
 
 ```
 @software{kade_heckel_2024_10635178,
