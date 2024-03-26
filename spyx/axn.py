@@ -119,3 +119,19 @@ def superspike(k=25):
         return 1 / (1 + k*jnp.abs(x))**2
     
     return custom(grad_superspike, heaviside)
+
+@jax.custom_gradient
+def eprop_SpikeFunction(v_scaled, dampening_factor):
+    z_ = jnp.greater(v_scaled, 0.)
+    z_ = z_.astype(jnp.float32)
+
+    def grad(dy):
+        dE_dz = dy
+        dz_dv_scaled = jnp.maximum(1 - jnp.abs(v_scaled), 0)
+        dz_dv_scaled *= dampening_factor
+
+        dE_dv_scaled = dE_dz * dz_dv_scaled
+
+        return (dE_dv_scaled, jnp.zeros_like(dampening_factor).astype(jnp.float32))
+
+    return z_, grad
