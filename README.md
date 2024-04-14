@@ -1,6 +1,6 @@
 ⚡🧠💻 Welcome to Spyx! 💻🧠⚡
 ============================
-[![DOI](https://zenodo.org/badge/656877506.svg)](https://zenodo.org/badge/latestdoi/656877506) [![PyPI version](https://badge.fury.io/py/spyx.svg)](https://badge.fury.io/py/spyx)
+[![arXiv](https://img.shields.io/badge/arXiv-2402.18994-b31b1b.svg)](https://arxiv.org/abs/2402.18994) [![DOI](https://zenodo.org/badge/656877506.svg)](https://zenodo.org/badge/latestdoi/656877506) [![PyPI version](https://badge.fury.io/py/spyx.svg)](https://badge.fury.io/py/spyx)
 
 [![](https://dcbadge.vercel.app/api/server/TCYQFWsBwj)](https://discord.gg/TCYQFWsBwj)
 
@@ -34,6 +34,8 @@ Since Spyx is developed on top of the current JAX version, it does not work on G
 Research and Projects Using Spyx:
 =================================
 
+Experiments/Benchmarks used in the Spyx Paper: [Benchmark Notebooks](https://github.com/kmheckel/spyx/tree/main/research/paper)
+
 Master's Thesis: Neuroevolution of Spiking Neural Networks [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10620442.svg)](https://doi.org/10.5281/zenodo.10620442)
 
 *** Your projects and research could be here! ***
@@ -47,8 +49,18 @@ If you'd like to contribute, head on over to the issues page to find proposed en
 Citation:
 =========
 
-For now, use the Bibtex entry below or click the badge above the title image to get other formats from Zenodo.
+If you find Spyx useful in your work please cite it using the following Bibtex entries:
 
+```
+@misc{heckel2024spyx,
+    title={Spyx: A Library for Just-In-Time Compiled Optimization of Spiking Neural Networks},
+    author={Kade M. Heckel and Thomas Nowotny},
+    year={2024},
+    eprint={2402.18994},
+    archivePrefix={arXiv},
+    primaryClass={cs.NE}
+}
+```
 
 ```
 @software{kade_heckel_2024_10635178,
