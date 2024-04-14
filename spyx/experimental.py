@@ -2,6 +2,8 @@ import jax
 import jax.numpy as jnp
 import haiku as hk
 
+from .axn import arctan
+
 def sigmoid_bernoulli(k=10, threshold=1., max_prob=0.8):
 
     @jax.custom_gradient
@@ -37,6 +39,32 @@ def _binary_operator(element_i, element_j):
 def _pscan(tau, x):
     tau =  jnp.repeat(tau[None, ...], x.shape[0], axis=0)
     return jax.lax.associative_scan(_binary_operator, (tau, x))
+
+class PSU_LIF(hk.Module):
+
+    def __init__(self, hidden_shape, threshold=1, k=2, spike=True, name="PSULIF"):
+        super().__init__(name=name)
+        self.hidden_shape = hidden_shape
+        self.threshold = threshold
+        if spike:
+            self.spike = arctan(k)
+        else:
+            self.spike = lambda x: x
+
+    # x.shape = B, T, C
+    def __call__(self, x):
+        # Beta is our learnable neuron time constant / the diagonal operator.
+        beta = hk.get_parameter("beta", self.hidden_shape,
+                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
+        beta = jnp.clip(beta, 0, 1)
+
+        _, V = jax.vmap(_pscan, in_axes=(None,0))(beta, x)
+
+        _, R = jax.vmap(_pscan, in_axes=(None,0))(beta, jax.nn.sigmoid(V))
+
+
+
+        return self.spike(V - R - self.threshold), V
 
 class StochasticAssociativeLIF(hk.Module):
 

@@ -89,7 +89,7 @@ def mse_spikerate(sparsity=0.25, smoothing=0.0, time_axis=1):
     """
     def _mse_spikerate(traces, targets):
 
-        t = traces.shape[1]
+        t = traces.shape[time_axis]
         logits = jnp.mean(traces, axis=time_axis) # time axis.
         labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
         return jnp.mean(optax.squared_error(logits, labels * sparsity * t))

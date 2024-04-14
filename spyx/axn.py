@@ -6,7 +6,7 @@ def heaviside(x):
     return jnp.where(x > 0, 1, 0).astype(x.dtype)
 
 def custom(bwd=lambda x: x, 
-           fwd=lambda x: heaviside(x)):
+           fwd=lambda x: heaviside(x)): # this is probably redundant and could just be fwd=heaviside
     """
     This function serves as the activation function for the SNNs, allowing for custom definitions of both surrogate gradients for backwards
     passes as well as substitution of the Heaviside function for relaxations such as sigmoids. 
