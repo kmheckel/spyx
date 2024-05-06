@@ -100,9 +100,9 @@ class RecurrentLIFLight(hk.RNNCore):
     ------
     n_rec: int
         Number of recurrent neurons.
-    tau: float
+    tau: float or array
         Membrane time constant (ms)
-    thr: float
+    thr: float or array
         Firing threshold.
     dt: float
         Time step (ms)
@@ -110,9 +110,9 @@ class RecurrentLIFLight(hk.RNNCore):
         Data type.
     dampening_factor: float
         Dampening factor for the surrogate gradient (see abs_linear).
-    tau_adaptation: float
+    tau_adaptation: float or array
         Time constant for threshold adaptation (ALIF model)
-    beta: float
+    beta: float or array
         Decay rate for threshold adaptation (ALIF model)
     tag: str
         parameter tag.
@@ -143,7 +143,7 @@ class RecurrentLIFLight(hk.RNNCore):
         self.decay_b = jnp.exp(-dt / tau_adaptation)
 
         if jnp.isscalar(tau): tau = jnp.ones(n_rec, dtype=dtype) * jnp.mean(tau)
-        if jnp.isscalar(thr): thr = jnp.ones(n_rec, dtype=dtype) * jnp.mean(thr)
+        if jnp.isscalar(thr): thr = jnp.ones(n_rec, dtype=dtype) * jnp.mean(thr)        
 
         tau = jnp.array(tau, dtype=dtype)
         dt = jnp.array(dt, dtype=dtype)
@@ -261,6 +261,11 @@ class LeakyLinear(hk.RNNCore):
 
         self.weights = hk.get_parameter("weights", shape=[n_in, n_out], dtype=dtype,
                                         init=hk.initializers.TruncatedNormal(1./jnp.sqrt(n_in)))
+        
+        # self.weights = hk.get_parameter("weights", shape=[n_in, n_out], dtype=dtype,
+        #                                 init=hk.initializers.Constant(
+        #                                     jnp.eye(n_in, n_out)
+        #                                 ))
 
         self._num_units = self.n_out
         self.built = True
