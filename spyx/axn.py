@@ -13,7 +13,7 @@ def custom(bwd=lambda x: x,
 
     It is assumed that the input to this layer has already had it's threshold subtracted within the neuron model dynamics.
 
-    The default behavior is a Heaviside forward activation with a stragiht through estimator surrogate gradient.
+    The default behavior is a Heaviside forward activation with a straight through estimator surrogate gradient.
     
     :bwd: Function that calculates the gradient to be used in the backwards pass.
     :fwd: Forward activation/spiking function. Default is the heaviside function centered at 0.
@@ -69,10 +69,10 @@ def triangular(k=2):
     :return: JIT compiled triangular surrogate gradient function.
     """
 
-    def grad_traingle(x):
+    def grad_triangle(x):
         return jnp.maximum(0, 1-jnp.abs(k*x))
     
-    return custom(grad_traingle, heaviside)
+    return custom(grad_triangle, heaviside)
 
 
 def arctan(k=2):
@@ -119,3 +119,29 @@ def superspike(k=25):
         return 1 / (1 + k*jnp.abs(x))**2
     
     return custom(grad_superspike, heaviside)
+
+def abs_linear(dampening_factor=0.3):
+    """
+    This function implements the SpikeFunction surrogate gradient activation function for a spiking neuron.
+
+    It was introduced in Bellec, Guillaume, et al. Long short-term memory and learning-to-learn in networks of spiking neurons. 
+    arXiv:1803.09574, arXiv, 25 dec 2018. arXiv.org, 
+    https://doi.org/10.48550/arXiv.1803.09574.
+
+    :v_scaled: The normalized membrane potential of the neuron scaled by the threshold.
+    :dampening_factor: The dampening factor for the surrogate gradient, 
+        which can improve the stability of the training process
+        for deep networks. Default is 0.3.
+    """
+    def fwd(v_scaled):
+        z_ = jnp.greater(v_scaled, 0.)
+        z_ = z_.astype(jnp.float32)
+        return z_
+
+    def grad(v_scaled):
+        dz_dv_scaled = jnp.maximum(1 - jnp.abs(v_scaled), 0).astype(v_scaled.dtype)
+        dz_dv_scaled *= dampening_factor
+
+        return dz_dv_scaled
+
+    return custom(grad, fwd)

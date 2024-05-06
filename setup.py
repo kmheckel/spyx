@@ -25,7 +25,7 @@ extras = {
     'loaders' : [
         'tonic',
         'torchvision',
-        'sklearn'
+        'scikit-learn'
     ]
 }
 
