@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import haiku as hk
-from .axn import superspike, eprop_SpikeFunction
+from .axn import superspike, abs_linear
 
 from collections.abc import Sequence
 from typing import Optional, Union
@@ -12,14 +12,13 @@ from collections import namedtuple
 #needs fixed.
 class ALIF(hk.RNNCore): 
     """
-    Adaptive LIF Neuron based on the model used in LSNNs:
+    Adaptive LIF Neuron based on the model used in LSNNs
 
     Bellec, G., Salaj, D., Subramoney, A., Legenstein, R. & Maass, W. 
     Long short- term memory and learning-to-learn in networks of spiking neurons. 
     32nd Conference on Neural Information Processing Systems (2018).
     
     """
-
 
     def __init__(self, hidden_shape, beta=None, gamma=None,
                  threshold = 1,
@@ -89,13 +88,46 @@ CustomALIFStateTuple = namedtuple('CustomALIFStateTuple', ('s', 'z', 'r', 'z_loc
 
 class RecurrentLIFLight(hk.RNNCore):
     """
-    Recurrent LIF
-    See LeakyLIF for the output neuron type of the original paper
+    Recurrent Adaptive Leaky Integrate and Fire neuron model with threshold adaptation.
+    It can be used for LIF only by setting beta to 0.
 
     Original code from https://github.com/IGITUGraz/eligibility_propagation for RecurrentLIFLight
     Copyright 2019-2020, the e-prop team:
     Guillaume Bellec, Franz Scherr, Anand Subramoney, Elias Hajek, Darjan Salaj, Robert Legenstein, Wolfgang Maass
     from the Institute for theoretical computer science, TU Graz, Austria.
+
+    Params
+    ------
+    n_rec: int
+        Number of recurrent neurons.
+    tau: float
+        Membrane time constant (ms)
+    thr: float
+        Firing threshold.
+    dt: float
+        Time step (ms)
+    dtype:
+        Data type.
+    dampening_factor: float
+        Dampening factor for the surrogate gradient (see abs_linear).
+    tau_adaptation: float
+        Time constant for threshold adaptation (ALIF model)
+    beta: float
+        Decay rate for threshold adaptation (ALIF model)
+    tag: str
+        parameter tag.
+    stop_gradients: bool
+        Whether to stop gradients.
+        If True, e-prop will be applied
+        If False, exact BPTT will be applied
+    w_rec_init: array
+        Initial value for the recurrent weights.
+    n_refractory: float
+        Refractory period (ms)
+    rec: bool
+        Whether to include recurrent connections.   
+    name: str
+        Name of the Haiku module.
     """
 
     def __init__(self, 
@@ -139,23 +171,36 @@ class RecurrentLIFLight(hk.RNNCore):
 
         self.built = True
 
-    def initial_state(self, batch_size, dtype=jnp.float32, n_rec=None):
-        if n_rec is None: n_rec = self.n_rec
+    def initial_state(self, batch_size, dtype=jnp.float32):
+        """
+        Initialize the state of the neuron model.
+        
+        :batch_size: tuple
+            Batch size.
+        :dtype:
+            Data type.
+        """
+        n_rec = self.n_rec
 
         s0 = jnp.zeros(shape=(batch_size, n_rec, 2), dtype=dtype)
         z0 = jnp.zeros(shape=(batch_size, n_rec), dtype=dtype)
         z_local0 = jnp.zeros(shape=(batch_size, n_rec), dtype=dtype)
         r0 = jnp.zeros(shape=(batch_size, n_rec), dtype=dtype)
+
         return CustomALIFStateTuple(s=s0, z=z0, r=r0, z_local=z_local0)
     
     def compute_z(self, v, b):
+        """
+        Compute the surrogate gradient.
+        """
         adaptive_thr = self.thr + b * self.beta
         v_scaled = (v - adaptive_thr) / self.thr
-        z = eprop_SpikeFunction(v_scaled, self.dampening_factor)
+        z = abs_linear(self.dampening_factor)(v_scaled)
         z = z * 1 / self.dt
+
         return z
         
-    def __call__(self, inputs, state, scope=None, dtype=jnp.float32):
+    def __call__(self, inputs, state):
         decay = self._decay
 
         z = state.z
@@ -177,21 +222,17 @@ class RecurrentLIFLight(hk.RNNCore):
         else:
             i_t = i_in
 
-        def get_new_v_b(s, i_t):
-            v, b = s[..., 0], s[..., 1]
-            new_b = self.decay_b * b + z_local
+        v, b = s[..., 0], s[..., 1]
+        new_b = self.decay_b * b + z_local
 
-            I_reset = z * self.thr * self.dt
-            new_v = decay * v + i_t  - I_reset
-
-            return new_v, new_b
-        
-        new_v, new_b = get_new_v_b(s, i_t)
+        I_reset = z * self.thr * self.dt
+        new_v = decay * v + i_t  - I_reset
 
         is_refractory = state.r > 0
         zeros_like_spikes = jnp.zeros_like(z)
-        new_z = jnp.where(is_refractory, zeros_like_spikes, self.compute_z(new_v, new_b))
-        new_z_local = jnp.where(is_refractory, zeros_like_spikes, self.compute_z(new_v, new_b))
+        z_computed = self.compute_z(new_v, new_b)
+        new_z = jnp.where(is_refractory, zeros_like_spikes, z_computed)
+        new_z_local = jnp.where(is_refractory, zeros_like_spikes, z_computed)
         new_r = state.r + self.n_refractory * new_z - 1
         new_r = jnp.clip(new_r, 0., float(self.n_refractory))
 
@@ -206,6 +247,8 @@ class RecurrentLIFLight(hk.RNNCore):
 class LeakyLinear(hk.RNNCore):
     """
     Leaky real-valued output neuron from the code of the paper https://github.com/IGITUGraz/eligibility_propagation
+
+    To be replace with Linear + LI in the future.
  
     """
     def __init__(self, n_in, n_out, kappa, dtype=jnp.float32, name="LeakyLinear"):
