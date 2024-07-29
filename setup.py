@@ -24,8 +24,8 @@ requires = (
 extras = {
     'loaders' : [
         'tonic',
-        'torchvision',
-        'sklearn'
+        'torchvision==0.19.0+cpu',
+        'scikit-learn'
     ]
 }
 
