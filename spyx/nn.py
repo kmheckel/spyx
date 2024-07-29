@@ -354,12 +354,13 @@ class RLIF(hk.RNNCore):
 
 class RCuBaLIF(hk.RNNCore): 
     def __init__(self, hidden_shape, alpha=None, beta=None,  
-                 activation = superspike(),
+                 threshold = 1, activation = superspike(),
                  name="RCuBaLIF"):
         super().__init__(name=name)
         self.hidden_shape = hidden_shape
         self.alpha = alpha
         self.beta = beta
+        self.threshold = threshold
         self.spike = activation
     
     def __call__(self, x, VI):
