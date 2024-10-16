@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "spyx"
+version = "0.1.20"
+description = "A high-performance SNN library written in JAX."
+authors = ["Kade Heckel"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+optax = "^0.2.3"
+jax-tqdm = "^0.3.1"
+nir = "^1.0.4"
+tonic = "^1.5.0"
+
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
