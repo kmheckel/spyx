@@ -1,0 +1,23 @@
+[project]
+name = "spyx"
+version = "0.2.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "dm-haiku",
+    "jax-tqdm",
+    "jax[cuda13]",
+    "nir",
+    "optax",
+    "scikit-learn",
+    "tonic",
+    "grain",
+    "tensorflow-datasets",
+    "dm-pix",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1",
+]

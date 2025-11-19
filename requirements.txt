@@ -1,7 +1,0 @@
-jax[cuda12]==0.4.26
-dm-haiku
-optax
-jax_tqdm
-tonic
-torchvision
-nir

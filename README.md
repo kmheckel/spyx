@@ -16,12 +16,15 @@ The library currently supports training SNNs via surrogate gradient descent and 
 
 Installation:
 =============
-
+First, create a virtual environment with `uv venv` and activate it:
+```bash
+source .venv/bin/activate
+```
 As with other libraries built on top of JAX, you need to install jax with GPU if you want to get the full benefit of this library. Directions for installing JAX with GPU support can be found at the following: https://github.com/google/jax#installation
 
 The best way to install and run Spyx is if you install it into a container/environment that already has JAX and PyTorch installed.
 
-The spyx.data submodule contains some pre-built dataloaders for use with spyx - to install the depedencies for it run the command `pip install spyx[data]`
+The spyx.data submodule contains some pre-built dataloaders for use with spyx - to install the depedencies for it run the command `uv add spyx[data]`
 
 Hardware Requirements:
 ======================
