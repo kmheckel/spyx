@@ -1,8 +1,8 @@
-from flax import nnx
-import jax
 import jax.numpy as jnp
+from flax import nnx
+
 from spyx import nn
-import pytest
+
 
 def test_lif():
     rngs = nnx.Rngs(0)

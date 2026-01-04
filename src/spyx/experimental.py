@@ -1,7 +1,9 @@
 import jax
 import jax.numpy as jnp
 from flax import nnx
+
 from .axn import arctan
+
 
 def sigmoid_bernoulli(k=10, threshold=1., max_prob=0.8):
 

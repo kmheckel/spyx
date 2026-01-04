@@ -2,8 +2,9 @@
 import argparse
 import subprocess
 import sys
-import os
+
 import tomllib
+
 
 def run_command(command, check=True):
     print(f"Running: {' '.join(command)}")

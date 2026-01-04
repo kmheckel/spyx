@@ -3,11 +3,17 @@
 import jax
 import jax.numpy as jnp
 
+from . import axn, data, experimental, fn, nir, nn
 from ._version import __version__
-from . import nn
-from . import nir
-from . import axn
-from . import fn
-from . import data
-from . import experimental
-from . import loaders
+
+__all__ = [
+    "jax",
+    "jnp",
+    "axn",
+    "data",
+    "experimental",
+    "fn",
+    "nir",
+    "nn",
+    "__version__",
+]

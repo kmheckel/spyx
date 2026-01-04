@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 
+
 def heaviside(x):
     return jnp.where(x > 0, 1, 0).astype(x.dtype)
 

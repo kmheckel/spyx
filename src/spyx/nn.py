@@ -1,11 +1,15 @@
+from collections.abc import Sequence
+from typing import Optional, Union
+
 import jax
 import jax.numpy as jnp
 from flax import nnx
+
 from .axn import superspike
 
-from collections.abc import Sequence
-from typing import Optional, Union, Any
-import warnings
+# Module-level singleton for default activation to avoid B008
+_DEFAULT_ACTIVATION = superspike()
+
 
 class ALIF(nnx.Module): 
     """
@@ -19,7 +23,7 @@ class ALIF(nnx.Module):
 
     def __init__(self, hidden_shape, beta=None, gamma=None,
                  threshold = 1,
-                 activation = superspike(),
+                 activation=None,
                  *,
                  rngs: nnx.Rngs):
         """
@@ -31,7 +35,7 @@ class ALIF(nnx.Module):
         """
         self.hidden_shape = hidden_shape
         self.threshold = threshold
-        self.spike = activation
+        self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
         
         if beta is None:
             self.beta = nnx.Param(
@@ -104,7 +108,7 @@ class IF(nnx.Module):
 
     def __init__(self, hidden_shape,
                  threshold = 1,
-                 activation = superspike()):
+                 activation=None):
         """
         :hidden_shape: Shape of the layer.
         :threshold: threshold for reset. Defaults to 1.
@@ -112,7 +116,7 @@ class IF(nnx.Module):
         """
         self.hidden_shape = hidden_shape
         self.threshold = threshold
-        self.spike = activation
+        self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
     
     def __call__(self, x, V):
         """
@@ -136,7 +140,7 @@ class LIF(nnx.Module):
                  hidden_shape: tuple, 
                  beta=None,
                  threshold = 1.,
-                 activation = superspike(),
+                 activation=None,
                  *,
                  rngs: nnx.Rngs):
         """
@@ -147,7 +151,7 @@ class LIF(nnx.Module):
         """
         self.hidden_shape = hidden_shape
         self.threshold = threshold
-        self.spike = activation
+        self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
         
         if beta is None:
             self.beta = nnx.Param(
@@ -174,12 +178,12 @@ class CuBaLIF(nnx.Module):
                  hidden_shape, 
                  alpha=None, beta=None,
                  threshold = 1,
-                 activation = superspike(),
+                 activation=None,
                  *,
                  rngs: nnx.Rngs):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
-        self.spike = activation
+        self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
 
         if alpha is None:
             self.alpha = nnx.Param(
@@ -196,7 +200,7 @@ class CuBaLIF(nnx.Module):
             self.beta = nnx.Param(jnp.full((), beta))
     
     def __call__(self, x, VI):
-        V, I = jnp.split(VI, 2, -1)
+        V, current_I = jnp.split(VI, 2, -1)
         
         alpha = jnp.clip(self.alpha[...], 0, 1)
         beta = jnp.clip(self.beta[...], 0, 1)
@@ -205,10 +209,10 @@ class CuBaLIF(nnx.Module):
         spikes = self.spike(V - self.threshold)
         reset = spikes * self.threshold
         V = V - reset
-        I = alpha * I + x
-        V = beta * V + I - reset
+        current_I = alpha * current_I + x
+        V = beta * V + current_I - reset
         
-        VI = jnp.concatenate([V, I], axis=-1)
+        VI = jnp.concatenate([V, current_I], axis=-1)
         return spikes, VI
     
     def initial_state(self, batch_size):
@@ -221,12 +225,12 @@ class RIF(nnx.Module):
 
     def __init__(self, hidden_shape, 
                  threshold = 1,
-                 activation = superspike(),
+                 activation=None,
                  *,
                  rngs: nnx.Rngs):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
-        self.spike = activation
+        self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
         
         # recurrent weight matrix
         self.recurrent_w = nnx.Param(
@@ -255,12 +259,12 @@ class RLIF(nnx.Module):
 
     def __init__(self, hidden_shape, beta=None,
                  threshold = 1,
-                 activation = superspike(),
+                 activation=None,
                  *,
                  rngs: nnx.Rngs):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
-        self.spike = activation
+        self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
 
         # recurrent weight matrix
         self.recurrent_w = nnx.Param(
@@ -292,12 +296,12 @@ class RLIF(nnx.Module):
 
 class RCuBaLIF(nnx.Module): 
     def __init__(self, hidden_shape, alpha=None, beta=None,  
-                 threshold = 1, activation = superspike(),
+                 threshold = 1, activation=None,
                  *,
                  rngs: nnx.Rngs):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
-        self.spike = activation
+        self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
 
         # recurrent weight matrix
         self.recurrent_w = nnx.Param(
@@ -319,7 +323,7 @@ class RCuBaLIF(nnx.Module):
             self.beta = nnx.Param(jnp.full((), beta))
     
     def __call__(self, x, VI):
-        V, I = jnp.split(VI, 2, -1)
+        V, current_I = jnp.split(VI, 2, -1)
         
         alpha = jnp.clip(self.alpha[...], 0, 1)
         beta = jnp.clip(self.beta[...], 0, 1)
@@ -328,10 +332,10 @@ class RCuBaLIF(nnx.Module):
         spikes = self.spike(V - self.threshold)
         V = V - spikes * self.threshold
         feedback = spikes @ self.recurrent_w[...]
-        I = alpha * I + x + feedback
-        V = beta * V + I
+        current_I = alpha * current_I + x + feedback
+        V = beta * V + current_I
         
-        VI = jnp.concatenate([V, I], axis=-1)
+        VI = jnp.concatenate([V, current_I], axis=-1)
         return spikes, VI
     
     def initial_state(self, batch_size):
@@ -423,7 +427,7 @@ class Sequential(nnx.Sequential):
     
     def __call__(self, x, state):
         new_state = []
-        for layer, s in zip(self.layers, state):
+        for layer, s in zip(self.layers, state, strict=True):
             if s is not None:
                 x, s_new = layer(x, s)
                 new_state.append(s_new)

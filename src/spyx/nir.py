@@ -1,10 +1,10 @@
-import jax
 import jax.numpy as jnp
-from flax import nnx
 import nir
 import numpy as np
+from flax import nnx
 
-from .nn import IF, LIF, CuBaLIF, RIF, RLIF, RCuBaLIF, SumPool, Sequential
+from .nn import IF, LIF, RIF, RLIF, CuBaLIF, RCuBaLIF, Sequential, SumPool
+
 
 def reorder_layers(init_params, trained_params):
     """
@@ -76,7 +76,7 @@ def _parse_rnn_subgraph(graph: nir.NIRGraph) -> tuple:
         lif_node = [n for n in sub_nodes if isinstance(n, (nir.LIF, nir.CubaLIF))][0]
         wrec_node = [n for n in sub_nodes if isinstance(n, (nir.Affine, nir.Linear))][0]
     except IndexError:
-        raise ValueError('invalid RNN subgraph - could not find all required nodes')
+        raise ValueError('invalid RNN subgraph - could not find all required nodes') from None
     lif_size = list(input_node.input_type.values())[0][0]
     assert lif_size == list(output_node.output_type.values())[0][0], 'output size mismatch'
     assert lif_size == lif_node.v_threshold.size, 'lif size mismatch (v_threshold)'
@@ -163,7 +163,8 @@ def from_nir(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs = None):
         ordered_list = []
         while next_node != "output":
             tup = _find_tuple_with_first_element(edge_list, curr_node)
-            if tup is None: break
+            if tup is None:
+                break
             ordered_list.append(tup)
             next_node = tup[1]
             curr_node = next_node
@@ -171,8 +172,9 @@ def from_nir(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs = None):
 
     sorted_edges = _order_edge_list(nir_graph.edges)
     
-    for i, (src, dst) in enumerate(sorted_edges):
-        if src == "input": continue
+    for _i, (src, _dst) in enumerate(sorted_edges):
+        if src == "input":
+            continue
         node = nir_graph.nodes[src]
         mod = _nir_node_to_spyx_module(node, rngs)
         if mod:

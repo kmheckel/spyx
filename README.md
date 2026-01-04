@@ -51,6 +51,49 @@ cd spyx
 uv sync
 ```
 
+This will install all dependencies including development tools (pytest, ruff, mkdocs).
+
+### Code Quality
+
+Spyx uses [Ruff](https://docs.astral.sh/ruff/) for linting and code formatting. Before committing changes, run:
+
+```bash
+# Check for linting errors
+uv run ruff check
+
+# Auto-fix linting errors
+uv run ruff check --fix
+
+# Format code
+uv run ruff format
+```
+
+Ruff is configured in `pyproject.toml` to enforce code quality standards including:
+- Import sorting (isort-compatible)
+- PEP 8 style guidelines
+- Common bug patterns (flake8-bugbear)
+- Exclusion of research, docs, and scripts directories
+
+### Testing
+
+Run the test suite using pytest:
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run tests with verbose output
+uv run pytest -v
+
+# Run a specific test file
+uv run pytest tests/test_data_grain.py
+
+# Run tests with coverage
+uv run pytest --cov=spyx --cov-report=html
+```
+
+Tests are located in the `tests/` directory and cover core functionality including data loading, neuron models, and training utilities.
+
 ### Releasing new versions
 
 A utility script is provided to automate the release process:

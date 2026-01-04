@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jnp
 import optax
-
 from jax import tree_util as tree
 
 
@@ -61,7 +60,6 @@ def integral_accuracy(time_axis=1):
     return jax.jit(_integral_accuracy)
 
 # smoothing can be critical to the performance of your model...
-# change this to be a higher-order function yielding a func with a set smoothing rate.
 
 def integral_crossentropy(smoothing=0.3, time_axis=1):
     """Calculate the crossentropy between the integral of membrane potentials. Allows for label smoothing to discourage silencing the other neurons in the readout layer.
@@ -77,9 +75,8 @@ def integral_crossentropy(smoothing=0.3, time_axis=1):
         labels = optax.smooth_labels(one_hot, smoothing)
         return jnp.mean(optax.softmax_cross_entropy(logits, labels))
 
-    return _integral_crossentropy
+    return jax.jit(_integral_crossentropy)
 
-# convert to function that returns compiled function
 def mse_spikerate(sparsity=0.25, smoothing=0.0, time_axis=1):
     """Calculate the mean squared error of the mean spike rate. Allows for label smoothing to discourage silencing the other neurons in the readout layer.
 

@@ -1,10 +1,10 @@
 import jax
 import jax.numpy as jnp
 from flax import nnx
-from spyx import nn, nir as spyx_nir
-import nir
-import numpy as np
-import pytest
+
+from spyx import nir as spyx_nir
+from spyx import nn
+
 
 def test_nir_export_import_lif():
     rngs = nnx.Rngs(0)
