@@ -207,6 +207,9 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
+# uv
+.python-version
+
 # End of https://www.toptal.com/developers/gitignore/api/linux,python,jupyternotebooks
 
 logs/

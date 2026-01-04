@@ -1,0 +1,67 @@
+site_name: Spyx
+site_description: "Spyx: SNNs in JAX"
+site_url: https://github.com/kmheckel/spyx
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocs-jupyter:
+      include_source: true
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+
+nav:
+  - Home: index.md
+  - Introduction: introduction.md
+  - Quickstart: quickstart.md
+  - Tutorials:
+      - Surrogate Gradient Tutorial: examples/surrogate_gradient/SurrogateGradientTutorial.ipynb
+      - Cartpole Evolution: examples/neuroevolution/cartpole_evo.ipynb
+      - Neuron Model Comparison: examples/surrogate_gradient/shd_sg_neuron_model_comparison.ipynb
+      - Surrogate Comparison: examples/surrogate_gradient/shd_sg_surrogate_comparison.ipynb
+      - SHD Template: examples/surrogate_gradient/shd_sg_template.ipynb
+      - NIR Conversion: examples/nir/conversion.ipynb
+      - NIR Braille RSNN: examples/nir/rsnn/braille_spyx.ipynb
+      - NIR N-MNIST SCNN: examples/nir/scnn/nmnist_spyx.ipynb
+      - NIR Single Neuron LIF: examples/nir/single_neuron/lif_spyx.ipynb
+  - API Reference: api.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - footnotes
+  - attr_list
+  - md_in_html
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js

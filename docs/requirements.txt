@@ -1,5 +1,0 @@
-astroid~=2.15 # https://github.com/readthedocs/sphinx-autoapi/issues/407
-sphinx>=5.0
-sphinx-book-theme
-myst_nb
-sphinx-autoapi

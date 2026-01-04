@@ -1,0 +1,52 @@
+[project]
+name = "spyx"
+version = "0.1.20"
+description = "Spyx: SNNs in JAX"
+authors = [
+    { name = "Kade Heckel", email = "kade.heckel@gmail.com" }
+]
+dependencies = [
+    "dm-haiku",
+    "optax",
+    "jax_tqdm",
+    "nir",
+]
+readme = "README.md"
+requires-python = ">=3.10, <3.14"
+license = { text = "MIT" }
+
+[project.optional-dependencies]
+loaders = [
+    "tonic",
+    "torchvision",
+    "scikit-learn",
+]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-jupyter>=0.25.1",
+    "mkdocs-material>=9.7.1",
+    "mkdocstrings[python]>=1.0.0",
+]
+
+[tool.uv.sources]
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "mkdocs>=1.6.1",
+    "mkdocs-jupyter>=0.25.1",
+    "mkdocs-material>=9.7.1",
+    "mkdocstrings[python]>=1.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spyx"]
