@@ -1,29 +1,27 @@
 import jax
 import jax.numpy as jnp
-import haiku as hk
+from flax import nnx
 from .axn import superspike
 
 from collections.abc import Sequence
-from typing import Optional, Union
+from typing import Optional, Union, Any
 import warnings
 
-#needs fixed.
-class ALIF(hk.RNNCore): 
+class ALIF(nnx.Module): 
     """
     Adaptive LIF Neuron based on the model used in LSNNs:
 
-    Bellec, G., Salaj, D., Subramoney, A., Legenstein, R. & Maass, W. 
+    Bellec, G., Salaj, D., Subramoney, A., Legenstein, R. & Maass, Maass, W. 
     Long short- term memory and learning-to-learn in networks of spiking neurons. 
     32nd Conference on Neural Information Processing Systems (2018).
     
     """
 
-
     def __init__(self, hidden_shape, beta=None, gamma=None,
                  threshold = 1,
                  activation = superspike(),
-                 name="ALIF"):
-
+                 *,
+                 rngs: nnx.Rngs):
         """
         :hidden_shape: Hidden layer shape.
         :beta: Membrane decay/inverse time constant.
@@ -31,111 +29,87 @@ class ALIF(hk.RNNCore):
         :threshold: Neuron firing threshold.
         :activation: spyx.axn.Axon object determining forward function and surrogate gradient function.
         """
-
-        super().__init__(name=name)
         self.hidden_shape = hidden_shape
-        self.beta = beta
-        self.gamma = gamma
         self.threshold = threshold
         self.spike = activation
-    
+        
+        if beta is None:
+            self.beta = nnx.Param(
+                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+            )
+        else:
+            self.beta = nnx.Param(jnp.full((), beta))
+            
+        if gamma is None:
+            self.gamma = nnx.Param(
+                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+            )
+        else:
+            self.gamma = nnx.Param(jnp.full((), gamma))
+
     def __call__(self, x, VT):
         """
         :x: Tensor from previous layer.
         :VT: Neuron state vector.
         """
-
         V, T = jnp.split(VT, 2, -1)
         
-        gamma = self.gamma
-        beta = self.beta
-        # threshold adaptation
-        if not gamma:
-            gamma = hk.get_parameter("gamma", self.hidden_shape, 
-                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            gamma = jnp.clip(gamma, 0, 1)
-        else:
-            gamma = hk.get_parameter("gamma", [],
-                                init=hk.initializers.Constant(gamma))
-            gamma = jnp.clip(gamma, 0, 1)
-
-        if not beta:
-            beta = hk.get_parameter("beta", self.hidden_shape, 
-                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jnp.clip(beta, 0, 1)
-        else:
-            beta = hk.get_parameter("beta", [],
-                                init=hk.initializers.Constant(beta))
-            beta = jnp.clip(beta, 0, 1)
+        beta = jnp.clip(self.beta[...], 0, 1)
+        gamma = jnp.clip(self.gamma[...], 0, 1)
 
         # calculate whether spike is generated, and update membrane potential
         thresh = self.threshold + T
         spikes = self.spike(V - thresh) # T is the dynamic threshold adaptation
-        V = beta*V + x - spikes*thresh
-        T = gamma*T + (1-gamma)*spikes
+        V = beta * V + x - spikes * thresh
+        T = gamma * T + (1 - gamma) * spikes
         
-        VT = jnp.concatenate([V,T], axis=-1)
+        VT = jnp.concatenate([V, T], axis=-1)
         return spikes, VT
     
-    # not sure if this is borked.
-    def initial_state(self, batch_size): # this might need fixed to match CuBaLIF...
-        return jnp.zeros((batch_size,) + tuple(2*s for s in self.hidden_shape))
+    def initial_state(self, batch_size):
+        return jnp.zeros((batch_size,) + tuple(2 * s for s in self.hidden_shape))
          
-class LI(hk.RNNCore):
+class LI(nnx.Module):
     """
     Leaky-Integrate (Non-spiking) neuron model.
-
- 
     """
 
-    def __init__(self, layer_shape, beta=None, name="LI"):
+    def __init__(self, layer_shape, beta=None, *, rngs: nnx.Rngs):
         """
-        
-        :layer_size: Number of output neurons from the previous linear layer.
-        :beta: Decay rate on membrane potential (voltage). Set uniformly across the layer.
+        :layer_shape: Shape of the layer.
+        :beta: Decay rate on membrane potential (voltage).
         """
-        super().__init__(name=name)
         self.layer_shape = layer_shape
-        self.beta = beta
+        if beta is None:
+            self.beta = nnx.Param(jnp.full(layer_shape, 0.8))
+        else:
+            self.beta = nnx.Param(jnp.full((), beta))
     
     def __call__(self, x, Vin):
         """
         :x: Input tensor from previous layer.
         :Vin: Neuron state tensor. 
         """
-        beta = self.beta
-        if not beta:
-            beta = hk.get_parameter("beta", self.layer_shape,
-                                init=hk.initializers.Constant(0.8))
-            beta = jnp.clip(beta, 0, 1)
-        else:
-            beta = hk.get_parameter("beta", [],
-                                init=hk.initializers.Constant(beta))
-            beta = jnp.clip(beta, 0, 1)
-
-        # calculate whether spike is generated, and update membrane potential
-        Vout = beta*Vin + x
+        beta = jnp.clip(self.beta[...], 0, 1)
+        Vout = beta * Vin + x
         return Vout, Vout
     
     def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + self.layer_shape)
 
-class IF(hk.RNNCore): 
+class IF(nnx.Module): 
     """
-    Integrate and Fire neuron model. While not being as powerful/rich as other neuron models, they are very easy to implement in hardware.
-    
+    Integrate and Fire neuron model.
     """
 
     def __init__(self, hidden_shape,
                  threshold = 1,
-                 activation = superspike(),
-                 name="IF"):
+                 activation = superspike()):
         """
-        :hidden_size: Size of preceding layer's outputs
+        :hidden_shape: Shape of the layer.
         :threshold: threshold for reset. Defaults to 1.
-        :activation: spyx.activation function, default is Heaviside with Straight-Through-Estimation.
+        :activation: spyx.activation function.
         """
-        super().__init__(name=name)
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.spike = activation
@@ -145,23 +119,17 @@ class IF(hk.RNNCore):
         :x: Vector coming from previous layer.
         :V: Neuron state tensor.
         """
-        # calculate whether spike is generated, and update membrane potential
-        spikes = self.spike(V-self.threshold)
-        V = V + x - spikes*self.threshold
-        
+        spikes = self.spike(V - self.threshold)
+        V = V + x - spikes * self.threshold
         return spikes, V
 
     def initial_state(self, batch_size): 
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
 
-class LIF(hk.RNNCore):
+class LIF(nnx.Module):
     """
-    Leaky Integrate and Fire neuron model inspired by the implementation in
-    snnTorch:
-
-    https://snntorch.readthedocs.io/en/latest/snn.neurons_leaky.html
-    
+    Leaky Integrate and Fire neuron model.
     """
 
     def __init__(self, 
@@ -169,261 +137,225 @@ class LIF(hk.RNNCore):
                  beta=None,
                  threshold = 1.,
                  activation = superspike(),
-                 name="LIF"):
-
+                 *,
+                 rngs: nnx.Rngs):
         """
-        
-        :hidden_size: Size of preceding layer's outputs
-        :beta: decay rate. Set to float in range (0,1] for uniform decay across layer, otherwise it will be a normal
-                distribution centered on 0.5 with stddev of 0.25
+        :hidden_shape: Shape of the layer.
+        :beta: decay rate.
         :threshold: threshold for reset. Defaults to 1.
-        :activation: spyx.axn.Axon object, default is Heaviside with Straight-Through-Estimation.
+        :activation: spyx.axn.Axon object.
         """
-        super().__init__(name=name)
         self.hidden_shape = hidden_shape
-        self.beta = beta
         self.threshold = threshold
         self.spike = activation
+        
+        if beta is None:
+            self.beta = nnx.Param(
+                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+            )
+        else:
+            self.beta = nnx.Param(jnp.full((), beta))
     
     def __call__(self, x, V):
         """
         :x: input vector coming from previous layer.
         :V: neuron state tensor.
-
         """
-        beta = self.beta # this line can probably be deleted, and the check changed to self.beta
-        if not beta:
-            beta = hk.get_parameter("beta", self.hidden_shape,
-                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jnp.clip(beta, 0, 1)
-        else:
-            beta = hk.get_parameter("beta", [],
-                                init=hk.initializers.Constant(beta))
-            beta = jnp.clip(beta, 0, 1)
-            
-        # calculate whether spike is generated, and update membrane potential
-        spikes = self.spike(V-self.threshold)
-        V = beta*V + x - spikes * self.threshold
-        
+        beta = jnp.clip(self.beta[...], 0, 1)
+        spikes = self.spike(V - self.threshold)
+        V = beta * V + x - spikes * self.threshold
         return spikes, V
 
     def initial_state(self, batch_size): 
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
-
-class CuBaLIF(hk.RNNCore): 
+class CuBaLIF(nnx.Module): 
     def __init__(self, 
                  hidden_shape, 
                  alpha=None, beta=None,
                  threshold = 1,
                  activation = superspike(),
-                 name="CuBaLIF"):
-        super().__init__(name=name)
+                 *,
+                 rngs: nnx.Rngs):
         self.hidden_shape = hidden_shape
-        self.alpha = alpha
-        self.beta = beta
         self.threshold = threshold
         self.spike = activation
+
+        if alpha is None:
+            self.alpha = nnx.Param(
+                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+            )
+        else:
+            self.alpha = nnx.Param(jnp.full((), alpha))
+
+        if beta is None:
+            self.beta = nnx.Param(
+                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+            )
+        else:
+            self.beta = nnx.Param(jnp.full((), beta))
     
     def __call__(self, x, VI):
         V, I = jnp.split(VI, 2, -1)
         
-        alpha = self.alpha
-        beta = self.beta
+        alpha = jnp.clip(self.alpha[...], 0, 1)
+        beta = jnp.clip(self.beta[...], 0, 1)
 
-        if not alpha:
-            alpha = hk.get_parameter("alpha", self.hidden_shape, 
-                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            alpha = jnp.clip(alpha, 0, 1)
-        else:
-            alpha = hk.get_parameter("alpha", [], 
-                                 init=hk.initializers.Constant(alpha))
-            alpha = jnp.clip(alpha, 0, 1)
-        if not beta:
-            beta = hk.get_parameter("beta", self.hidden_shape, 
-                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jnp.clip(beta, 0, 1)
-        else:
-            beta = hk.get_parameter("beta", [], 
-                                init=hk.initializers.Constant(beta))
-            beta = jnp.clip(beta, 0, 1)
         # calculate whether spike is generated, and update membrane potential
-        spikes = self.spike(V-self.threshold)
-        reset = spikes*self.threshold
+        spikes = self.spike(V - self.threshold)
+        reset = spikes * self.threshold
         V = V - reset
-        I = alpha*I + x
-        V = beta*V + I - reset # cast may not be needed?
+        I = alpha * I + x
+        V = beta * V + I - reset
         
-        VI = jnp.concatenate([V,I], axis=-1)
+        VI = jnp.concatenate([V, I], axis=-1)
         return spikes, VI
     
     def initial_state(self, batch_size):
-        return jnp.zeros((batch_size,) + tuple(2*v for v in self.hidden_shape))
+        return jnp.zeros((batch_size,) + tuple(2 * v for v in self.hidden_shape))
     
-class RIF(hk.RNNCore): 
+class RIF(nnx.Module): 
     """
     Recurrent Integrate and Fire neuron model.
-    
     """
 
     def __init__(self, hidden_shape, 
                  threshold = 1,
                  activation = superspike(),
-                 name="RIF"):
-        """
-        :hidden_size: Size of preceding layer's outputs
-        :threshold: threshold for reset. Defaults to 1.
-        :activation: spyx.activation function, default is Heaviside with Straight-Through-Estimation.
-        """
-        super().__init__(name=name)
+                 *,
+                 rngs: nnx.Rngs):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.spike = activation
+        
+        # recurrent weight matrix
+        self.recurrent_w = nnx.Param(
+            nnx.initializers.truncated_normal()(rngs.params(), self.hidden_shape + self.hidden_shape)
+        )
     
     def __call__(self, x, V):
         """
         :x: Vector coming from previous layer.
         :V: Neuron state tensor.
         """
-
-        recurrent = hk.get_parameter("w", self.hidden_shape*2, init=hk.initializers.TruncatedNormal())
-
         # calculate whether spike is generated, and update membrane potential
-        spikes = self.spike(V-self.threshold)
-        feedback = spikes@recurrent
-        V = V + x + feedback - spikes*self.threshold
+        spikes = self.spike(V - self.threshold)
+        feedback = spikes @ self.recurrent_w[...]
+        V = V + x + feedback - spikes * self.threshold
         
         return spikes, V
 
     def initial_state(self, batch_size): 
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
-class RLIF(hk.RNNCore): 
+class RLIF(nnx.Module): 
     """
-    Recurrent LIF Neuron adapted from snnTorch. 
-
-    https://snntorch.readthedocs.io/en/latest/snn.neurons_rleaky.html
+    Recurrent LIF Neuron.
     """
 
     def __init__(self, hidden_shape, beta=None,
                  threshold = 1,
                  activation = superspike(),
-                 name="RLIF"):
-
-        """
-        Initialization function.
-
-        :hidden_shape: The tuple describing the layer's shape. Can accomodate varying shapes to directly stack on convolution layers without flattening.
-        :beta: Decay constant. Unless explicitly set to a float of range [0,1], it is treated as a learnable parameter.
-        :threshold: Firing threshold for the layer. Does not currently support learning/trainable thresholds.
-        :activation: A spyx.axn.Axon object specifying the forward and reverse activation function. By default it is Heaviside with Straight Through Estimation.
-        """
-
-        super().__init__(name=name)
+                 *,
+                 rngs: nnx.Rngs):
         self.hidden_shape = hidden_shape
-        self.beta = beta
         self.threshold = threshold
         self.spike = activation
+
+        # recurrent weight matrix
+        self.recurrent_w = nnx.Param(
+            nnx.initializers.truncated_normal()(rngs.params(), self.hidden_shape + self.hidden_shape)
+        )
+
+        if beta is None:
+            self.beta = nnx.Param(
+                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+            )
+        else:
+            self.beta = nnx.Param(jnp.full((), beta))
     
     def __call__(self, x, V):
         """
         :x: The input data/latent vector from another layer.
         :V: The state tensor.
         """
-
-        recurrent = hk.get_parameter("w", self.hidden_shape*2, init=hk.initializers.TruncatedNormal())
-
-        beta = self.beta
-        if not beta:
-            beta = hk.get_parameter("beta", self.hidden_shape, 
-                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jnp.clip(beta, 0, 1)
-        else:
-            beta = hk.get_parameter("beta", [], 
-                                init=hk.initializers.Constant(beta))
-            beta = jnp.clip(beta, 0, 1)
+        beta = jnp.clip(self.beta[...], 0, 1)
         
-        spikes = self.spike(V-self.threshold)
-        feedback = spikes@recurrent # investigate and fix this...
-        V = beta*V + x + feedback - spikes*self.threshold
+        spikes = self.spike(V - self.threshold)
+        feedback = spikes @ self.recurrent_w[...]
+        V = beta * V + x + feedback - spikes * self.threshold
         
         return spikes, V
 
     def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
-class RCuBaLIF(hk.RNNCore): 
+class RCuBaLIF(nnx.Module): 
     def __init__(self, hidden_shape, alpha=None, beta=None,  
                  threshold = 1, activation = superspike(),
-                 name="RCuBaLIF"):
-        super().__init__(name=name)
+                 *,
+                 rngs: nnx.Rngs):
         self.hidden_shape = hidden_shape
-        self.alpha = alpha
-        self.beta = beta
         self.threshold = threshold
         self.spike = activation
+
+        # recurrent weight matrix
+        self.recurrent_w = nnx.Param(
+            nnx.initializers.truncated_normal()(rngs.params(), self.hidden_shape + self.hidden_shape)
+        )
+
+        if alpha is None:
+            self.alpha = nnx.Param(
+                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+            )
+        else:
+            self.alpha = nnx.Param(jnp.full((), alpha))
+
+        if beta is None:
+            self.beta = nnx.Param(
+                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+            )
+        else:
+            self.beta = nnx.Param(jnp.full((), beta))
     
     def __call__(self, x, VI):
         V, I = jnp.split(VI, 2, -1)
         
-        alpha = self.alpha
-        beta = self.beta
-
-        recurrent = hk.get_parameter("w", self.hidden_shape*2, init=hk.initializers.TruncatedNormal())
-
-        if not alpha:
-            alpha = hk.get_parameter("alpha", self.hidden_shape, 
-                                 init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            alpha = jnp.clip(alpha, 0, 1)
-        else:
-            alpha = hk.get_parameter("alpha", [], 
-                                 init=hk.initializers.Constant(alpha))
-            alpha = jnp.clip(alpha, 0, 1)
-        if not beta:
-            beta = hk.get_parameter("beta", self.hidden_shape, 
-                                init=hk.initializers.TruncatedNormal(0.25, 0.5))
-            beta = jnp.clip(beta, 0, 1)
-        else:
-            beta = hk.get_parameter("beta", [], 
-                                init=hk.initializers.Constant(beta))
-            beta = jnp.clip(beta, 0, 1)
+        alpha = jnp.clip(self.alpha[...], 0, 1)
+        beta = jnp.clip(self.beta[...], 0, 1)
 
         # calculate whether spike is generated, and update membrane potential
-        spikes = self.spike(V-self.threshold)
+        spikes = self.spike(V - self.threshold)
         V = V - spikes * self.threshold
-        feedback = spikes@recurrent
-        I = alpha*I + x + feedback
-        V = beta*V + I
+        feedback = spikes @ self.recurrent_w[...]
+        I = alpha * I + x + feedback
+        V = beta * V + I
         
-        VI = jnp.concatenate([V,I], axis=-1)
+        VI = jnp.concatenate([V, I], axis=-1)
         return spikes, VI
     
     def initial_state(self, batch_size):
-        return jnp.zeros((batch_size,) + tuple(2*v for v in self.hidden_shape))
+        return jnp.zeros((batch_size,) + tuple(2 * v for v in self.hidden_shape))
 
-class ActivityRegularization(hk.Module):
+class ActivityRegularization(nnx.Module):
     """
     Add state to the SNN to track the average number of spikes emitted per neuron per batch.
-
-    Adding this to a network requires using the Haiku transform_with_state transform, which will also return an initial regularization state vector.
-    This blank initial vector can be reused and is provided as the second arg to the SNN's apply function. 
     """
 
-    def __init__(self, name="ActReg"):
-        super().__init__(name=name)
+    def __init__(self):
+        # In NNX, state is just a Variable.
+        self.spike_count = nnx.Variable(None) # we'll initialize on first call with proper shape
         
     def __call__(self, spikes):
-        spike_count = hk.get_state("spike_count", spikes.shape, init=jnp.zeros, dtype=spikes.dtype)
-        hk.set_state("spike_count", spike_count + spikes) 
+        if self.spike_count.get_value() is None:
+            self.spike_count.set_value(jnp.zeros(spikes.shape, dtype=spikes.dtype))
+            
+        self.spike_count[...] += spikes
         return spikes
 
 def PopulationCode(num_classes):
-    """
-    Add population coding to the preceding neuron layer. Preceding layer's output shape must be a multiple of
-    the number of classes. Use this for rate coded SNNs where the time steps are too few to get a good spike count.
-    """
     def _pop_code(x):
-        return jnp.sum(jnp.reshape(x, (-1,num_classes)), axis=-1)
+        return jnp.sum(jnp.reshape(x, (-1, num_classes)), axis=-1)
     return jax.jit(_pop_code)
 
 def _infer_shape(
@@ -446,25 +378,6 @@ def _infer_shape(
     assert x.ndim == len(size)
     return tuple(size)
 
-_VMAP_SHAPE_INFERENCE_WARNING = (
-    "When running under vmap, passing an `int` (except for `1`) for "
-    "`window_shape` or `strides` will result in the wrong shape being inferred "
-    "because the batch dimension is not visible to Haiku. Please update your "
-    "code to specify a full unbatched size.\n"
-    "For example if you had `pool(x, window_shape=3, strides=1)` before, you "
-    "should now pass `pool(x, window_shape=(3, 3, 1), strides=1)`. \n"
-    "Haiku will assume that any additional dimensions in your input are "
-    "batch dimensions, and will pad `window_shape` and `strides` accordingly "
-    "making your module support both batched and per-example inputs."
-)
-
-
-def _warn_if_unsafe(window_shape, strides):
-  unsafe = lambda size: isinstance(size, int) and size != 1
-  if unsafe(window_shape) or unsafe(strides):
-    warnings.warn(_VMAP_SHAPE_INFERENCE_WARNING, DeprecationWarning)
-
-
 def sum_pool(
     value: jax.Array,
     window_shape: Union[int, Sequence[int]],
@@ -472,33 +385,18 @@ def sum_pool(
     padding: str,
     channel_axis: Optional[int] = -1,
 ) -> jax.Array:
-  """Sum pool.
-
-  Args:
-    value: Value to pool.
-    window_shape: Shape of the pooling window, same rank as value.
-    strides: Strides of the pooling window, same rank as value.
-    padding: Padding algorithm. Either ``VALID`` or ``SAME``.
-    channel_axis: Axis of the spatial channels for which pooling is skipped.
-
-  Returns:
-    Pooled result. Same rank as value.
-  """
+  """Sum pool."""
   if padding not in ("SAME", "VALID"):
     raise ValueError(f"Invalid padding '{padding}', must be 'SAME' or 'VALID'.")
 
-  _warn_if_unsafe(window_shape, strides)
   window_shape = _infer_shape(value, window_shape, channel_axis)
   strides = _infer_shape(value, strides, channel_axis)
 
   return jax.lax.reduce_window(value, 0., jax.lax.add, window_shape, strides,
                            padding)
 
-class SumPool(hk.Module):
-  """Sum pool.
-
-  Returns the total number of spikes emitted in a receptive field.
-  """
+class SumPool(nnx.Module):
+  """Sum pool."""
 
   def __init__(
       self,
@@ -506,18 +404,7 @@ class SumPool(hk.Module):
       strides: Union[int, Sequence[int]],
       padding: str,
       channel_axis: Optional[int] = -1,
-      name: Optional[str] = None,
   ):
-    """Sum pool.
-
-    Args:
-      window_shape: Shape of the pooling window, same rank as value.
-      strides: Strides of the pooling window, same rank as value.
-      padding: Padding algorithm. Either ``VALID`` or ``SAME``.
-      channel_axis: Axis of the spatial channels for which pooling is skipped.
-      name: String name for the module.
-    """
-    super().__init__(name=name)
     self.window_shape = window_shape
     self.strides = strides
     self.padding = padding
@@ -526,3 +413,45 @@ class SumPool(hk.Module):
   def __call__(self, value: jax.Array) -> jax.Array:
     return sum_pool(value, self.window_shape, self.strides,
                     self.padding, self.channel_axis)
+
+class Sequential(nnx.Sequential):
+    """
+    A Sequential container that supports passing state through its layers.
+    """
+    def initial_state(self, batch_size):
+        return [layer.initial_state(batch_size) if hasattr(layer, "initial_state") else None for layer in self.layers]
+    
+    def __call__(self, x, state):
+        new_state = []
+        for layer, s in zip(self.layers, state):
+            if s is not None:
+                x, s_new = layer(x, s)
+                new_state.append(s_new)
+            else:
+                x = layer(x)
+                new_state.append(None)
+        return x, new_state
+
+def run(model, x, state=None):
+    """
+    Execute a model over a sequence of inputs using jax.lax.scan.
+    
+    :model: A Flax NNX Module (e.g. nnx.Sequential).
+    :x: Input data with shape [Time, Batch, ...].
+    :state: Initial state for the model. If None, model.initial_state is used if available.
+    :return: (outputs, final_state)
+    """
+    
+    if state is None:
+        # We need batch size from x
+        batch_size = x.shape[1]
+        if hasattr(model, "initial_state"):
+            state = model.initial_state(batch_size)
+    
+    def scan_fn(carry, x_t):
+        out, next_state = model(x_t, carry)
+        return next_state, out
+        
+    final_state, outputs = jax.lax.scan(scan_fn, state, x)
+    return outputs, final_state
+

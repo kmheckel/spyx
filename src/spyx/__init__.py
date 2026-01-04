@@ -2,7 +2,6 @@
 
 import jax
 import jax.numpy as jnp
-import haiku as hk
 
 from ._version import __version__
 from . import nn
