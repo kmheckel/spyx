@@ -151,6 +151,25 @@ the five surrogate-gradient/cartpole notebooks plus the QAT tutorial on
 synthetic data. Runs in ~10 seconds; catches the kind of API drift that
 silently breaks notebooks between `flax` / `evosax` / `qwix` releases.
 
+### End-to-end install check
+After `uv sync` on a new machine (especially a GPU laptop), run:
+
+```bash
+uv run python scripts/check_install.py
+```
+
+Seven PASS/FAIL/SKIP checks in ~30 seconds:
+1. JAX version + visible accelerator devices (flags CPU-only install).
+2. Core Spyx imports.
+3. Forward pass through a `Sequential(Linear, LIF, Linear, LI)` SNN.
+4. One full `spyx.optimize.fit` training epoch on synthetic data.
+5. NIR export + re-import roundtrip.
+6. `smoke_notebook_apis.py` passthrough (all 6 tutorials).
+7. Optional-extra availability (`tonic` for loaders, `qwix` for quant).
+
+Exit code is 0 if everything required passed, nonzero on any hard failure.
+Missing optional extras are reported but don't fail the run.
+
 ### Documentation
 ```bash
 uv run mkdocs serve        # Preview docs locally

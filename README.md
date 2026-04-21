@@ -53,6 +53,16 @@ uv sync
 
 This will install all dependencies including development tools (pytest, ruff, mkdocs).
 
+### End-to-end install check
+
+Once installed, run the bundled install-check script to confirm JAX, Spyx, and optional extras are all wired up correctly:
+
+```bash
+uv run python scripts/check_install.py
+```
+
+Seven checks in ~30 seconds — JAX version + visible devices, Spyx imports, SNN forward pass, one training epoch, NIR roundtrip, notebook-API smoke tests, and optional-extra detection (`tonic`, `qwix`). Useful right after `uv sync` on a new machine, especially if you expect GPU / TPU devices to show up.
+
 ### Code Quality
 
 Spyx uses [Ruff](https://docs.astral.sh/ruff/) for linting and code formatting. Before committing changes, run:
