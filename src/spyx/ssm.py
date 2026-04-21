@@ -353,9 +353,18 @@ class Mamba(nnx.Module):
             jax.random.normal(k_dtproj, self.dt_proj.kernel[...].shape)
             * (dt_rank**-0.5)
         )
-        # Inverse-softplus init so that softplus(bias) ~ U(dt_min, dt_max).
-        dt_init = jax.random.uniform(k_dtproj, (d_inner,), minval=jnp.log(dt_min), maxval=jnp.log(dt_max))
-        inv_dt = dt_init + jnp.log1p(-jnp.exp(-jnp.exp(dt_init)))
+        # Match the published Mamba recipe: sample dt log-uniformly in
+        # [dt_min, dt_max], then set bias = inverse_softplus(dt) so that
+        # softplus(bias) ~ dt. The inverse-softplus identity
+        # ``inv_softplus(x) = x + log1p(-exp(-x))`` takes a *positive* dt,
+        # not log(dt) — feeding the log-space sample in directly (as the
+        # first draft did) produced dt values ~1e-6 at init instead of
+        # the intended 1e-3..1e-1 range, which damps the selective SSM.
+        log_dt = jax.random.uniform(
+            k_dtproj, (d_inner,), minval=jnp.log(dt_min), maxval=jnp.log(dt_max)
+        )
+        dt = jnp.exp(log_dt)
+        inv_dt = dt + jnp.log1p(-jnp.exp(-dt))
         self.dt_proj.bias = nnx.Param(inv_dt)
 
         # A is a real-valued diagonal: A = -exp(A_log).
