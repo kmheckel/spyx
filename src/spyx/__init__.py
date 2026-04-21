@@ -3,7 +3,7 @@
 import jax
 import jax.numpy as jnp
 
-from . import axn, data, experimental, fn, nir, nn, quant
+from . import axn, data, experimental, fn, nir, nn, optimize, quant
 from ._version import __version__
 
 __all__ = [
@@ -15,6 +15,7 @@ __all__ = [
     "fn",
     "nir",
     "nn",
+    "optimize",
     "quant",
     "__version__",
 ]

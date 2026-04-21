@@ -88,6 +88,11 @@ Functional training and evaluation tools (factory functions returning JIT-compil
 
 For training, drive the SNN with `nn.run(model, x)` and combine with an `nnx.Optimizer` + `nnx.value_and_grad` loop; there is no built-in `update_step` helper.
 
+### `optimize.py` - High-level Training Loop
+Convenience helpers that wrap the canonical `nnx.Optimizer` + `nnx.value_and_grad` pattern:
+- `fit(model, tx, loss_fn, train_iter, *, epochs, eval_iter=None, eval_fn=None, on_epoch_end=None)`: end-to-end epoch loop.
+- `make_train_step(loss_fn)` / `make_eval_step(metric_fn)`: JIT-compiled step primitives for custom loops.
+
 ### `nir.py` - Neuromorphic Intermediate Representation
 Import/export to NIR format for interoperability:
 - `from_nir()`: Convert NIR graph to Spyx model
