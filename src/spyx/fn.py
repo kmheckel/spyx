@@ -4,6 +4,37 @@ import optax
 from jax import tree_util as tree
 
 
+def _check_traces_vs_targets(traces, targets, time_axis, fn_name):
+    """Raise a clear error if the trace / target shapes disagree.
+
+    Runs at trace time (not per call), so there's no runtime cost once the
+    outer function is JIT-compiled. Addresses the common "my targets don't
+    line up with my readout" foot-gun tracked in issue #25.
+    """
+    if traces.ndim < 2:
+        raise ValueError(
+            f"{fn_name}: traces must have at least 2 dimensions (time + classes); "
+            f"got shape {traces.shape}."
+        )
+    # Resolve negative time_axis to a positive index.
+    ta = time_axis if time_axis >= 0 else traces.ndim + time_axis
+    if not 0 <= ta < traces.ndim:
+        raise ValueError(
+            f"{fn_name}: time_axis {time_axis} is out of range for traces with "
+            f"ndim={traces.ndim}."
+        )
+    # After reducing along time_axis the trailing dim is the class dim; the
+    # remaining leading dims must match targets.
+    reduced = traces.shape[:ta] + traces.shape[ta + 1:]
+    expected = reduced[:-1]
+    if targets.shape != expected:
+        raise ValueError(
+            f"{fn_name}: targets shape {targets.shape} does not match the batch "
+            f"portion of traces shape {traces.shape} (expected {expected} after "
+            f"reducing along time_axis={time_axis} and dropping the class axis)."
+        )
+
+
 def silence_reg(min_spikes):
     """L2-Norm per-neuron activation normalization for spiking less than a target number of times.
 
@@ -54,9 +85,10 @@ def integral_accuracy(time_axis=1):
     :return: function which computes Accuracy score and predictions that takes SNN output traces and integer index labels.
     """
     def _integral_accuracy(traces, targets):
+        _check_traces_vs_targets(traces, targets, time_axis, "integral_accuracy")
         preds = jnp.argmax(jnp.sum(traces, axis=time_axis), axis=-1)
         return jnp.mean(preds == targets), preds
-        
+
     return jax.jit(_integral_accuracy)
 
 # smoothing can be critical to the performance of your model...
@@ -70,7 +102,8 @@ def integral_crossentropy(smoothing=0.3, time_axis=1):
     """
 
     def _integral_crossentropy(traces, targets):
-        logits = jnp.sum(traces, axis=time_axis) # time axis.
+        _check_traces_vs_targets(traces, targets, time_axis, "integral_crossentropy")
+        logits = jnp.sum(traces, axis=time_axis)  # time axis.
         one_hot = jax.nn.one_hot(targets, logits.shape[-1])
         labels = optax.smooth_labels(one_hot, smoothing)
         return jnp.mean(optax.softmax_cross_entropy(logits, labels))
@@ -85,9 +118,9 @@ def mse_spikerate(sparsity=0.25, smoothing=0.0, time_axis=1):
     :return: Mean-Squared-Error loss function on the spike rate that takes SNN output traces and integer index labels.
     """
     def _mse_spikerate(traces, targets):
-
+        _check_traces_vs_targets(traces, targets, time_axis, "mse_spikerate")
         t = traces.shape[time_axis]
-        logits = jnp.mean(traces, axis=time_axis) # time axis.
+        logits = jnp.mean(traces, axis=time_axis)  # time axis.
         labels = optax.smooth_labels(jax.nn.one_hot(targets, logits.shape[-1]), smoothing)
         return jnp.mean(optax.squared_error(logits, labels * sparsity * t))
 

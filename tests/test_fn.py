@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import pytest
 
 from spyx import fn
 
@@ -72,3 +73,48 @@ def test_sparsity_reg_penalises_high_spikers():
     # Layer with mean spike rate 0 -> no penalty.
     silent = [jnp.zeros((4, 8))]
     assert reg(silent) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Shape checks (issue #25)
+# ---------------------------------------------------------------------------
+
+
+def test_integral_accuracy_rejects_rank_1_traces():
+    acc = fn.integral_accuracy(time_axis=1)
+    with pytest.raises(ValueError, match="at least 2 dimensions"):
+        acc(jnp.zeros((4,)), jnp.zeros((4,), dtype=jnp.int32))
+
+
+def test_integral_accuracy_rejects_target_batch_mismatch():
+    acc = fn.integral_accuracy(time_axis=1)
+    # traces: (B=3, T=4, C=5); expected targets: (B=3,)
+    traces = jnp.zeros((3, 4, 5))
+    with pytest.raises(ValueError, match="does not match"):
+        acc(traces, jnp.zeros((7,), dtype=jnp.int32))
+
+
+def test_integral_crossentropy_rejects_target_batch_mismatch():
+    loss = fn.integral_crossentropy(smoothing=0.0, time_axis=1)
+    traces = jnp.zeros((3, 4, 5))
+    with pytest.raises(ValueError, match="does not match"):
+        loss(traces, jnp.zeros((7,), dtype=jnp.int32))
+
+
+def test_integral_crossentropy_rejects_bad_time_axis():
+    loss = fn.integral_crossentropy(time_axis=99)
+    with pytest.raises(ValueError, match="out of range"):
+        loss(jnp.zeros((2, 4, 5)), jnp.zeros((2,), dtype=jnp.int32))
+
+
+def test_shape_check_accepts_valid_shapes():
+    """Shape check must NOT fire on the canonical (B, T, C) layout."""
+    acc = fn.integral_accuracy(time_axis=1)
+    loss = fn.integral_crossentropy(smoothing=0.0, time_axis=1)
+    mse = fn.mse_spikerate(sparsity=0.25, smoothing=0.0, time_axis=1)
+    traces = jnp.zeros((3, 4, 5))
+    targets = jnp.zeros((3,), dtype=jnp.int32)
+    # None of these should raise; return values are not asserted here.
+    acc(traces, targets)
+    loss(traces, targets)
+    mse(traces, targets)

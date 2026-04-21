@@ -1,4 +1,10 @@
+import pytest
+
 from spyx import data
+
+# These tests need the [loaders] extra. Skip cleanly when tonic isn't installed
+# rather than failing the default `uv run pytest` sweep (issue #35).
+pytest.importorskip("tonic")
 
 
 def test_nmnist_loader():
