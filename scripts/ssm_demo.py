@@ -106,8 +106,44 @@ def quantized_ssm_demo() -> None:
         print(f"  {label:16s} -> max |fp - q|: {max_diff:.4f}")
 
 
+def train_mamba_block_on_copy_task(T: int = 32, B: int = 16, d_model: int = 8) -> None:
+    print("\n== MambaBlock trained on identity (copy) task ==")
+    rngs = nnx.Rngs(0)
+    block = ssm.MambaBlock(d_model=d_model, d_state=8, rngs=rngs)
+    optimizer = nnx.Optimizer(block, optax.adam(3e-3), wrt=nnx.Param)
+
+    u = jax.random.normal(jax.random.PRNGKey(3), (T, B, d_model))
+
+    @nnx.jit
+    def step(model, optimizer, u):
+        def loss_fn(m):
+            return jnp.mean((m(u) - u) ** 2)
+        loss, grads = nnx.value_and_grad(loss_fn)(model)
+        optimizer.update(model, grads)
+        return loss
+
+    for epoch in range(100):
+        loss = float(step(block, optimizer, u))
+        if epoch % 20 == 0 or epoch == 99:
+            print(f"  step {epoch:3d}: loss={loss:.4f}")
+
+
+def h_net_chunked_ssm_demo(T: int = 32, B: int = 4, d_model: int = 8) -> None:
+    print("\n== ChunkedSSM (H-Net skeleton) forward ==")
+    rngs = nnx.Rngs(4)
+    inner = ssm.LRU(d_model=d_model, d_state=16, rngs=rngs)
+    outer = ssm.LRU(d_model=d_model, d_state=16, rngs=rngs)
+    cs = ssm.ChunkedSSM(inner, outer, chunk_size=8, pool="mean")
+    u = jax.random.normal(jax.random.PRNGKey(5), (T, B, d_model))
+    y = cs(u)
+    print(f"  input:  {u.shape}  chunk_size=8 -> {T // 8} chunks")
+    print(f"  output: {y.shape}  finite: {bool(jnp.all(jnp.isfinite(y)))}")
+
+
 if __name__ == "__main__":
     train_lru_on_copy_task()
     s5_diag_forward_demo()
     hybrid_snn_ssm_demo()
+    train_mamba_block_on_copy_task()
+    h_net_chunked_ssm_demo()
     quantized_ssm_demo()

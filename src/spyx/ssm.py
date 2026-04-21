@@ -258,7 +258,294 @@ class S5Diag(nnx.Module):
         return y
 
 
+# ---------------------------------------------------------------------------
+# Selective SSM (Mamba)
+# ---------------------------------------------------------------------------
+
+
+def _selective_binary_op(a, b):
+    """Associative op for per-timestep diagonal recurrences.
+
+    Elements: ``(A, x)`` where ``A`` is the per-step transition scalar (can
+    vary across the state dim but not the batch) and ``x`` is the accumulator.
+    Composes as ``(A_b · A_a, A_b · x_a + x_b)``, the same rule as the fixed-λ
+    case but now ``A`` is a per-timestep tensor.
+    """
+    A_a, x_a = a
+    A_b, x_b = b
+    return A_b * A_a, A_b * x_a + x_b
+
+
+def _selective_scan(A_bar: jax.Array, Bu_bar: jax.Array) -> jax.Array:
+    """Run Mamba's selective recurrence via associative scan.
+
+    :A_bar: shape ``(T, B, d_inner, d_state)`` — per-step state transition.
+    :Bu_bar: shape ``(T, B, d_inner, d_state)`` — per-step input drive.
+    :return: shape ``(T, B, d_inner, d_state)``.
+    """
+    _, x_seq = jax.lax.associative_scan(_selective_binary_op, (A_bar, Bu_bar), axis=0)
+    return x_seq
+
+
+def _selective_scan_reference(A_bar: jax.Array, Bu_bar: jax.Array) -> jax.Array:
+    """Sequential reference for :func:`_selective_scan`."""
+
+    def step(x, ab):
+        A_t, Bu_t = ab
+        x_next = A_t * x + Bu_t
+        return x_next, x_next
+
+    x0 = jnp.zeros(Bu_bar.shape[1:], dtype=Bu_bar.dtype)
+    _, xs = jax.lax.scan(step, x0, (A_bar, Bu_bar))
+    return xs
+
+
+class Mamba(nnx.Module):
+    """Selective state-space layer (Gu & Dao, 2023) — the SSM core of a Mamba block.
+
+    Implements the input-dependent ``(Δ, B, C)`` recurrence with a learned
+    diagonal ``A`` matrix, running the selective scan via
+    :func:`jax.lax.associative_scan` (O(log T) parallel depth). This is the
+    portable pure-JAX fallback for the ``selective_scan_cuda`` op in the
+    reference PyTorch implementation; it has the same semantics but lower
+    throughput on long sequences compared to the custom CUDA kernel.
+
+    Note: ``Mamba`` is the SSM subroutine. For the full block with the in-proj,
+    depthwise conv, SiLU gate and out-proj, use :class:`MambaBlock`.
+    """
+
+    def __init__(
+        self,
+        d_inner: int,
+        d_state: int = 16,
+        dt_rank: int | None = None,
+        *,
+        dt_min: float = 1e-3,
+        dt_max: float = 1e-1,
+        rngs: nnx.Rngs,
+    ):
+        if dt_rank is None:
+            # The published Mamba recipe uses ceil(d_inner / 16).
+            dt_rank = max(1, (d_inner + 15) // 16)
+
+        self.d_inner = d_inner
+        self.d_state = d_state
+        self.dt_rank = dt_rank
+
+        k_xproj, k_dtproj, k_A, k_D = jax.random.split(rngs.params(), 4)
+
+        # A tiny projection that extracts (Δ_rank, B, C) from the already-SSM
+        # input. Δ is a low-rank scalar-per-channel signal; B, C are state-sized.
+        self.x_proj = nnx.Linear(
+            d_inner, dt_rank + 2 * d_state, use_bias=False, rngs=nnx.Rngs(0),
+        )
+        # Re-init the x_proj kernel so we don't accidentally share RNG state
+        # with other layers (x_proj needs its own stream).
+        self.x_proj.kernel = nnx.Param(
+            jax.random.normal(k_xproj, self.x_proj.kernel[...].shape)
+            * (1.0 / jnp.sqrt(d_inner))
+        )
+
+        # dt_proj maps the Δ_rank projection back to d_inner, with a bias
+        # that's initialised so softplus(bias) ~ uniform(dt_min, dt_max).
+        self.dt_proj = nnx.Linear(dt_rank, d_inner, rngs=nnx.Rngs(1))
+        self.dt_proj.kernel = nnx.Param(
+            jax.random.normal(k_dtproj, self.dt_proj.kernel[...].shape)
+            * (dt_rank**-0.5)
+        )
+        # Inverse-softplus init so that softplus(bias) ~ U(dt_min, dt_max).
+        dt_init = jax.random.uniform(k_dtproj, (d_inner,), minval=jnp.log(dt_min), maxval=jnp.log(dt_max))
+        inv_dt = dt_init + jnp.log1p(-jnp.exp(-jnp.exp(dt_init)))
+        self.dt_proj.bias = nnx.Param(inv_dt)
+
+        # A is a real-valued diagonal: A = -exp(A_log).
+        A_init = jnp.tile(jnp.arange(1, d_state + 1, dtype=jnp.float32)[None, :], (d_inner, 1))
+        self.A_log = nnx.Param(jnp.log(A_init))
+
+        # Skip-style D.
+        self.D = nnx.Param(jnp.ones((d_inner,)) + 0.1 * jax.random.normal(k_D, (d_inner,)))
+
+    def __call__(self, u: jax.Array) -> jax.Array:
+        """Run the selective SSM.
+
+        :u: real array ``(T, B, d_inner)``.
+        :return: same shape.
+        """
+        if u.ndim != 3 or u.shape[-1] != self.d_inner:
+            raise ValueError(
+                f"Mamba expects [T, B, d_inner={self.d_inner}]; got {u.shape}."
+            )
+        T, B, _ = u.shape
+
+        # x_proj(u) -> (dt_rank, d_state, d_state) split along the last axis.
+        x_proj = self.x_proj(u)
+        dt_rank = self.dt_rank
+        d_state = self.d_state
+        dt_lowrank, B_mat, C_mat = jnp.split(
+            x_proj, (dt_rank, dt_rank + d_state), axis=-1
+        )
+        # dt: (T, B, d_inner) via dt_proj + softplus.
+        dt = jax.nn.softplus(self.dt_proj(dt_lowrank))
+
+        # A: (d_inner, d_state).
+        A = -jnp.exp(self.A_log[...])
+
+        # Discretise: A_bar = exp(dt ⊗ A), B_bar = dt ⊗ B.
+        # dt: (T, B, d_inner); A: (d_inner, d_state); -> A_bar: (T, B, d_inner, d_state)
+        A_bar = jnp.exp(jnp.einsum("tbd,ds->tbds", dt, A))
+        # B_bar: (T, B, d_inner, d_state) via dt[..., None] * B_mat[..., None, :]
+        B_bar = dt[..., None] * B_mat[..., None, :]
+        # Input drive: (B_bar u) has shape (T, B, d_inner, d_state)
+        Bu_bar = B_bar * u[..., None]
+
+        # Selective scan.
+        x_state = _selective_scan(A_bar, Bu_bar)  # (T, B, d_inner, d_state)
+
+        # y = C · x + D · u
+        y = jnp.einsum("tbs,tbds->tbd", C_mat, x_state)
+        y = y + self.D[...] * u
+        return y
+
+
+class MambaBlock(nnx.Module):
+    """Full Mamba block: in-proj → depthwise conv → SSM → gate → out-proj.
+
+    Residual connection is left to the caller (usually composed alongside an
+    ``RMSNorm`` inside a stack). The depthwise convolution uses
+    ``flax.nnx.Conv`` with ``feature_group_count = d_inner`` to mimic the
+    reference Mamba ``conv1d`` with ``groups = d_inner``.
+    """
+
+    def __init__(
+        self,
+        d_model: int,
+        d_state: int = 16,
+        d_conv: int = 4,
+        expand: int = 2,
+        *,
+        rngs: nnx.Rngs,
+    ):
+        d_inner = d_model * expand
+        self.d_model = d_model
+        self.d_inner = d_inner
+        self.d_conv = d_conv
+
+        self.in_proj = nnx.Linear(d_model, 2 * d_inner, use_bias=False, rngs=rngs)
+        # Depthwise (groups == d_inner) causal 1D convolution.
+        self.conv = nnx.Conv(
+            in_features=d_inner,
+            out_features=d_inner,
+            kernel_size=(d_conv,),
+            feature_group_count=d_inner,
+            padding=((d_conv - 1, 0),),
+            rngs=rngs,
+        )
+        self.ssm = Mamba(d_inner, d_state=d_state, rngs=rngs)
+        self.out_proj = nnx.Linear(d_inner, d_model, use_bias=False, rngs=rngs)
+
+    def __call__(self, u: jax.Array) -> jax.Array:
+        """u: (T, B, d_model) → (T, B, d_model)."""
+        if u.ndim != 3 or u.shape[-1] != self.d_model:
+            raise ValueError(
+                f"MambaBlock expects [T, B, d_model={self.d_model}]; got {u.shape}."
+            )
+        T, B, _ = u.shape
+
+        # In-projection: split to (x, z_gate).
+        x_z = self.in_proj(u)  # (T, B, 2*d_inner)
+        x, z = jnp.split(x_z, 2, axis=-1)
+
+        # Depthwise conv over time: nnx.Conv expects (B, T, C).
+        x_BTC = jnp.transpose(x, (1, 0, 2))
+        x_conv = self.conv(x_BTC)
+        x = jnp.transpose(x_conv, (1, 0, 2))
+
+        # SiLU + selective SSM.
+        x = jax.nn.silu(x)
+        y = self.ssm(x)
+        # Gate with SiLU(z), then out-project.
+        y = y * jax.nn.silu(z)
+        return self.out_proj(y)
+
+
+# ---------------------------------------------------------------------------
+# H-Net skeleton (chunked hierarchical SSM)
+# ---------------------------------------------------------------------------
+
+
+class ChunkedSSM(nnx.Module):
+    """Hierarchical SSM stack — the structural skeleton of an H-Net.
+
+    Splits the input sequence into fixed chunks of ``chunk_size`` timesteps,
+    processes each chunk with an inner SSM (``inner``), pools the chunk to a
+    single vector, runs the sequence of chunk-vectors through an outer SSM
+    (``outer``), and up-samples the outer signal back into the chunk slots
+    via a learnable affine blend. This captures the H-Net idea — hierarchical
+    composition of SSMs at different temporal resolutions — without the
+    dynamic-chunking and byte-level specifics of the full Hwang et al. 2024
+    recipe, which are separate research pieces.
+
+    ``inner`` and ``outer`` can be any module whose ``__call__`` takes
+    ``(T, B, d_model)`` and returns the same shape — for example
+    :class:`LRU`, :class:`S5Diag`, or :class:`MambaBlock`.
+
+    :chunk_size: number of timesteps per chunk. The input length must be a
+        multiple of this.
+    :pool: ``"mean"`` or ``"last"`` (last-timestep pooling is closer to the
+        H-Net's "segment-end" summary).
+    """
+
+    def __init__(
+        self,
+        inner: nnx.Module,
+        outer: nnx.Module,
+        *,
+        chunk_size: int,
+        pool: str = "mean",
+    ):
+        if pool not in ("mean", "last"):
+            raise ValueError(f"pool must be 'mean' or 'last'; got {pool!r}.")
+        if chunk_size <= 0:
+            raise ValueError(f"chunk_size must be positive; got {chunk_size}.")
+        self.inner = inner
+        self.outer = outer
+        self.chunk_size = chunk_size
+        self.pool = pool
+
+    def __call__(self, u: jax.Array) -> jax.Array:
+        """u: (T, B, d_model) → (T, B, d_model), where T is divisible by chunk_size."""
+        if u.ndim != 3:
+            raise ValueError(f"ChunkedSSM expects 3D input; got {u.shape}.")
+        T, B, D = u.shape
+        if T % self.chunk_size != 0:
+            raise ValueError(
+                f"Sequence length {T} is not divisible by chunk_size {self.chunk_size}."
+            )
+
+        # Run the inner SSM over the full sequence first — cheap and keeps
+        # per-timestep resolution.
+        h = self.inner(u)  # (T, B, D)
+
+        # Pool chunks -> (n_chunks, B, D).
+        n_chunks = T // self.chunk_size
+        reshaped = h.reshape(n_chunks, self.chunk_size, B, D)
+        if self.pool == "mean":
+            summaries = reshaped.mean(axis=1)
+        else:  # "last"
+            summaries = reshaped[:, -1]
+
+        # Outer SSM on the summaries.
+        summaries_out = self.outer(summaries)  # (n_chunks, B, D)
+
+        # Broadcast each chunk summary back across its timesteps and add.
+        broadcast = jnp.repeat(summaries_out, self.chunk_size, axis=0)  # (T, B, D)
+        return h + broadcast
+
+
 __all__ = [
     "LRU",
     "S5Diag",
+    "Mamba",
+    "MambaBlock",
+    "ChunkedSSM",
 ]

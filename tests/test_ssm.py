@@ -183,3 +183,137 @@ def test_ssm_can_be_quantized_with_spyx_quant_linear_rules():
     qwrapped = spyx.quant.quantize(wrapped, sample)
     y = qwrapped(sample)
     assert y.shape == (T, B, 3)
+
+
+# ---------------------------------------------------------------------------
+# Mamba (selective SSM)
+# ---------------------------------------------------------------------------
+
+
+def test_selective_scan_matches_sequential_reference():
+    """Parallel selective scan (per-step A_bar) must match the lax.scan reference."""
+    T, B, d_inner, d_state = 16, 2, 8, 4
+    key = jax.random.PRNGKey(0)
+    k1, k2 = jax.random.split(key)
+    # Use small A_bar magnitudes to keep the scan numerically well-behaved.
+    A_bar = 0.5 + 0.1 * jax.random.normal(k1, (T, B, d_inner, d_state))
+    Bu = jax.random.normal(k2, (T, B, d_inner, d_state))
+
+    parallel = ssm._selective_scan(A_bar, Bu)
+    sequential = ssm._selective_scan_reference(A_bar, Bu)
+    assert jnp.allclose(parallel, sequential, atol=1e-4)
+
+
+def test_mamba_forward_shape_and_dtype():
+    rngs = nnx.Rngs(0)
+    m = ssm.Mamba(d_inner=16, d_state=8, rngs=rngs)
+    u = jax.random.normal(jax.random.PRNGKey(0), (12, 2, 16))
+    y = m(u)
+    assert y.shape == (12, 2, 16)
+    assert y.dtype == jnp.float32
+    assert jnp.all(jnp.isfinite(y))
+
+
+def test_mamba_rejects_wrong_dim():
+    rngs = nnx.Rngs(0)
+    m = ssm.Mamba(d_inner=8, d_state=4, rngs=rngs)
+    with pytest.raises(ValueError, match="d_inner"):
+        m(jnp.ones((5, 2, 16)))
+
+
+def test_mamba_block_forward_shape():
+    rngs = nnx.Rngs(0)
+    block = ssm.MambaBlock(d_model=8, d_state=8, d_conv=4, expand=2, rngs=rngs)
+    y = block(jax.random.normal(jax.random.PRNGKey(0), (12, 2, 8)))
+    assert y.shape == (12, 2, 8)
+
+
+def test_mamba_block_trains_on_copy_task():
+    """MambaBlock should noticeably reduce loss on an identity copy task."""
+    rngs = nnx.Rngs(0)
+    block = ssm.MambaBlock(d_model=8, d_state=8, rngs=rngs)
+    optimizer = nnx.Optimizer(block, optax.adam(3e-3), wrt=nnx.Param)
+
+    u = jax.random.normal(jax.random.PRNGKey(1), (16, 4, 8))
+    target = u
+
+    @nnx.jit
+    def step(model, optimizer, u, target):
+        def loss_fn(m):
+            return jnp.mean((m(u) - target) ** 2)
+        loss, grads = nnx.value_and_grad(loss_fn)(model)
+        optimizer.update(model, grads)
+        return loss
+
+    initial = float(step(block, optimizer, u, target))
+    for _ in range(50):
+        final = float(step(block, optimizer, u, target))
+    assert final < initial * 0.8, f"MambaBlock loss did not drop: {initial:.3f} -> {final:.3f}"
+
+
+# ---------------------------------------------------------------------------
+# ChunkedSSM (H-Net skeleton)
+# ---------------------------------------------------------------------------
+
+
+def test_chunked_ssm_forward_shape_mean_and_last_pools():
+    rngs = nnx.Rngs(0)
+    for pool in ("mean", "last"):
+        inner = ssm.LRU(d_model=4, d_state=4, rngs=rngs)
+        outer = ssm.LRU(d_model=4, d_state=4, rngs=rngs)
+        cs = ssm.ChunkedSSM(inner, outer, chunk_size=4, pool=pool)
+        y = cs(jnp.ones((16, 2, 4)))
+        assert y.shape == (16, 2, 4)
+
+
+def test_chunked_ssm_rejects_invalid_chunking():
+    rngs = nnx.Rngs(0)
+    inner = ssm.LRU(d_model=4, d_state=4, rngs=rngs)
+    outer = ssm.LRU(d_model=4, d_state=4, rngs=rngs)
+    cs = ssm.ChunkedSSM(inner, outer, chunk_size=4, pool="mean")
+    # T=15 not divisible by chunk_size=4.
+    with pytest.raises(ValueError, match="divisible"):
+        cs(jnp.ones((15, 2, 4)))
+
+
+def test_chunked_ssm_rejects_bad_pool():
+    rngs = nnx.Rngs(0)
+    inner = ssm.LRU(d_model=4, d_state=4, rngs=rngs)
+    outer = ssm.LRU(d_model=4, d_state=4, rngs=rngs)
+    with pytest.raises(ValueError, match="pool"):
+        ssm.ChunkedSSM(inner, outer, chunk_size=4, pool="banana")
+
+
+def test_chunked_ssm_trains_on_copy_task():
+    rngs = nnx.Rngs(0)
+    inner = ssm.LRU(d_model=8, d_state=8, rngs=rngs)
+    outer = ssm.LRU(d_model=8, d_state=8, rngs=rngs)
+    cs = ssm.ChunkedSSM(inner, outer, chunk_size=4, pool="mean")
+    optimizer = nnx.Optimizer(cs, optax.adam(3e-3), wrt=nnx.Param)
+
+    u = jax.random.normal(jax.random.PRNGKey(2), (16, 4, 8))
+    target = u
+
+    @nnx.jit
+    def step(model, optimizer, u, target):
+        def loss_fn(m):
+            return jnp.mean((m(u) - target) ** 2)
+        loss, grads = nnx.value_and_grad(loss_fn)(model)
+        optimizer.update(model, grads)
+        return loss
+
+    initial = float(step(cs, optimizer, u, target))
+    for _ in range(50):
+        final = float(step(cs, optimizer, u, target))
+    assert final < initial * 0.5, f"ChunkedSSM loss did not drop: {initial:.3f} -> {final:.3f}"
+
+
+def test_chunked_ssm_can_wrap_mamba_block():
+    """H-Net skeleton should accept any (T,B,D)->(T,B,D) module, including MambaBlock."""
+    rngs = nnx.Rngs(0)
+    inner = ssm.MambaBlock(d_model=8, d_state=4, d_conv=2, expand=1, rngs=rngs)
+    outer = ssm.LRU(d_model=8, d_state=8, rngs=rngs)
+    cs = ssm.ChunkedSSM(inner, outer, chunk_size=4)
+    y = cs(jax.random.normal(jax.random.PRNGKey(0), (16, 2, 8)))
+    assert y.shape == (16, 2, 8)
+    assert jnp.all(jnp.isfinite(y))
