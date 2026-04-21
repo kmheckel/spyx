@@ -9,17 +9,27 @@ dependencies = [
     "optax",
     "jax_tqdm",
     "nir",
-    "flax>=0.10.7",
+    # flax 0.11 changed the nnx.Optimizer signature to require `wrt=` and made
+    # `optimizer.update(model, grads)` the canonical call. Spyx's tutorials and
+    # spyx.quant target the newer API; pin accordingly.
+    "flax>=0.11.0",
     "grain",
 ]
 readme = "README.md"
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.11, <3.13"
 license = { text = "MIT" }
 
 [project.optional-dependencies]
 loaders = [
     "tonic",
     "numba>=0.59.0",
+]
+quant = [
+    # Qwix is Google's JAX quantization library; published from GitHub today
+    # (no PyPI release yet). Install via `uv pip install "spyx[quant]"` together
+    # with `uv pip install "git+https://github.com/google/qwix"`, or pin the
+    # github URL in your downstream requirements.
+    "qwix",
 ]
 docs = [
     "mkdocs>=1.6.1",
@@ -30,6 +40,8 @@ docs = [
 
 [tool.uv.sources]
 torchvision = { index = "pytorch-cpu" }
+# qwix has no PyPI release as of 2026-04; install from GitHub.
+qwix = { git = "https://github.com/google/qwix" }
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
@@ -96,8 +108,8 @@ exclude = [
 line-length = 88
 indent-width = 4
 
-# Assume Python 3.10
-target-version = "py310"
+# Lower Python bound is 3.11 (matches flax >= 0.11).
+target-version = "py311"
 
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.

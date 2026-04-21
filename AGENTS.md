@@ -101,6 +101,13 @@ Experimental features under development:
 - Novel neuron dynamics
 - Training algorithms (e.g., DECOLLE)
 
+### `quant.py` - Quantization (optional)
+Thin SNN-aware wrapper around Google's `qwix` library:
+- `quantize(model, *example_inputs, rules=None, mode="qat" | "ptq")`: convert an SNN to a quantized version; defaults to int8 weights+activations on Linear/Conv only.
+- `linear_only_rules(weight_qtype, act_qtype)`: shorthand qwix rules that match only dense layers (spiking dynamics stay fp32).
+- `weights_only_rules(weight_qtype)`: weight-only quantization for memory-bound deployment.
+- `available()`: returns True iff qwix is importable (the dependency lives behind the `[quant]` extra).
+
 ## Development Workflow
 
 ### Setup
@@ -148,8 +155,9 @@ uv run mkdocs build        # Build static site
 - Excluded: research/, docs/, scripts/, data/
 
 ### Dependencies
-- **Core**: optax, jax_tqdm, nir, flax>=0.10.7, grain
+- **Core**: optax, jax_tqdm, nir, flax>=0.11.0, grain
 - **Optional** (`[loaders]`): tonic, numba>=0.59.0
+- **Optional** (`[quant]`): qwix (installed from GitHub via `tool.uv.sources`)
 - **Dev**: pytest, ruff, mkdocs, mkdocs-material, mkdocstrings
 
 ## Common Tasks for Agents
@@ -186,6 +194,7 @@ The package exports the following in `src/spyx/__init__.py`:
 - `fn` - Functional utilities
 - `nir` - NIR conversion
 - `nn` - Neuron models
+- `quant` - Quantization helpers (qwix wrapper, optional)
 - `__version__` - Version string
 
 All exports are defined in `__all__` for explicit API declaration.
