@@ -106,6 +106,7 @@ Thin SNN-aware wrapper around Google's `qwix` library:
 - `quantize(model, *example_inputs, rules=None, mode="qat" | "ptq")`: convert an SNN to a quantized version; defaults to int8 weights+activations on Linear/Conv only.
 - `linear_only_rules(weight_qtype, act_qtype)`: shorthand qwix rules that match only dense layers (spiking dynamics stay fp32).
 - `weights_only_rules(weight_qtype)`: weight-only quantization for memory-bound deployment.
+- `bitnet_ternary_rules(act_qtype="int8")`: BitNet b1.58-style ternary weights (via `int2`) + int8 activations for dense / conv layers.
 - `available()`: returns True iff qwix is importable (the dependency lives behind the `[quant]` extra).
 
 ## Development Workflow
@@ -130,6 +131,20 @@ uv run pytest              # Run all tests
 uv run pytest -v           # Verbose output
 uv run pytest tests/test_data_grain.py  # Specific test
 ```
+
+### Notebook smoke tests
+Before tagging a release (or whenever dependencies shift), verify that every
+published tutorial's code path still matches the `src/spyx/` API without
+requiring dataset downloads:
+
+```bash
+uv run python scripts/smoke_notebook_apis.py
+```
+
+This exercises the model-construction + one `nnx.Optimizer` step for each of
+the five surrogate-gradient/cartpole notebooks plus the QAT tutorial on
+synthetic data. Runs in ~10 seconds; catches the kind of API drift that
+silently breaks notebooks between `flax` / `evosax` / `qwix` releases.
 
 ### Documentation
 ```bash

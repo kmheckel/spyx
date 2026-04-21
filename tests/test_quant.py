@@ -105,6 +105,34 @@ def test_weights_only_rules_disables_act_qtype():
 
 
 @needs_qwix
+def test_bitnet_ternary_rules_use_int2_weights():
+    rules = spyx.quant.bitnet_ternary_rules()
+    assert len(rules) == 2
+    assert {r.weight_qtype for r in rules} == {"int2"}
+    # All BitNet rules should have act_qtype set; defaults to int8.
+    assert {r.act_qtype for r in rules} == {"int8"}
+
+
+@needs_qwix
+def test_bitnet_ternary_rules_quantize_a_real_snn():
+    rngs = nnx.Rngs(0)
+    model = snn.Sequential(
+        nnx.Linear(8, 16, use_bias=False, rngs=rngs),
+        snn.LIF((16,), rngs=rngs),
+        nnx.Linear(16, 4, use_bias=False, rngs=rngs),
+        snn.LI((4,), rngs=rngs),
+    )
+    sample_x = jnp.ones((2, 8))
+    sample_state = model.initial_state(2)
+    qmodel = spyx.quant.quantize(
+        model, sample_x, sample_state, rules=spyx.quant.bitnet_ternary_rules()
+    )
+    out, _ = qmodel(sample_x, sample_state)
+    assert out.shape == (2, 4)
+    assert jnp.all(jnp.isfinite(out))
+
+
+@needs_qwix
 def test_unknown_mode_raises():
     rngs = nnx.Rngs(0)
     model = snn.Sequential(nnx.Linear(2, 2, rngs=rngs))

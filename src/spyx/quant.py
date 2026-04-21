@@ -113,6 +113,42 @@ def weights_only_rules(
     ]
 
 
+def bitnet_ternary_rules(act_qtype: str = "int8") -> list[Any]:
+    """BitNet b1.58-style "ternary" weight quantization for dense / conv layers.
+
+    The published BitNet recipe stores each weight as one of ``{-1, 0, +1}``,
+    a 1.58-bit code. Qwix doesn't expose a true ternary qtype today, so this
+    helper falls back to ``"int2"`` (4-level symmetric quantization with values
+    in ``{-2, -1, 0, 1}``). The two-bit fallback gets you the same memory
+    profile and storage class as ternary; the extra ``-2`` level slightly
+    inflates representational range but keeps the symmetric absmax calibration
+    well-behaved.
+
+    For exact ternary semantics, follow up with a custom
+    :class:`qwix.QuantizationRule` using a hand-rolled calibration method;
+    spiking SSMs in particular may benefit from the strict 1.58-bit recipe.
+
+    :param act_qtype: activation quantization dtype. ``"int8"`` matches the
+        official BitNet recipe ("BitNet b1.58 + 8-bit activations"). Pass
+        ``None`` for a pure weights-only ternary mode.
+    :return: list of qwix :class:`QuantizationRule` instances ready to feed to
+        :func:`quantize`.
+    """
+    qwix = _require_qwix()
+    return [
+        qwix.QuantizationRule(
+            module_path=r".*Linear.*",
+            weight_qtype="int2",
+            act_qtype=act_qtype,
+        ),
+        qwix.QuantizationRule(
+            module_path=r".*Conv.*",
+            weight_qtype="int2",
+            act_qtype=act_qtype,
+        ),
+    ]
+
+
 def quantize(
     model: Any,
     *example_inputs: Any,
@@ -174,6 +210,7 @@ def quantize(
 
 __all__ = [
     "available",
+    "bitnet_ternary_rules",
     "linear_only_rules",
     "weights_only_rules",
     "quantize",
