@@ -176,3 +176,12 @@ if __name__ == "__main__":
     test_activity_reg_under_jit()
     test_sequential_run()
     print("Tests passed!")
+
+
+def test_run_rejects_stateless_module_with_clear_error():
+    """run() on a plain stateless module must raise a TypeError, not pass None."""
+    import pytest
+    rngs = nnx.Rngs(0)
+    stateless = nnx.Linear(4, 4, rngs=rngs)
+    with pytest.raises(TypeError, match="initial_state"):
+        nn.run(stateless, jnp.ones((3, 2, 4)))

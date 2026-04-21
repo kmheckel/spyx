@@ -101,3 +101,19 @@ def test_fit_invokes_on_epoch_end_callback():
     )
     assert [s[0] for s in seen] == [0, 1, 2, 3]
     assert all(jnp.isfinite(jnp.array([s[1] for s in seen])))
+
+
+def test_fit_raises_on_empty_train_iter():
+    """fit() should raise a clear error when an epoch yields no batches."""
+    import pytest
+    model, _x, _targets, forward = _make_model_and_data()
+    Loss = spyx.fn.integral_crossentropy()
+
+    def loss_fn(m, x, targets):
+        return Loss(forward(m), targets)
+
+    def empty_iter():
+        return iter(())
+
+    with pytest.raises(RuntimeError, match="yielded no batches"):
+        opt.fit(model, optax.adam(1e-3), loss_fn, empty_iter, epochs=1)

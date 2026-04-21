@@ -100,6 +100,18 @@ def fit(
     train_step = make_train_step(loss_fn)
     eval_step = make_eval_step(eval_fn) if eval_fn is not None else None
 
+    def _mean_or_raise(xs, *, kind: str, epoch: int):
+        # jnp.stack(()) raises a low-signal error; produce a clearer one. This
+        # most commonly fires when a Grain loader's `drop_remainder=True`
+        # combined with `batch_size > dataset_size` yields a zero-batch epoch.
+        if not xs:
+            raise RuntimeError(
+                f"fit(): {kind}_iter() yielded no batches at epoch {epoch}. "
+                "Check that batch_size <= dataset size and drop_remainder=False "
+                "if you want partial trailing batches."
+            )
+        return float(jnp.mean(jnp.stack(xs)))
+
     history: History = []
     for epoch in range(epochs):
         train_losses = []
@@ -107,7 +119,7 @@ def fit(
             batch_args = batch if isinstance(batch, tuple) else (batch,)
             train_losses.append(train_step(model, optimizer, *batch_args))
         metrics: dict[str, float] = {
-            "train_loss": float(jnp.mean(jnp.stack(train_losses)))
+            "train_loss": _mean_or_raise(train_losses, kind="train", epoch=epoch)
         }
 
         if eval_iter is not None and eval_step is not None:
@@ -117,8 +129,8 @@ def fit(
                 acc, loss = eval_step(model, *batch_args)
                 accs.append(acc)
                 losses.append(loss)
-            metrics["eval_acc"] = float(jnp.mean(jnp.stack(accs)))
-            metrics["eval_loss"] = float(jnp.mean(jnp.stack(losses)))
+            metrics["eval_acc"] = _mean_or_raise(accs, kind="eval", epoch=epoch)
+            metrics["eval_loss"] = _mean_or_raise(losses, kind="eval", epoch=epoch)
 
         history.append(metrics)
         if on_epoch_end is not None:

@@ -449,23 +449,35 @@ class Sequential(nnx.Sequential):
 def run(model, x, state=None):
     """
     Execute a model over a sequence of inputs using jax.lax.scan.
-    
-    :model: A Flax NNX Module (e.g. nnx.Sequential).
+
+    :model: A stateful Flax NNX Module, typically :class:`Sequential` or a
+        Spyx neuron. It must either take ``(x_t, state) -> (out, next_state)``
+        or expose an ``initial_state(batch_size)`` method (or both). Plain
+        stateless modules like ``nnx.Linear`` don't fit the contract — wrap
+        them in a :class:`Sequential` with at least one stateful layer, or
+        use ``jax.vmap`` if you just want to apply the module per timestep.
     :x: Input data with shape [Time, Batch, ...].
-    :state: Initial state for the model. If None, model.initial_state is used if available.
+    :state: Initial state for the model. If None, ``model.initial_state`` is
+        consulted; if the model has no ``initial_state`` and no state is
+        supplied explicitly, a clear error is raised.
     :return: (outputs, final_state)
     """
-    
+
     if state is None:
-        # We need batch size from x
+        if not hasattr(model, "initial_state"):
+            raise TypeError(
+                "spyx.nn.run: the given model has no `initial_state` method "
+                "and no explicit `state=` was provided. run() scans a stateful "
+                "(x, state) -> (out, new_state) module; wrap stateless layers "
+                "in spyx.nn.Sequential or use jax.vmap over the time axis."
+            )
         batch_size = x.shape[1]
-        if hasattr(model, "initial_state"):
-            state = model.initial_state(batch_size)
-    
+        state = model.initial_state(batch_size)
+
     def scan_fn(carry, x_t):
         out, next_state = model(x_t, carry)
         return next_state, out
-        
+
     final_state, outputs = jax.lax.scan(scan_fn, state, x)
     return outputs, final_state
 
