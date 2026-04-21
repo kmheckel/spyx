@@ -223,6 +223,21 @@ uv run ruff check          # Verify all issues resolved
 ### Running experiments
 Research notebooks are in `research/` but excluded from linting. Use these for exploratory work without strict code quality requirements.
 
+## Claude Code workflows
+
+This repository ships skill files under `.claude/skills/` that Claude Code can invoke by name. Each skill is a focused recipe for a common workflow; they compose — e.g. `setup-gpu` runs before `run-tutorial` on a fresh machine.
+
+| Skill | Use when |
+|---|---|
+| `snn-primer` | You're new to SNNs and want a JAX-ready mental model (spikes, LIF dynamics, surrogate gradients, time-major tensors). |
+| `setup-gpu` | JAX is falling back to CPU and you have an NVIDIA GPU that isn't being seen. |
+| `smoke-check` | You want one command to verify install + tests + notebook APIs are healthy. |
+| `run-tutorial` | You want to open and execute one of the bundled tutorial notebooks. |
+| `new-experiment` | You want to scaffold a new Spyx training script against your own dataset. |
+| `debug-training` | Your SNN isn't learning: flat loss, NaN, silent neurons, or exploding gradients. |
+
+Invoke via `/snn-primer`, `/setup-gpu`, etc. from Claude Code. Each skill is self-contained; see the file in `.claude/skills/` for the full instructions.
+
 ## Public API
 
 The package exports the following in `src/spyx/__init__.py`:
@@ -233,6 +248,7 @@ The package exports the following in `src/spyx/__init__.py`:
 - `fn` - Functional utilities
 - `nir` - NIR conversion
 - `nn` - Neuron models
+- `optimize` - High-level training loop (`fit`, `make_train_step`, `make_eval_step`)
 - `quant` - Quantization helpers (qwix wrapper, optional)
 - `__version__` - Version string
 
