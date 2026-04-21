@@ -199,11 +199,76 @@ def from_nir(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs = None):
                 mod.beta[...] = jnp.array(1 - (dt / node.tau_mem))
             elif isinstance(node, nir.NIRGraph):
                 lif_node, wrec_node, _ = _parse_rnn_subgraph(node)
-                # ... handle recurrent weights ...
-                # This needs more care to match weights to the new modules.
-                pass
+                # NIR weight is (out, in); spyx recurrent_w is (hidden, hidden).
+                # For recurrent layers in_features == out_features, but transpose
+                # anyway to honour the (in, out) convention shared with nnx.Linear.
+                mod.recurrent_w[...] = jnp.array(wrec_node.weight.T)
+                if isinstance(lif_node, nir.LIF):
+                    mod.beta[...] = jnp.array(1 - (dt / lif_node.tau))
+                elif isinstance(lif_node, nir.CubaLIF):
+                    mod.alpha[...] = jnp.array(1 - (dt / lif_node.tau_syn))
+                    mod.beta[...] = jnp.array(1 - (dt / lif_node.tau_mem))
+                # nir.IF carries no tau parameter; nothing to load for RIF.
                 
     return Sequential(*modules)
+
+def _spyx_recurrent_to_nirgraph(layer, node_key, dt) -> nir.NIRGraph:
+    """Build the inner NIRGraph subgraph for an RIF / RLIF / RCuBaLIF layer.
+
+    The subgraph mirrors the (input -> wrec, lif <-> wrec, lif -> output)
+    topology produced by ``_replace_rnn_subgraph_with_nirgraph`` so that a
+    Spyx -> NIR -> Spyx roundtrip is symmetric.
+    """
+    hidden_shape = layer.hidden_shape
+    threshold = np.full(hidden_shape, layer.threshold)
+    v_leak = np.zeros(hidden_shape)
+
+    if isinstance(layer, RIF):
+        lif = nir.IF(r=np.ones(hidden_shape), v_threshold=threshold)
+    elif isinstance(layer, RLIF):
+        beta = np.array(layer.beta[...])
+        if beta.ndim == 0:
+            beta = np.full(hidden_shape, beta)
+        lif = nir.LIF(
+            tau=dt / (1 - beta),
+            v_threshold=threshold,
+            v_leak=v_leak,
+            r=beta,
+        )
+    else:  # RCuBaLIF
+        alpha = np.array(layer.alpha[...])
+        beta = np.array(layer.beta[...])
+        if alpha.ndim == 0:
+            alpha = np.full(hidden_shape, alpha)
+        if beta.ndim == 0:
+            beta = np.full(hidden_shape, beta)
+        lif = nir.CubaLIF(
+            tau_mem=dt / (1 - beta),
+            tau_syn=dt / (1 - alpha),
+            v_threshold=threshold,
+            v_leak=v_leak,
+            r=beta,
+        )
+
+    # NIR Linear weight is (out, in); spyx recurrent_w is (in, out).
+    wrec = nir.Linear(weight=np.array(layer.recurrent_w[...]).T)
+
+    lif_nk = f"{node_key}.lif"
+    w_nk = f"{node_key}.w_rec"
+    sub_nodes = {
+        lif_nk: lif,
+        w_nk: wrec,
+        f"{node_key}.input": nir.Input(input_type={"input": np.array(hidden_shape)}),
+        f"{node_key}.output": nir.Output(output_type={"output": np.array(hidden_shape)}),
+    }
+    sub_edges = [
+        (f"{node_key}.input", w_nk),
+        (w_nk, lif_nk),
+        (lif_nk, w_nk),
+        (lif_nk, f"{node_key}.output"),
+    ]
+    return nir.NIRGraph(nodes=sub_nodes, edges=sub_edges)
+
 
 def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
     """Converts a Spyx/NNX model to a NIR graph."""
@@ -268,7 +333,10 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
                 v_leak=np.zeros(layer.hidden_shape),
                 r=beta
             )
-            
+
+        elif isinstance(layer, (RIF, RLIF, RCuBaLIF)):
+            nodes[node_key] = _spyx_recurrent_to_nirgraph(layer, node_key, dt)
+
         elif isinstance(layer, nnx.Flatten):
             nodes[node_key] = nir.Flatten(input_type={"input": input_shape}) # Simplified
             

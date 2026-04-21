@@ -44,21 +44,27 @@ spyx/
 ## Core Modules
 
 ### `axn.py` - Surrogate Gradients
-Defines surrogate gradient functions for backpropagation through spiking neurons:
-- `Axon`: Base class for activation functions with custom gradients
-- `superspike()`: SuperSpike surrogate gradient
-- `arctan()`: Arctangent surrogate gradient
-- `triangular()`: Triangular surrogate gradient
+Defines surrogate gradient functions for backpropagation through spiking neurons. Each is a factory that returns a JIT-compiled `jax.custom_gradient` function:
+- `custom(bwd, fwd)`: Build an activation with arbitrary forward / surrogate-gradient functions
+- `heaviside()`: The forward spiking nonlinearity
+- `superspike(k=25)`: SuperSpike surrogate gradient (Zenke & Ganguli, 2018)
+- `arctan(k=2)`: Arctangent surrogate gradient
+- `triangular(k=2)`: Triangular surrogate gradient
+- `boxcar(width=2, height=0.5)`: Boxcar surrogate gradient
+- `tanh(k=1)`: Hyperbolic-tangent surrogate gradient
 
 ### `nn.py` - Neuron Models
 Spiking neuron implementations using Flax NNX:
 - **IF**: Integrate-and-Fire
 - **LIF**: Leaky Integrate-and-Fire
+- **LI**: Leaky Integrator (non-spiking output layer)
 - **ALIF**: Adaptive LIF (with threshold adaptation)
 - **CuBaLIF**: Current-based LIF (separate current and voltage dynamics)
 - **Recurrent variants**: RIF, RLIF, RCuBaLIF
 - **Sequential**: Container for stateful layer composition
 - **SumPool**: Spatial pooling for spike trains
+- **ActivityRegularization**: Mutable spike-count tracker for per-layer regularization
+- **`run(model, x, state=None)`**: Time-major scan helper (`[T, B, ...]` input → `[T, B, ...]` output, final state)
 
 All neuron models follow a consistent interface:
 - `__init__`: Initialize parameters with optional random initialization
@@ -73,12 +79,14 @@ Grain-based data loading with SNN-specific transforms:
 - Integration with Tonic for neuromorphic datasets
 
 ### `fn.py` - Training Utilities
-Functional training and evaluation tools:
-- `integral_accuracy()`: Compute accuracy from spike counts
-- `integral_crossentropy()`: Cross-entropy loss for spike trains
-- `scan_snn()`: Execute SNN over time using jax.lax.scan
-- `update_step()`: Single gradient descent step
-- `evaluate()`: Batch evaluation
+Functional training and evaluation tools (factory functions returning JIT-compiled callables):
+- `integral_accuracy(time_axis=1)`: Argmax-of-summed-traces accuracy + predictions
+- `integral_crossentropy(smoothing=0.3, time_axis=1)`: Softmax cross-entropy on summed traces with optional label smoothing
+- `mse_spikerate(sparsity=0.25, smoothing=0.0, time_axis=1)`: MSE between mean spike rate and a target sparsity
+- `silence_reg(min_spikes)`: Penalize neurons that spike below a target rate
+- `sparsity_reg(max_spikes, norm=optax.huber_loss)`: Penalize layers whose mean spiking exceeds a target
+
+For training, drive the SNN with `nn.run(model, x)` and combine with an `nnx.Optimizer` + `nnx.value_and_grad` loop; there is no built-in `update_step` helper.
 
 ### `nir.py` - Neuromorphic Intermediate Representation
 Import/export to NIR format for interoperability:

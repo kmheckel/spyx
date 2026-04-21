@@ -60,7 +60,59 @@ def test_nir_export_import_cubalif():
     assert jnp.allclose(original_model.layers[1].alpha[...], imported_model.layers[1].alpha[...])
     assert jnp.allclose(original_model.layers[1].beta[...], imported_model.layers[1].beta[...])
 
+def test_nir_export_import_rlif():
+    rngs = nnx.Rngs(0)
+    original_model = nn.Sequential(
+        nnx.Linear(8, 12, use_bias=False, rngs=rngs),
+        nn.RLIF((12,), beta=0.85, rngs=rngs),
+    )
+
+    input_shape = {"input": (8,)}
+    output_shape = {"output": (12,)}
+    nir_graph = spyx_nir.to_nir(original_model, input_shape, output_shape)
+    imported_model = spyx_nir.from_nir(nir_graph, dt=1, rngs=nnx.Rngs(1))
+
+    # Linear preceeding the recurrent block.
+    assert jnp.allclose(
+        original_model.layers[0].kernel[...], imported_model.layers[0].kernel[...]
+    )
+    # Recurrent weights should round-trip exactly.
+    assert jnp.allclose(
+        original_model.layers[1].recurrent_w[...],
+        imported_model.layers[1].recurrent_w[...],
+    )
+    assert jnp.allclose(
+        original_model.layers[1].beta[...], imported_model.layers[1].beta[...]
+    )
+
+
+def test_nir_export_import_rcubalif():
+    rngs = nnx.Rngs(0)
+    original_model = nn.Sequential(
+        nnx.Linear(6, 6, use_bias=False, rngs=rngs),
+        nn.RCuBaLIF((6,), alpha=0.95, beta=0.9, rngs=rngs),
+    )
+
+    input_shape = {"input": (6,)}
+    output_shape = {"output": (6,)}
+    nir_graph = spyx_nir.to_nir(original_model, input_shape, output_shape)
+    imported_model = spyx_nir.from_nir(nir_graph, dt=1, rngs=nnx.Rngs(1))
+
+    assert jnp.allclose(
+        original_model.layers[1].recurrent_w[...],
+        imported_model.layers[1].recurrent_w[...],
+    )
+    assert jnp.allclose(
+        original_model.layers[1].alpha[...], imported_model.layers[1].alpha[...]
+    )
+    assert jnp.allclose(
+        original_model.layers[1].beta[...], imported_model.layers[1].beta[...]
+    )
+
+
 if __name__ == "__main__":
     test_nir_export_import_lif()
     test_nir_export_import_cubalif()
+    test_nir_export_import_rlif()
+    test_nir_export_import_rcubalif()
     print("NIR tests passed!")

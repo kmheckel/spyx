@@ -10,7 +10,7 @@
 Why use Spyx?
 =============
 
-Spyx (pronounced "spikes") is a compact spiking neural network library built on top of DeepMind's Haiku package, offering the flexibility and extensibility of PyTorch-based frameworks while enabling the extreme perfomance of SNN libraries which implement custom CUDA kernels for their dynamics. 
+Spyx (pronounced "spikes") is a compact spiking neural network library built on JAX and Flax NNX, offering the flexibility and extensibility of PyTorch-based frameworks while enabling the extreme performance of SNN libraries which implement custom CUDA kernels for their dynamics.
 
 The library currently supports training SNNs via surrogate gradient descent and neuroevolution, with additional capabilities such as ANN2SNN conversion and Phasor Networks being planned for the future. Spyx offers a number of predefined neuron models but is designed for it to be easy to define your own and plug it into a model; the hope is to soon include definitions of SpikingRWKV and other more sophisticated model blocks into the framework.
 
@@ -132,6 +132,8 @@ Experiments/Benchmarks used in the Spyx Paper: [Benchmark Notebooks](https://git
 Master's Thesis: Neuroevolution of Spiking Neural Networks [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10620442.svg)](https://doi.org/10.5281/zenodo.10620442)
 
 *** Your projects and research could be here! ***
+
+Note: notebooks under `research/` predate the Flax NNX migration and still use the legacy Haiku API. They are kept for reproducibility of the Spyx paper experiments and will be ported in a follow-up effort. New work should use the tutorials under `docs/examples/`.
 
 
 Contributing:

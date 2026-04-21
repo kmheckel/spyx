@@ -343,18 +343,28 @@ class RCuBaLIF(nnx.Module):
 
 class ActivityRegularization(nnx.Module):
     """
-    Add state to the SNN to track the average number of spikes emitted per neuron per batch.
+    Add state to the SNN to track the cumulative number of spikes emitted per neuron per batch.
+
+    The spike count is exposed as ``self.spike_count`` (an ``nnx.Variable``) and can be
+    fed to ``spyx.fn.silence_reg`` / ``spyx.fn.sparsity_reg`` for activity penalties.
+    Use ``reset(batch_size)`` between training steps to zero the buffer.
     """
 
-    def __init__(self):
-        # In NNX, state is just a Variable.
-        self.spike_count = nnx.Variable(None) # we'll initialize on first call with proper shape
-        
+    def __init__(self, hidden_shape, batch_size=1, dtype=jnp.float32):
+        """
+        :hidden_shape: Per-neuron shape of the layer being regularized.
+        :batch_size: Leading batch dimension of the spike-count buffer.
+        :dtype: Storage dtype for the spike-count buffer.
+        """
+        self.hidden_shape = tuple(hidden_shape) if not isinstance(hidden_shape, int) else (hidden_shape,)
+        self.dtype = dtype
+        self.spike_count = nnx.Variable(jnp.zeros((batch_size,) + self.hidden_shape, dtype=dtype))
+
+    def reset(self, batch_size):
+        self.spike_count[...] = jnp.zeros((batch_size,) + self.hidden_shape, dtype=self.dtype)
+
     def __call__(self, spikes):
-        if self.spike_count.get_value() is None:
-            self.spike_count.set_value(jnp.zeros(spikes.shape, dtype=spikes.dtype))
-            
-        self.spike_count[...] += spikes
+        self.spike_count[...] = self.spike_count[...] + spikes.astype(self.dtype)
         return spikes
 
 def PopulationCode(num_classes):
