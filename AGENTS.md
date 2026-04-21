@@ -73,8 +73,8 @@ All neuron models follow a consistent interface:
 
 ### `data.py` - Data Loading
 Grain-based data loading with SNN-specific transforms:
-- **Functional transforms**: `rate_code()`, `angle_code()`, `shift_augment()`
-- **Grain transforms**: `RateCode`, `AngleCode`, `ShiftAugment`
+- **Functional transforms**: `rate_code()`, `angle_code()`, `latency_code()`, `shift_augment()`
+- **Grain transforms**: `RateCode`, `AngleCode`, `LatencyCode`, `ShiftAugment`
 - **Dataset loaders**: `NMNIST_loader`, `SHD_loader` (requires tonic)
 - Integration with Tonic for neuromorphic datasets
 

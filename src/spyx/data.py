@@ -88,11 +88,44 @@ def angle_code(neuron_count, min_val, max_val):
     :max_val: An upper bound on the continuous input channel.
     """
     neurons = jnp.linspace(min_val, max_val, neuron_count)
-        
+
     def _call(obs):
         digital = jnp.digitize(obs, neurons) - 1
         digital = jnp.clip(digital, 0, neuron_count - 1)
         return jax.nn.one_hot(digital, neuron_count)
+
+    return jax.jit(_call)
+
+
+def latency_code(num_steps, threshold=0.01):
+    """Time-to-first-spike (latency) encoding.
+
+    Large input values fire earlier in the cycle, small values fire later.
+    Concretely, an input in ``[0, 1]`` is mapped to a spike time
+    ``t = round((1 - x) * (num_steps - 1))`` and a one-hot spike train is
+    emitted along a new leading time axis. Inputs below ``threshold`` never
+    fire, producing all-zero rows.
+
+    The encoding preserves total information in a single spike per neuron,
+    which is both far sparser than rate coding and matches the time-to-
+    first-spike training scheme used in the neuromorphic hardware literature.
+
+    :param num_steps: length of the emitted spike train (time axis).
+    :param threshold: values ``<= threshold`` are considered silent.
+    :return: JIT-compiled function mapping ``data: [..., C]`` (values in
+        ``[0, 1]``) to ``spikes: [num_steps, ..., C]`` of dtype ``uint8``.
+    """
+
+    def _call(data):
+        x = jnp.asarray(data, dtype=jnp.float32)
+        x = jnp.clip(x, 0.0, 1.0)
+        spike_idx = jnp.round((1.0 - x) * (num_steps - 1)).astype(jnp.int32)
+        # One-hot along a new time axis at the end, then move it to the front.
+        one_hot = jax.nn.one_hot(spike_idx, num_steps, dtype=jnp.uint8)
+        moved = jnp.moveaxis(one_hot, -1, 0)  # [T, ..., C]
+        # Zero out silent units.
+        silent_mask = (x <= threshold).astype(jnp.uint8)
+        return moved * (1 - silent_mask)
 
     return jax.jit(_call)
 
@@ -130,6 +163,33 @@ class ShiftAugment(grain.MapTransform):
         shift = np.random.randint(-self.max_shift, self.max_shift, size=len(self.axes))
         record[self.input_key] = np.roll(data, shift, axis=self.axes)
         return record
+
+class LatencyCode(grain.MapTransform):
+    """Grain MapTransform for time-to-first-spike (latency) encoding.
+
+    Counterpart to :func:`latency_code`, wrapped in the Grain op interface so
+    it can slot into an existing ``SHD_loader``-style pipeline.
+    """
+
+    def __init__(self, sample_T, threshold=0.01, input_key="obs", output_key="obs"):
+        self.sample_T = sample_T
+        self.threshold = threshold
+        self.input_key = input_key
+        self.output_key = output_key
+
+    def map(self, record):
+        data = np.asarray(record[self.input_key], dtype=np.float32)
+        data = np.clip(data, 0.0, 1.0)
+        spike_idx = np.round((1.0 - data) * (self.sample_T - 1)).astype(np.int32)
+        # Build a one-hot mask along axis 0.
+        spikes = np.zeros((self.sample_T,) + data.shape, dtype=np.uint8)
+        idx_grid = np.indices(data.shape)
+        silent = data <= self.threshold
+        # Fire only at the computed time bin, and only for non-silent units.
+        spikes[(spike_idx, *idx_grid)] = np.where(silent, 0, 1).astype(np.uint8)
+        record[self.output_key] = np.packbits(spikes, axis=0)
+        return record
+
 
 class AngleCode(grain.MapTransform):
     """
