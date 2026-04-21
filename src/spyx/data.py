@@ -440,20 +440,27 @@ class SHD_loader:
         if not tonic_installed:
             raise ImportError("Please install the optional dependencies by running 'pip install spyx[loaders]' to use this feature.")
 
-        shd_timestep = 1e-6
         net_channels = channels
-        net_dt = 1/sample_T
         self.obs_shape = (channels,)
         self.act_shape = (20,)
         self.batch_size = batch_size
         self.sample_T = sample_T
 
+        # Note: we intentionally leave timestamps in microseconds and let
+        # ToFrame(n_time_bins=sample_T) do the temporal binning. Applying
+        # Downsample(time_factor=...) first (which we used to do) compresses
+        # the timestamps into [0, sample_T] integer range; tonic's
+        # SliceByTimeBins then computes the per-bin window as
+        # ``(times[-1] - times[0]) // n_time_bins``, which floor-divides to
+        # 0 or 1 and silently yields empty frames for every SHD sample.
+        # See https://github.com/neuromorphs/tonic/issues/313 for the
+        # upstream tracking of the underlying slicing behaviour.
         transform = transforms.Compose([
-            transforms.Downsample(
-                time_factor=shd_timestep / net_dt,
-                spatial_factor=net_channels / 700
+            transforms.Downsample(spatial_factor=net_channels / 700),
+            transforms.ToFrame(
+                sensor_size=(net_channels, 1, 1),
+                n_time_bins=sample_T,
             ),
-            transforms.ToFrame(sensor_size=(net_channels, 1, 1), n_time_bins=sample_T)
         ])
 
         train_ds = datasets.SHD(download_dir, train=True, transform=transform)

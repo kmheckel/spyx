@@ -1,12 +1,15 @@
-"""Regression test for the tonic HSD monkey-patch shipped in spyx.data.
+"""Regression tests for the SHD loader + HSD monkey-patch shipped in spyx.data.
 
-Builds a small in-memory SHD-style HDF5 file with deliberately bad values
-(NaN, inf) in ``spikes/times`` and verifies that spyx's patched
-``HSD.__getitem__``:
+Two protections are covered:
 
-* doesn't raise,
-* drops the bad timestamps,
-* returns a finite ``int``-typed event ``t`` column.
+1. The monkey-patch on ``tonic.datasets.hsd.HSD.__getitem__`` drops
+   non-finite timestamps instead of letting them cast to INT_MIN / 0.
+
+2. The SHD transform pipeline (``Downsample`` → ``ToFrame``) actually
+   produces non-empty frames. Previously ``Downsample(time_factor=1e-6 /
+   (1/sample_T))`` pre-compressed timestamps into [0, sample_T], which
+   then collapsed under tonic's integer floor-division slicing and
+   silently zeroed every frame.
 
 Skipped cleanly when tonic isn't installed.
 """
@@ -53,8 +56,11 @@ def _write_fake_shd(path: str) -> None:
 
 
 def test_hsd_monkey_patch_drops_non_finite_entries():
+    # Importing spyx.data is what applies the monkey-patch. The `noqa: F401`
+    # keeps ruff from stripping this import as unused.
     from tonic.datasets.hsd import HSD
 
+    import spyx.data  # noqa: F401
 
     # Monkey-patch marker lets us confirm spyx.data applied its version.
     assert getattr(HSD.__getitem__, "_spyx_patched", False), (
@@ -91,3 +97,47 @@ def test_hsd_monkey_patch_drops_non_finite_entries():
         assert np.all(np.isfinite(events1["t"]))
         # The finite spikes should come back as 100000 and 300000 microseconds.
         assert sorted(events1["t"].tolist()) == [100000, 300000]
+
+
+def test_shd_transform_pipeline_produces_nonempty_frames():
+    """The Downsample → ToFrame pipeline must actually bin events into frames.
+
+    Regression for the interaction bug between ``Downsample(time_factor=...)``
+    and ``ToFrame(n_time_bins=...)``: pre-scaling timestamps into [0, T]
+    causes tonic's SliceByTimeBins to floor-divide the per-bin window to
+    zero and produce all-zero frames. spyx.data.SHD_loader now leaves
+    timestamps in microseconds so ToFrame gets a wide enough range.
+    """
+    from tonic import transforms
+
+    # Synthetic SHD-shaped sample: 1000 events spanning ~1 second.
+    rng = np.random.default_rng(0)
+    events = np.zeros(
+        1000, dtype=[("t", int), ("x", int), ("p", int)]
+    )
+    events["t"] = np.sort(rng.uniform(0, 1e6, 1000).astype(int))
+    events["x"] = rng.integers(0, 700, 1000)
+    events["p"] = 1
+
+    net_channels = 128
+    sample_T = 128
+
+    # Reproduce the fixed pipeline from spyx.data.SHD_loader.
+    pipeline = transforms.Compose([
+        transforms.Downsample(spatial_factor=net_channels / 700),
+        transforms.ToFrame(
+            sensor_size=(net_channels, 1, 1),
+            n_time_bins=sample_T,
+        ),
+    ])
+    frame = pipeline(events)
+    assert frame.sum() > 0, (
+        "SHD transform pipeline collapsed events to empty frames; "
+        "check that time_factor is NOT being applied before ToFrame."
+    )
+    # A typical 1000-event sample should spread over most time bins.
+    time_axis_totals = frame.sum(axis=(1, 2))
+    assert (time_axis_totals > 0).sum() > sample_T // 4, (
+        f"expected spikes in > {sample_T // 4} time bins, "
+        f"got {(time_axis_totals > 0).sum()}"
+    )
