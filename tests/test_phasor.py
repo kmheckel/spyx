@@ -71,23 +71,22 @@ def test_phasor_mlp_forward_shape_and_finite_grads():
         assert jnp.all(jnp.isfinite(g))
 
 
-def test_phasor_mlp_training_does_not_diverge():
-    """Forward + backward + optimizer step over many iterations stays finite.
+def test_phasor_mlp_training_reduces_loss():
+    """A linearly-separable toy task should be learnable after the real/imag split.
 
-    Note: getting a phasor network to actually converge with vanilla optax is
-    non-trivial because JAX returns the *conjugate* Wirtinger derivative for
-    real-valued losses on complex parameters; without unwinding that, optax
-    sees a sign-flipped imaginary component and Adam can chase its tail. See
-    issue #38 for the design discussion. This test just guarantees that the
-    forward / backward path itself is numerically well-behaved.
+    Before the real/imag parameter split, a stock optax loop couldn't
+    converge on phasor weights because JAX's conjugate-Wirtinger gradient
+    fights optax's real-arithmetic assumption. With ``kernel_re`` +
+    ``kernel_im`` stored separately the fix is structural and this test
+    serves as the regression guard.
     """
     rngs = nnx.Rngs(0)
     model = phasor.PhasorMLP(
-        in_features=4, hidden_features=8, out_features=2, depth=1, rngs=rngs
+        in_features=4, hidden_features=16, out_features=2, depth=2, rngs=rngs
     )
-    optimizer = nnx.Optimizer(model, optax.adam(1e-4), wrt=nnx.Param)
+    optimizer = nnx.Optimizer(model, optax.adam(5e-3), wrt=nnx.Param)
 
-    x = jax.random.uniform(jax.random.PRNGKey(2), (16, 4))
+    x = jax.random.uniform(jax.random.PRNGKey(2), (64, 4))
     y = (x[:, 0] > 0.5).astype(jnp.int32)
 
     @nnx.jit
@@ -98,8 +97,11 @@ def test_phasor_mlp_training_does_not_diverge():
         optimizer.update(model, grads)
         return loss
 
-    losses = [float(step(model, optimizer, x, y)) for _ in range(50)]
-    assert all(jnp.isfinite(jnp.array(losses))), losses
+    initial = float(step(model, optimizer, x, y))
+    for _ in range(200):
+        final = float(step(model, optimizer, x, y))
+    assert jnp.isfinite(final), final
+    assert final < initial * 0.6, f"Loss did not drop enough: {initial:.3f} -> {final:.3f}"
 
 
 # ---------------------------------------------------------------------------

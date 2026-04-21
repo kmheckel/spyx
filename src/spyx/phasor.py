@@ -21,14 +21,12 @@ This module is intentionally minimal and targets the pattern documented in
 ``docs/examples/phasor/phasor_intro.ipynb`` (issue #38).
 
 .. note::
-    JAX returns the *conjugate* Wirtinger derivative when you take ``jax.grad``
-    of a real-valued loss with respect to a complex parameter. Optax is built
-    around real arithmetic and does not unwind the conjugation, which means
-    naive ``optax.adam`` updates of complex weights can drift in the wrong
-    direction on the imaginary axis. For now ``PhasorLinear`` is a faithful
-    forward / backward implementation; convergence-aware training (manual
-    Wirtinger steps, or splitting into real/imag parameter pairs) is tracked
-    as follow-up work in issue #38.
+    Parameters that enter a complex-valued forward pass are stored as
+    separate ``kernel_re`` + ``kernel_im`` ``float32`` tensors and assembled
+    on each call (see :class:`PhasorLinear`). This sidesteps the JAX
+    Wirtinger-conjugate-gradient surprise that bit the first iteration of
+    this module, and lets you train phasor networks with a stock
+    ``optax.adam`` + ``nnx.Optimizer`` loop.
 """
 
 from __future__ import annotations
@@ -90,14 +88,21 @@ def _complex_glorot(key: jax.Array, in_features: int, out_features: int) -> jax.
 
 
 class PhasorLinear(nnx.Module):
-    """Complex-valued dense layer.
+    """Complex-valued dense layer with real/imag parameter storage.
 
-    ``z_out = z_in @ kernel + bias`` where ``kernel`` is ``complex64`` of shape
-    ``(in_features, out_features)`` and ``bias`` (optional) is ``complex64`` of
-    shape ``(out_features,)``.
+    ``z_out = z_in @ kernel + bias`` where ``kernel = kernel_re + i·kernel_im``
+    is reconstructed on each forward pass from two ``float32`` parameters.
 
-    JAX handles complex autodiff natively, so this composes with
-    ``nnx.value_and_grad`` and ``nnx.Optimizer`` without any custom plumbing.
+    Why not store ``kernel`` as a single ``complex64`` ``nnx.Param``?
+    JAX returns the *conjugate* Wirtinger derivative when you take
+    ``jax.grad`` of a real-valued loss with respect to a complex parameter.
+    Optax is real-arithmetic only and does not unwind the conjugation, which
+    caused vanilla ``optax.adam`` steps to drift sideways on the imaginary
+    axis in the first iteration of this module. Splitting storage into
+    ``kernel_re`` + ``kernel_im`` sidesteps the whole issue: the gradients
+    optax sees are always real, and the complex structure shows up only in
+    the forward pass. This matches the pattern used by the TF reference in
+    ``wilkieolin/phasor_networks``.
     """
 
     def __init__(
@@ -108,12 +113,28 @@ class PhasorLinear(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ):
-        self.kernel = nnx.Param(_complex_glorot(rngs.params(), in_features, out_features))
+        complex_kernel = _complex_glorot(rngs.params(), in_features, out_features)
+        self.kernel_re = nnx.Param(jnp.real(complex_kernel).astype(jnp.float32))
+        self.kernel_im = nnx.Param(jnp.imag(complex_kernel).astype(jnp.float32))
         self.use_bias = use_bias
         if use_bias:
-            self.bias = nnx.Param(jnp.zeros((out_features,), dtype=jnp.complex64))
+            self.bias_re = nnx.Param(jnp.zeros((out_features,), dtype=jnp.float32))
+            self.bias_im = nnx.Param(jnp.zeros((out_features,), dtype=jnp.float32))
         else:
-            self.bias = None
+            self.bias_re = None
+            self.bias_im = None
+
+    @property
+    def kernel(self) -> jax.Array:
+        """Complex kernel reconstructed from the real/imag storage."""
+        return (self.kernel_re[...] + 1j * self.kernel_im[...]).astype(jnp.complex64)
+
+    @property
+    def bias(self) -> jax.Array | None:
+        """Complex bias reconstructed from the real/imag storage (or None)."""
+        if not self.use_bias:
+            return None
+        return (self.bias_re[...] + 1j * self.bias_im[...]).astype(jnp.complex64)
 
     def __call__(self, z: jax.Array) -> jax.Array:
         if z.dtype not in (jnp.complex64, jnp.complex128):
@@ -121,9 +142,9 @@ class PhasorLinear(nnx.Module):
                 f"PhasorLinear expects a complex input; got dtype {z.dtype}. "
                 "Use spyx.phasor.real_to_phasor(x) on the input first."
             )
-        out = z @ self.kernel[...]
+        out = z @ self.kernel
         if self.use_bias:
-            out = out + self.bias[...]
+            out = out + self.bias
         return out
 
 
