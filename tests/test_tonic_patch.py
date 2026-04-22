@@ -100,15 +100,28 @@ def test_hsd_monkey_patch_drops_non_finite_entries():
 
 
 def test_shd_transform_pipeline_produces_nonempty_frames():
-    """The Downsample → ToFrame pipeline must actually bin events into frames.
+    """The Downsample → _SHD2Raster pipeline must produce non-empty frames.
 
-    Regression for the interaction bug between ``Downsample(time_factor=...)``
-    and ``ToFrame(n_time_bins=...)``: pre-scaling timestamps into [0, T]
-    causes tonic's SliceByTimeBins to floor-divide the per-bin window to
-    zero and produce all-zero frames. spyx.data.SHD_loader now leaves
-    timestamps in microseconds so ToFrame gets a wide enough range.
+    Regression for two failure modes that previously left every SHD sample
+    silenced:
+
+    * ``Downsample(time_factor=...)`` + ``ToFrame(n_time_bins=...)`` composed
+      badly because tonic's ``SliceByTimeBins`` floor-divides the per-bin
+      window to zero once timestamps are already in ``[0, T]`` integer range
+      (see https://github.com/neuromorphs/tonic/issues/313 ).
+    * The workaround of dropping ``time_factor`` and letting ``ToFrame`` bin
+      raw microseconds was ~10x slower per sample than the bespoke
+      ``_SHD2Raster`` transform used in the pre-NNX Spyx loader.
+
+    Current pipeline: ``Downsample(time_factor, spatial_factor)`` → the
+    in-tree ``_SHD2Raster``. Downsample compresses timestamps to a small
+    integer range; _SHD2Raster rasters them directly with ``np.add.at``
+    rather than going through tonic's slicer. Test asserts the combined
+    pipeline yields non-zero frames spread across multiple time bins.
     """
     from tonic import transforms
+
+    from spyx.data import _SHD2Raster
 
     # Synthetic SHD-shaped sample: 1000 events spanning ~1 second.
     rng = np.random.default_rng(0)
@@ -124,19 +137,16 @@ def test_shd_transform_pipeline_produces_nonempty_frames():
 
     # Reproduce the fixed pipeline from spyx.data.SHD_loader.
     pipeline = transforms.Compose([
-        transforms.Downsample(spatial_factor=net_channels / 700),
-        transforms.ToFrame(
-            sensor_size=(net_channels, 1, 1),
-            n_time_bins=sample_T,
+        transforms.Downsample(
+            time_factor=1e-6 / (1 / sample_T),
+            spatial_factor=net_channels / 700,
         ),
+        _SHD2Raster(encoding_dim=net_channels, sample_T=sample_T),
     ])
     frame = pipeline(events)
-    assert frame.sum() > 0, (
-        "SHD transform pipeline collapsed events to empty frames; "
-        "check that time_factor is NOT being applied before ToFrame."
-    )
-    # A typical 1000-event sample should spread over most time bins.
-    time_axis_totals = frame.sum(axis=(1, 2))
+    assert frame.shape == (sample_T, net_channels), frame.shape
+    assert frame.sum() > 0, "SHD transform pipeline collapsed events to empty frames"
+    time_axis_totals = frame.sum(axis=1)
     assert (time_axis_totals > 0).sum() > sample_T // 4, (
         f"expected spikes in > {sample_T // 4} time bins, "
         f"got {(time_axis_totals > 0).sum()}"

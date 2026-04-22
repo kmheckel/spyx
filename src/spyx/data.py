@@ -412,6 +412,41 @@ class NMNIST_loader:
     def test_epoch(self):
         return iter(self._test_dl)
 
+class _SHD2Raster:
+    """Rasterise SHD events directly into a binary spike frame.
+
+    Ported from ``spyx.loaders._SHD2Raster`` (pre-NNX). Strictly faster per
+    sample than ``tonic.transforms.ToFrame(n_time_bins=T)`` because it skips
+    tonic's ``SliceByTimeBins`` (which does per-bin list construction and a
+    Python-level loop) and also dodges the integer-floor-division bug that
+    zeroes out frames when upstream ``Downsample(time_factor=...)``
+    pre-compresses timestamps to ``[0, sample_T]``. See
+    https://github.com/neuromorphs/tonic/issues/313 .
+
+    Emits ``(sample_T, encoding_dim) uint8`` binary data; the caller
+    (typically :class:`TonicSource`) handles ``np.packbits(..., axis=0)``.
+    """
+
+    def __init__(self, encoding_dim, sample_T=128):
+        self.encoding_dim = encoding_dim
+        self.sample_T = sample_T
+
+    def __call__(self, events):
+        # events["t"] is already int (microseconds, integer-valued after
+        # Downsample's spatial_factor scaling — no time_factor needed).
+        t_max = int(events["t"].max()) + 1 if len(events) else self.sample_T
+        tensor = np.zeros((t_max, self.encoding_dim), dtype=np.uint8)
+        np.add.at(tensor, (events["t"], events["x"]), 1)
+        tensor = tensor[: self.sample_T, :]
+        # Pad with zeros if the sample was shorter than sample_T.
+        if tensor.shape[0] < self.sample_T:
+            tensor = np.pad(
+                tensor,
+                ((0, self.sample_T - tensor.shape[0]), (0, 0)),
+            )
+        return np.minimum(tensor, 1)
+
+
 class SHD_loader:
     """Dataloader for the Spiking Heidelberg Dataset using Google Grain and Tonic.
 
@@ -446,31 +481,84 @@ class SHD_loader:
         self.batch_size = batch_size
         self.sample_T = sample_T
 
-        # Note: we intentionally leave timestamps in microseconds and let
-        # ToFrame(n_time_bins=sample_T) do the temporal binning. Applying
-        # Downsample(time_factor=...) first (which we used to do) compresses
-        # the timestamps into [0, sample_T] integer range; tonic's
-        # SliceByTimeBins then computes the per-bin window as
-        # ``(times[-1] - times[0]) // n_time_bins``, which floor-divides to
-        # 0 or 1 and silently yields empty frames for every SHD sample.
-        # See https://github.com/neuromorphs/tonic/issues/313 for the
-        # upstream tracking of the underlying slicing behaviour.
+        # Custom raster transform: faster per-sample than tonic's
+        # ``ToFrame(n_time_bins=T)`` and dodges the integer-floor-division
+        # bug in ``SliceByTimeBins`` that silently zeroes out every frame
+        # when ``Downsample(time_factor=...)`` pre-compresses timestamps
+        # into ``[0, sample_T]``. See ``_SHD2Raster`` above and tonic
+        # issue https://github.com/neuromorphs/tonic/issues/313 .
+        # We apply ``Downsample(time_factor=..., spatial_factor=...)`` up
+        # front because the raster builds a ``(t_max+1, channels)`` zero
+        # tensor per sample; leaving timestamps in microseconds would
+        # allocate a ~1e6-row tensor per sample and blow out memory.
+        shd_timestep = 1e-6
+        net_dt = 1 / sample_T
         transform = transforms.Compose([
-            transforms.Downsample(spatial_factor=net_channels / 700),
-            transforms.ToFrame(
-                sensor_size=(net_channels, 1, 1),
-                n_time_bins=sample_T,
+            transforms.Downsample(
+                time_factor=shd_timestep / net_dt,
+                spatial_factor=net_channels / 700,
             ),
+            _SHD2Raster(encoding_dim=net_channels, sample_T=sample_T),
         ])
 
         train_ds = datasets.SHD(download_dir, train=True, transform=transform)
         test_ds = datasets.SHD(download_dir, train=False, transform=transform)
+
+        # Keep the raw tonic datasets around for the bulk-prestage path.
+        self._train_tonic = train_ds
+        self._test_tonic = test_ds
 
         train_mds = SpyxMapDataset(TonicSource(train_ds))
         test_mds = SpyxMapDataset(TonicSource(test_ds))
 
         self._train_dl = GrainLoader(train_mds, batch_size, shuffle=True, seed=key, worker_count=worker_count)
         self._test_dl = GrainLoader(test_mds, batch_size, shuffle=False, seed=key, worker_count=worker_count)
+
+    def prestage(self, split: str = "train"):
+        """Bulk-load a split into a single on-device array, fast and torch-free.
+
+        Walks the underlying tonic dataset in-process (no grain workers,
+        no PyTorch DataLoader) and rasterises each sample via
+        :class:`_SHD2Raster`. For the 8 k-sample SHD train split this runs
+        in a handful of seconds, vs. tens of seconds through grain's
+        streaming pipeline which pays per-iterator spinup + inter-process
+        shared-memory overhead. Matches the "entire dataset lives in vRAM"
+        pattern the Spyx paper relied on for throughput.
+
+        :split: ``"train"`` or ``"test"``.
+        :return: ``(obs_NBTC, labels_NB)`` — ``obs`` is
+            ``uint8[n_batches, batch_size, T_packed, channels]`` with
+            time packed along axis 1, ``labels`` is
+            ``int[n_batches, batch_size]``. Trailing partial batch is
+            dropped so the training loop can scan over a fixed ``N``.
+        """
+        if split not in ("train", "test"):
+            raise ValueError(f"split must be 'train' or 'test'; got {split!r}")
+        ds = self._train_tonic if split == "train" else self._test_tonic
+
+        # Allocate once and fill by index. _SHD2Raster output is already
+        # (sample_T, channels) uint8 binary; we pack along axis 0 per
+        # sample to match the rest of the pipeline.
+        N = len(ds)
+        C = self.obs_shape[0]
+        T_packed = (self.sample_T + 7) // 8
+        packed = np.empty((N, T_packed, C), dtype=np.uint8)
+        labels_np = np.empty((N,), dtype=np.int64)
+        for i in range(N):
+            frame, label = ds[i]
+            packed[i] = np.packbits(frame, axis=0)
+            labels_np[i] = int(label)
+
+        n_batches = N // self.batch_size
+        cutoff = n_batches * self.batch_size
+        obs_NBTC = jnp.asarray(
+            packed[:cutoff].reshape(n_batches, self.batch_size, T_packed, C)
+        )
+        labels_NB = jnp.asarray(
+            labels_np[:cutoff].reshape(n_batches, self.batch_size)
+        )
+        return obs_NBTC, labels_NB
+
 
     def train_epoch(self):
         return iter(self._train_dl)
