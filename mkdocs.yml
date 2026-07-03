@@ -48,6 +48,7 @@ nav:
       - NIR N-MNIST SCNN: examples/nir/scnn/nmnist_spyx.ipynb
       - NIR Single Neuron LIF: examples/nir/single_neuron/lif_spyx.ipynb
       - Quantization-Aware Training: examples/quantization/qat_intro.ipynb
+      - State-Space Models: examples/ssm/ssm_intro.ipynb
   - API Reference: api.md
 
 markdown_extensions:

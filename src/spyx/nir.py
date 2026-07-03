@@ -129,7 +129,9 @@ def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
     elif isinstance(node, nir.NIRGraph):
         lif_node, wrec_node, lif_size = _parse_rnn_subgraph(node)
         if isinstance(lif_node, nir.IF):
-            return RIF((lif_size,), threshold=lif_node.v_leak, rngs=rngs)
+            # RIF inherits its spike threshold from v_threshold, matching the
+            # non-recurrent IF path above (nir.IF has no v_leak attribute).
+            return RIF((lif_size,), threshold=lif_node.v_threshold, rngs=rngs)
         elif isinstance(lif_node, nir.LIF):
             return RLIF((lif_size,), threshold=lif_node.v_threshold, rngs=rngs)
         else:
