@@ -370,9 +370,7 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
         elif isinstance(layer, Flatten):
             # spyx.nn.Flatten collapses every non-batch dim; NIR shapes have no
             # batch axis, so flatten the whole per-sample shape (start_dim=0).
-            nodes[node_key] = nir.Flatten(
-                input_type=cur_shape, start_dim=0, end_dim=-1
-            )
+            nodes[node_key] = nir.Flatten(input_type=cur_shape, start_dim=0, end_dim=-1)
             cur_shape = (int(np.prod(cur_shape)),)
 
         else:
