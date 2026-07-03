@@ -47,6 +47,7 @@ nav:
       - NIR Braille RSNN: examples/nir/rsnn/braille_spyx.ipynb
       - NIR N-MNIST SCNN: examples/nir/scnn/nmnist_spyx.ipynb
       - NIR Single Neuron LIF: examples/nir/single_neuron/lif_spyx.ipynb
+      - Quantization-Aware Training: examples/quantization/qat_intro.ipynb
   - API Reference: api.md
 
 markdown_extensions:

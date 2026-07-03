@@ -2,13 +2,20 @@
 
 import jax
 import jax.numpy as jnp
-import haiku as hk
 
+from . import axn, data, experimental, fn, nir, nn, optimize, quant
 from ._version import __version__
-from . import nn
-from . import nir
-from . import axn
-from . import fn
-from . import data
-from . import experimental
-from . import loaders
+
+__all__ = [
+    "jax",
+    "jnp",
+    "axn",
+    "data",
+    "experimental",
+    "fn",
+    "nir",
+    "nn",
+    "optimize",
+    "quant",
+    "__version__",
+]
