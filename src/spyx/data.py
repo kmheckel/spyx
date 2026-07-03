@@ -84,7 +84,7 @@ def _patch_tonic_hsd() -> None:
             target = self.target_transform(target)
         return events, target
 
-    __getitem__._spyx_patched = True
+    __getitem__._spyx_patched = True  # ty: ignore[unresolved-attribute]  # marker on patched fn
     HSD.__getitem__ = __getitem__
 
 

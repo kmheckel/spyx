@@ -27,10 +27,16 @@ uv add "spyx[loaders]"
 ```
 
 !!! note "qwix has no PyPI release"
-    Spyx pins qwix to its GitHub repository via `tool.uv.sources`, so `uv` resolves `spyx[quant]` automatically inside the Spyx repo. In your own project, add the source explicitly or install it directly:
+    The `spyx[quant]` extra needs [qwix](https://github.com/google/qwix), which
+    isn't published on PyPI. Spyx pins it via `tool.uv.sources`, but uv sources
+    aren't transitive — so `spyx[quant]` alone resolves qwix **only inside the
+    Spyx repo** (`uv sync --extra quant`), not in your own project. Everywhere
+    else, install qwix from GitHub directly. This one-liner works with **both uv
+    and pip**:
 
     ```bash
-    uv pip install "git+https://github.com/google/qwix"
+    uv add  spyx "qwix @ git+https://github.com/google/qwix"
+    pip install spyx "qwix @ git+https://github.com/google/qwix"
     ```
 
 ## Get GPU / TPU support

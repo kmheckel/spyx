@@ -1,6 +1,6 @@
 # Migrate from Haiku Spyx (≤0.1.x) to Flax NNX
 
-Spyx `0.2` replaces the DeepMind **Haiku** backend with **Flax NNX**. This is a
+Spyx `1.0` replaces the DeepMind **Haiku** backend with **Flax NNX**. This is a
 breaking change: models are now stateful `nnx.Module` objects instead of
 `hk.transform`-ed functions, so existing training scripts need edits. This guide
 maps every old pattern to its new form.
@@ -11,7 +11,7 @@ instead of threading a `params` pytree through `SNN.apply`.**
 
 ## At a glance
 
-| Concern | Old (Haiku, ≤0.1.x) | New (Flax NNX, 0.2+) |
+| Concern | Old (Haiku, ≤0.1.x) | New (Flax NNX, 1.0+) |
 | --- | --- | --- |
 | NN library | `import haiku as hk` | `from flax import nnx` |
 | Dense layer | `hk.Linear(64, with_bias=False)` | `nnx.Linear(in, 64, use_bias=False, rngs=rngs)` |

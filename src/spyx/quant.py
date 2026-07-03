@@ -28,14 +28,20 @@ try:
 
     _HAS_QWIX = True
 except ImportError:  # pragma: no cover - exercised only without the extra
-    _qwix = None
+    _qwix = None  # ty: ignore[invalid-assignment]  # module-or-None sentinel
     _HAS_QWIX = False
 
 
+# qwix has no PyPI release. Spyx pins it via tool.uv.sources, but uv sources
+# aren't transitive, so downstream `spyx[quant]` doesn't resolve it in either uv
+# or pip. The portable fix (works in both) is installing qwix from GitHub
+# directly; inside the Spyx repo `uv sync --extra quant` handles it.
 _INSTALL_HINT = (
-    "spyx.quant requires the optional `qwix` dependency. Install it with "
-    '`uv pip install "git+https://github.com/google/qwix"` (qwix has no PyPI '
-    "release yet)."
+    "spyx.quant needs the optional `qwix` dependency, which has no PyPI "
+    "release. Install it from GitHub (works with uv and pip):\n"
+    '    uv add "qwix @ git+https://github.com/google/qwix"\n'
+    '    # or: pip install "qwix @ git+https://github.com/google/qwix"\n'
+    "Inside the Spyx repo, `uv sync --extra quant` resolves it automatically."
 )
 
 

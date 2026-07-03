@@ -495,7 +495,7 @@ class Sequential(nnx.Sequential):
 
     def initial_state(self, batch_size):
         return [
-            layer.initial_state(batch_size) if hasattr(layer, "initial_state") else None
+            layer.initial_state(batch_size) if hasattr(layer, "initial_state") else None  # ty: ignore[call-non-callable]  # untyped module list
             for layer in self.layers
         ]
 
@@ -509,6 +509,19 @@ class Sequential(nnx.Sequential):
                 x = layer(x)
                 new_state.append(None)
         return x, new_state
+
+
+class Flatten(nnx.Module):
+    """Flatten every non-batch dimension of a per-timestep input.
+
+    Stateless: maps ``x`` of shape ``(B, ...)`` to ``(B, prod(...))``. It has no
+    ``initial_state``, so :class:`Sequential` runs it in stateless mode. Used by
+    :mod:`spyx.nir` to represent NIR ``Flatten`` nodes; ``flax.nnx`` has no
+    built-in flatten layer.
+    """
+
+    def __call__(self, x):
+        return x.reshape(x.shape[0], -1)
 
 
 def run(model, x, state=None):

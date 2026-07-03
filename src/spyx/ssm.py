@@ -165,7 +165,7 @@ class LRU(nnx.Module):
         x_seq = _diagonal_scan(lam, Bu)
         y = jnp.einsum("ms,tbs->tbm", C, x_seq).real
         if self.use_skip:
-            y = y + self.D[...] * u
+            y = y + self.D[...] * u  # ty: ignore[not-subscriptable]  # guarded by use_skip
         return y
 
 
@@ -246,7 +246,7 @@ class S5Diag(nnx.Module):
         x_seq = _diagonal_scan(lam, Bu)
         y = jnp.einsum("ms,tbs->tbm", C, x_seq).real
         if self.use_skip:
-            y = y + self.D[...] * u
+            y = y + self.D[...] * u  # ty: ignore[not-subscriptable]  # guarded by use_skip
         return y
 
 

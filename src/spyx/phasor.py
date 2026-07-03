@@ -134,7 +134,7 @@ class PhasorLinear(nnx.Module):
         """Complex bias reconstructed from the real/imag storage (or None)."""
         if not self.use_bias:
             return None
-        return (self.bias_re[...] + 1j * self.bias_im[...]).astype(jnp.complex64)
+        return (self.bias_re[...] + 1j * self.bias_im[...]).astype(jnp.complex64)  # ty: ignore[not-subscriptable]  # guarded by use_bias
 
     def __call__(self, z: jax.Array) -> jax.Array:
         if z.dtype not in (jnp.complex64, jnp.complex128):
@@ -144,7 +144,7 @@ class PhasorLinear(nnx.Module):
             )
         out = z @ self.kernel
         if self.use_bias:
-            out = out + self.bias
+            out = out + self.bias  # ty: ignore[unsupported-operator]  # guarded by use_bias
         return out
 
 

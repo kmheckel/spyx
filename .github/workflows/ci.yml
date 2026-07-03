@@ -39,6 +39,23 @@ jobs:
       - name: ruff format --check
         run: uv run ruff format --check
 
+  types:
+    name: ty (type check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync with all extras
+        # Type-check against the full dependency surface so optional imports
+        # (tonic, qwix) resolve instead of tripping unresolved-import.
+        run: uv sync --all-extras
+      - name: ty check
+        # Config in pyproject [tool.ty]; scoped to src/spyx.
+        run: uv run ty check
+
   test:
     name: Pytest (py${{ matrix.python-version }})
     runs-on: ubuntu-latest

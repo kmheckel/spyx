@@ -3,11 +3,11 @@
 All notable changes to Spyx are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [0.2.0] — unreleased
+## [1.0.0] — unreleased
 
-The **modernization release**: Spyx moves from DeepMind Haiku to **Flax NNX**
-and gains state-space, phasor, and quantization modules. This is a **breaking
-release** — see the
+The **modernization release** and Spyx's first stable major: Spyx moves from
+DeepMind Haiku to **Flax NNX** and gains state-space, phasor, and quantization
+modules. This is a **breaking release** — see the
 [Haiku→NNX migration guide](docs/how-to/migrate-haiku-to-nnx.md).
 
 ### Changed (breaking)
@@ -46,12 +46,21 @@ release** — see the
 - **`spyx.data`** — latency (time-to-first-spike) encoding; on-device SHD
   prestaging; configurable Grain `worker_count`.
 - Latency encoding, expanded `spyx.fn` losses/metrics, and shape-checked traces.
-- Diátaxis-structured docs (tutorials / how-to / reference / explanation),
-  new SSM & phasor tutorial notebooks, and a `uv` + `ruff` CI workflow.
-- `scripts/check_install.py` end-to-end smoke check.
+- `spyx.nn.Flatten` — a stateless flatten layer for use in `Sequential` and NIR
+  graphs (`flax.nnx` has no built-in flatten).
+- Diátaxis-structured docs (tutorials / how-to / reference / explanation), a
+  Haiku→NNX migration guide, new SSM & phasor tutorial notebooks.
+- Tooling: `uv` + `ruff` CI, `ty` static type checking (`uv run ty check`), and
+  `scripts/check_install.py` end-to-end smoke check.
 
 ### Fixed
 
+- `spyx.quant` rules matched nothing on NNX models — qwix's `module_path` regex
+  is checked against the NNX attribute path, so `.*Linear.*` never matched and
+  `quantize()` was a silent no-op. Rules now select dense/conv work by op
+  (`dot_general` / `conv_general_dilated`).
+- NIR `Flatten` conversion referenced the non-existent `nnx.Flatten` and crashed;
+  it now uses `spyx.nn.Flatten`.
 - SHD prestaging: "Too many open files" and empty-frame issues; a tonic `HSD`
   monkey-patch drops non-finite event timestamps.
 - Phasor weights stored as a real/imag pair so Optax converges.

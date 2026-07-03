@@ -3,7 +3,7 @@ import nir
 import numpy as np
 from flax import nnx
 
-from .nn import IF, LIF, RIF, RLIF, CuBaLIF, RCuBaLIF, Sequential, SumPool
+from .nn import IF, LIF, RIF, RLIF, CuBaLIF, Flatten, RCuBaLIF, Sequential, SumPool
 
 
 def reorder_layers(init_params, trained_params):
@@ -31,8 +31,8 @@ def _create_rnn_subgraph(graph: nir.NIRGraph, lif_nk: str, w_nk: str) -> nir.NIR
     sg_nodes = {
         lif_nk: graph.nodes[lif_nk],
         w_nk: graph.nodes[w_nk],
-        f"{sg_key}.input": nir.Input(graph.nodes[lif_nk].input_type),
-        f"{sg_key}.output": nir.Output(graph.nodes[lif_nk].output_type),
+        f"{sg_key}.input": nir.Input(graph.nodes[lif_nk].input_type),  # ty: ignore[unresolved-attribute]  # untyped NIR node
+        f"{sg_key}.output": nir.Output(graph.nodes[lif_nk].output_type),  # ty: ignore[unresolved-attribute]  # untyped NIR node
     }
     sg = nir.NIRGraph(nodes=sg_nodes, edges=sg_edges)
 
@@ -132,7 +132,7 @@ def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
         return CuBaLIF(node.tau_syn.shape, threshold=node.v_threshold, rngs=rngs)
 
     elif isinstance(node, nir.Flatten):
-        return nnx.Flatten()
+        return Flatten()
 
     elif isinstance(node, nir.NIRGraph):
         lif_node, wrec_node, lif_size = _parse_rnn_subgraph(node)
@@ -148,7 +148,7 @@ def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
     return None
 
 
-def from_nir(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs = None):
+def from_nir(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs | None = None):
     """Converts a NIR graph to a Spyx/NNX model."""
     if rngs is None:
         rngs = nnx.Rngs(0)
@@ -352,7 +352,7 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
         elif isinstance(layer, (RIF, RLIF, RCuBaLIF)):
             nodes[node_key] = _spyx_recurrent_to_nirgraph(layer, node_key, dt)
 
-        elif isinstance(layer, nnx.Flatten):
+        elif isinstance(layer, Flatten):
             nodes[node_key] = nir.Flatten(
                 input_type={"input": input_shape}
             )  # Simplified

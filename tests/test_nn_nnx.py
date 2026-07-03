@@ -192,3 +192,18 @@ def test_run_rejects_stateless_module_with_clear_error():
     stateless = nnx.Linear(4, 4, rngs=rngs)
     with pytest.raises(TypeError, match="initial_state"):
         nn.run(stateless, jnp.ones((3, 2, 4)))
+
+
+def test_flatten_collapses_non_batch_dims():
+    """Flatten maps (B, ...) -> (B, prod(...)) and runs stateless in Sequential.
+
+    Regression for spyx.nir referencing the non-existent ``nnx.Flatten``.
+    """
+    f = nn.Flatten()
+    x = jnp.ones((4, 2, 3, 3))
+    assert f(x).shape == (4, 18)
+
+    # Stateless slot inside Sequential (no initial_state on Flatten).
+    seq = nn.Sequential(nn.Flatten(), nnx.Linear(18, 5, rngs=nnx.Rngs(0)))
+    out, _ = seq(x, seq.initial_state(4))
+    assert out.shape == (4, 5)

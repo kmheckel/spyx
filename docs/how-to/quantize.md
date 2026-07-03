@@ -4,19 +4,26 @@ To run quantization-aware training (QAT) on a Spyx SNN, use [`spyx.quant`](../re
 
 ## Prerequisite: install qwix
 
-`spyx.quant` needs the `[quant]` extra. Qwix has no PyPI release, so install it from GitHub:
+`spyx.quant` is built on [qwix](https://github.com/google/qwix), which has no
+PyPI release. Because uv sources aren't transitive, the `spyx[quant]` extra only
+auto-resolves qwix inside the Spyx repo; in your own project install qwix from
+GitHub directly. This works with **both uv and pip**:
 
 ```bash
-uv pip install "git+https://github.com/google/qwix"
+uv add  spyx "qwix @ git+https://github.com/google/qwix"
+pip install spyx "qwix @ git+https://github.com/google/qwix"
 ```
 
-Gate any quantization code on availability — `import spyx.quant` is always safe, but the helpers raise `ImportError` without qwix:
+Gate any quantization code on availability — `import spyx.quant` is always safe, and the helpers raise `ImportError` with these install instructions if you call them without qwix:
 
 ```python
 import spyx
 
 if not spyx.quant.available():
-    raise SystemExit("install qwix first: uv pip install 'git+https://github.com/google/qwix'")
+    raise SystemExit(
+        "quantization needs qwix: "
+        'pip install "qwix @ git+https://github.com/google/qwix"'
+    )
 ```
 
 ## Quantize with the int8 defaults
