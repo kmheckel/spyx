@@ -65,48 +65,54 @@ def linear_only_rules(
     :param weight_qtype: dtype string accepted by :class:`qwix.QuantizationRule`
         (e.g. ``"int8"``, ``"int4"``, ``"fp8"``). ``None`` disables weight quant.
     :param act_qtype: same options for activations. ``None`` disables.
-    :param extra_op_names: additional op names to include alongside ``nnx.Linear``
-        / ``nnx.Conv`` (e.g. ``("dot_general",)``).
-    :return: list of qwix :class:`QuantizationRule` instances.
+    :param extra_op_names: additional op names to quantize alongside the default
+        matmul / conv ops (e.g. a custom primitive).
+    :return: a single-element list with a qwix :class:`QuantizationRule`.
+
+    .. note::
+        qwix matches a rule's ``module_path`` regex with :func:`re.fullmatch`
+        against the ``/``-joined **NNX attribute path** (e.g. ``core/layers/0``),
+        which never contains the module's class name. Targeting layers with
+        ``module_path=r".*Linear.*"`` therefore matches *nothing* and silently
+        quantizes the model to a no-op. Instead we match every module and select
+        the dense/conv work by the underlying **op**: ``dot_general``
+        (``nnx.Linear``) and ``conv_general_dilated`` (``nnx.Conv``). Spiking
+        neuron updates are elementwise and use neither, so they stay in fp32
+        without needing a path filter. ``einsum`` is intentionally excluded so
+        that SSM state transitions (``spyx.ssm``) keep full precision; pass it
+        via ``extra_op_names`` to quantize einsum-based layers too.
     """
     qwix = _require_qwix()
-    rules: list[Any] = [
+    op_names = ("dot_general", "conv_general_dilated", *extra_op_names)
+    return [
         qwix.QuantizationRule(
-            module_path=r".*Linear.*",
+            module_path=".*",
+            op_names=op_names,
             weight_qtype=weight_qtype,
             act_qtype=act_qtype,
-        ),
-        qwix.QuantizationRule(
-            module_path=r".*Conv.*",
-            weight_qtype=weight_qtype,
-            act_qtype=act_qtype,
-        ),
-    ]
-    for op in extra_op_names:
-        rules.append(
-            qwix.QuantizationRule(
-                module_path=".*",
-                op_names=(op,),
-                weight_qtype=weight_qtype,
-                act_qtype=act_qtype,
-            )
         )
-    return rules
+    ]
 
 
 def weights_only_rules(
     weight_qtype: str = "int8",
-    module_path: str = r".*Linear.*",
+    module_path: str = ".*",
+    op_names: Sequence[str] = ("dot_general", "conv_general_dilated"),
 ) -> list[Any]:
     """Quantize only the weights, leaving activations in fp32.
 
     Useful for memory-bound deployment scenarios where the matmul itself runs
     on dequantized weights but the storage is compressed.
+
+    Selects work by op name rather than module class — see
+    :func:`linear_only_rules` for why (qwix ``module_path`` matches the NNX
+    attribute path, not the class name).
     """
     qwix = _require_qwix()
     return [
         qwix.QuantizationRule(
             module_path=module_path,
+            op_names=tuple(op_names),
             weight_qtype=weight_qtype,
             act_qtype=None,
         )
@@ -137,15 +143,11 @@ def bitnet_ternary_rules(act_qtype: str = "int8") -> list[Any]:
     qwix = _require_qwix()
     return [
         qwix.QuantizationRule(
-            module_path=r".*Linear.*",
+            module_path=".*",
+            op_names=("dot_general", "conv_general_dilated"),
             weight_qtype="int2",
             act_qtype=act_qtype,
-        ),
-        qwix.QuantizationRule(
-            module_path=r".*Conv.*",
-            weight_qtype="int2",
-            act_qtype=act_qtype,
-        ),
+        )
     ]
 
 

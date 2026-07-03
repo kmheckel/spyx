@@ -5,6 +5,7 @@ graceful-degradation path. Install qwix with
 ``uv pip install "git+https://github.com/google/qwix"`` to run the full suite.
 """
 
+import jax
 import jax.numpy as jnp
 import optax
 import pytest
@@ -88,14 +89,18 @@ def test_quantize_supports_qat_training_loop():
 
 
 @needs_qwix
-def test_linear_only_rules_skips_neuron_modules():
-    """linear_only_rules() should match Linear/Conv module paths only."""
+def test_linear_only_rules_target_matmul_and_conv_ops():
+    """linear_only_rules() selects dense/conv work by *op name*, not class name.
+
+    qwix matches ``module_path`` against the NNX attribute path (which never
+    contains the class name), so the rule matches every module and narrows to
+    the matmul / conv ops. Elementwise neuron updates use none of these ops and
+    stay in fp32.
+    """
     rules = spyx.quant.linear_only_rules(weight_qtype="int8", act_qtype="int8")
-    paths = [r.module_path for r in rules]
-    assert any("Linear" in p for p in paths)
-    assert any("Conv" in p for p in paths)
-    # Spiking neurons should NOT be matched by the default rules.
-    assert not any("LIF" in p or "ALIF" in p for p in paths)
+    assert len(rules) == 1
+    ops = set(rules[0].op_names)
+    assert {"dot_general", "conv_general_dilated"} <= ops
 
 
 @needs_qwix
@@ -104,15 +109,61 @@ def test_weights_only_rules_disables_act_qtype():
     assert len(rules) == 1
     assert rules[0].weight_qtype == "int8"
     assert rules[0].act_qtype is None
+    assert "dot_general" in rules[0].op_names
 
 
 @needs_qwix
 def test_bitnet_ternary_rules_use_int2_weights():
     rules = spyx.quant.bitnet_ternary_rules()
-    assert len(rules) == 2
-    assert {r.weight_qtype for r in rules} == {"int2"}
-    # All BitNet rules should have act_qtype set; defaults to int8.
-    assert {r.act_qtype for r in rules} == {"int8"}
+    assert len(rules) == 1
+    assert rules[0].weight_qtype == "int2"
+    # BitNet rules quantize activations too; defaults to int8.
+    assert rules[0].act_qtype == "int8"
+    assert "dot_general" in rules[0].op_names
+
+
+@needs_qwix
+@pytest.mark.parametrize(
+    "make_rules",
+    [
+        lambda: spyx.quant.linear_only_rules("int8", "int8"),
+        lambda: spyx.quant.bitnet_ternary_rules(),
+        lambda: spyx.quant.weights_only_rules("int8"),
+    ],
+)
+def test_quantization_actually_changes_outputs(make_rules):
+    """Regression: the built-in rules must actually quantize, not no-op.
+
+    The rules previously used ``module_path=r".*Linear.*"``, which qwix's
+    ``re.fullmatch`` against NNX attribute paths never matched — so
+    ``quantize()`` returned a model with fp32-identical outputs
+    (``max|fp - q| == 0``). Guard against that regression by requiring the
+    quantized forward pass to differ measurably from full precision.
+    """
+    rngs = nnx.Rngs(0)
+
+    class Net(nnx.Module):
+        def __init__(self, *, rngs):
+            self.core = snn.Sequential(
+                nnx.Linear(16, 32, use_bias=False, rngs=rngs),
+                snn.LIF((32,), rngs=rngs),
+                nnx.Linear(32, 4, use_bias=False, rngs=rngs),
+                snn.LI((4,), rngs=rngs),
+            )
+
+        def __call__(self, x_TBC):
+            traces, _ = snn.run(self.core, x_TBC)
+            return traces.sum(0)
+
+    model = Net(rngs=rngs)
+    T, B = 16, 8
+    # Drive over time (dense input) so spikes accumulate and signal reaches the
+    # readout; a single-step call leaves the neurons silent and hides quant.
+    sample = jax.random.uniform(jax.random.PRNGKey(0), (T, B, 16)) * 2.0
+    qmodel = spyx.quant.quantize(model, sample, rules=make_rules())
+    fp_out = model(sample)
+    q_out = qmodel(sample)
+    assert float(jnp.max(jnp.abs(fp_out - q_out))) > 1e-4
 
 
 @needs_qwix
