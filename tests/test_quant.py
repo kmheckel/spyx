@@ -17,6 +17,7 @@ import spyx.nn as snn
 def _qwix_installed() -> bool:
     try:
         import qwix  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -76,6 +77,7 @@ def test_quantize_supports_qat_training_loop():
         def loss_fn(m):
             out, _ = m(x, sample_state)
             return jnp.mean((out - target) ** 2)
+
         loss, grads = nnx.value_and_grad(loss_fn)(model)
         optimizer.update(model, grads)
         return loss

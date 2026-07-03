@@ -93,6 +93,7 @@ def test_phasor_mlp_training_reduces_loss():
     def step(model, optimizer, x, y):
         def loss_fn(m):
             return optax.softmax_cross_entropy_with_integer_labels(m(x), y).mean()
+
         loss, grads = nnx.value_and_grad(loss_fn)(model)
         optimizer.update(model, grads)
         return loss
@@ -101,7 +102,9 @@ def test_phasor_mlp_training_reduces_loss():
     for _ in range(200):
         final = float(step(model, optimizer, x, y))
     assert jnp.isfinite(final), final
-    assert final < initial * 0.6, f"Loss did not drop enough: {initial:.3f} -> {final:.3f}"
+    assert final < initial * 0.6, (
+        f"Loss did not drop enough: {initial:.3f} -> {final:.3f}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +143,9 @@ def test_spiking_phasor_wrapper_runs_end_to_end():
     layer = phasor.PhasorLinear(in_features=4, out_features=6, rngs=rngs)
     sp = phasor.SpikingPhasor(layer, period_T=16)
     # Build an input spike train: random phases -> spikes.
-    theta_in = jax.random.uniform(jax.random.PRNGKey(0), (3, 4), minval=-jnp.pi, maxval=jnp.pi)
+    theta_in = jax.random.uniform(
+        jax.random.PRNGKey(0), (3, 4), minval=-jnp.pi, maxval=jnp.pi
+    )
     spikes_in = phasor.phase_to_spikes(theta_in, T=16)  # [16, 3, 4]
     spikes_out = sp(spikes_in)
     assert spikes_out.shape == (16, 3, 6)

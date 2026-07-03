@@ -34,7 +34,7 @@ except ImportError:  # pragma: no cover - exercised only without the extra
 
 _INSTALL_HINT = (
     "spyx.quant requires the optional `qwix` dependency. Install it with "
-    "`uv pip install \"git+https://github.com/google/qwix\"` (qwix has no PyPI "
+    '`uv pip install "git+https://github.com/google/qwix"` (qwix has no PyPI '
     "release yet)."
 )
 
@@ -197,7 +197,9 @@ def quantize(
     elif mode == "ptq":
         provider = qwix.PtqProvider(rules=rules)
     else:
-        raise ValueError(f"Unknown quantization mode {mode!r}; expected 'qat' or 'ptq'.")
+        raise ValueError(
+            f"Unknown quantization mode {mode!r}; expected 'qat' or 'ptq'."
+        )
 
     return qwix.quantize_model(
         model,

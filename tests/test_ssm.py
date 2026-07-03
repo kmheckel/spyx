@@ -18,7 +18,7 @@ def test_diagonal_scan_matches_sequential_reference():
     T, B, D = 32, 4, 16
     key = jax.random.PRNGKey(0)
     k_lam, k_Bu = jax.random.split(key)
-    lam = (jax.random.uniform(k_lam, (D,)) - 0.5 + 1j * jax.random.uniform(k_lam, (D,)))
+    lam = jax.random.uniform(k_lam, (D,)) - 0.5 + 1j * jax.random.uniform(k_lam, (D,))
     lam = (lam * 0.9 / (jnp.abs(lam) + 1e-6)).astype(jnp.complex64)  # keep |λ| < 1
     Bu = jax.random.normal(k_Bu, (T, B, D), dtype=jnp.complex64)
 
@@ -83,6 +83,7 @@ def test_lru_trains_on_copy_task():
     def step(model, optimizer, u, target):
         def loss_fn(m):
             return jnp.mean((m(u) - target) ** 2)
+
         loss, grads = nnx.value_and_grad(loss_fn)(model)
         optimizer.update(model, grads)
         return loss
@@ -90,7 +91,9 @@ def test_lru_trains_on_copy_task():
     initial = float(step(layer, optimizer, u, target))
     for _ in range(80):
         final = float(step(layer, optimizer, u, target))
-    assert final < initial * 0.7, f"Loss did not decrease enough: {initial:.3f} -> {final:.3f}"
+    assert final < initial * 0.7, (
+        f"Loss did not decrease enough: {initial:.3f} -> {final:.3f}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +152,7 @@ def test_ssm_composes_with_sequential_and_lif():
 def _qwix_installed() -> bool:
     try:
         import qwix  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -241,6 +245,7 @@ def test_mamba_block_trains_on_copy_task():
     def step(model, optimizer, u, target):
         def loss_fn(m):
             return jnp.mean((m(u) - target) ** 2)
+
         loss, grads = nnx.value_and_grad(loss_fn)(model)
         optimizer.update(model, grads)
         return loss
@@ -248,7 +253,9 @@ def test_mamba_block_trains_on_copy_task():
     initial = float(step(block, optimizer, u, target))
     for _ in range(50):
         final = float(step(block, optimizer, u, target))
-    assert final < initial * 0.8, f"MambaBlock loss did not drop: {initial:.3f} -> {final:.3f}"
+    assert final < initial * 0.8, (
+        f"MambaBlock loss did not drop: {initial:.3f} -> {final:.3f}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +305,7 @@ def test_chunked_ssm_trains_on_copy_task():
     def step(model, optimizer, u, target):
         def loss_fn(m):
             return jnp.mean((m(u) - target) ** 2)
+
         loss, grads = nnx.value_and_grad(loss_fn)(model)
         optimizer.update(model, grads)
         return loss
@@ -305,7 +313,9 @@ def test_chunked_ssm_trains_on_copy_task():
     initial = float(step(cs, optimizer, u, target))
     for _ in range(50):
         final = float(step(cs, optimizer, u, target))
-    assert final < initial * 0.5, f"ChunkedSSM loss did not drop: {initial:.3f} -> {final:.3f}"
+    assert final < initial * 0.5, (
+        f"ChunkedSSM loss did not drop: {initial:.3f} -> {final:.3f}"
+    )
 
 
 def test_chunked_ssm_can_wrap_mamba_block():

@@ -125,9 +125,7 @@ def test_shd_transform_pipeline_produces_nonempty_frames():
 
     # Synthetic SHD-shaped sample: 1000 events spanning ~1 second.
     rng = np.random.default_rng(0)
-    events = np.zeros(
-        1000, dtype=[("t", int), ("x", int), ("p", int)]
-    )
+    events = np.zeros(1000, dtype=[("t", int), ("x", int), ("p", int)])
     events["t"] = np.sort(rng.uniform(0, 1e6, 1000).astype(int))
     events["x"] = rng.integers(0, 700, 1000)
     events["p"] = 1
@@ -136,13 +134,15 @@ def test_shd_transform_pipeline_produces_nonempty_frames():
     sample_T = 128
 
     # Reproduce the fixed pipeline from spyx.data.SHD_loader.
-    pipeline = transforms.Compose([
-        transforms.Downsample(
-            time_factor=1e-6 / (1 / sample_T),
-            spatial_factor=net_channels / 700,
-        ),
-        _SHD2Raster(encoding_dim=net_channels, sample_T=sample_T),
-    ])
+    pipeline = transforms.Compose(
+        [
+            transforms.Downsample(
+                time_factor=1e-6 / (1 / sample_T),
+                spatial_factor=net_channels / 700,
+            ),
+            _SHD2Raster(encoding_dim=net_channels, sample_T=sample_T),
+        ]
+    )
     frame = pipeline(events)
     assert frame.shape == (sample_T, net_channels), frame.shape
     assert frame.sum() > 0, "SHD transform pipeline collapsed events to empty frames"

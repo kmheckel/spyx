@@ -138,9 +138,7 @@ class LRU(nnx.Module):
         self.C_im = nnx.Param(jax.random.normal(kC_i, (d_model, d_state)) * scale_C)
 
         self.use_skip = use_skip
-        self.D = (
-            nnx.Param(jax.random.normal(k_D, (d_model,))) if use_skip else None
-        )
+        self.D = nnx.Param(jax.random.normal(k_D, (d_model,))) if use_skip else None
 
         self.d_model = d_model
         self.d_state = d_state
@@ -160,9 +158,7 @@ class LRU(nnx.Module):
         :return: real array of the same shape.
         """
         if u.ndim != 3:
-            raise ValueError(
-                f"LRU expects [T, B, d_model]; got shape {u.shape}."
-            )
+            raise ValueError(f"LRU expects [T, B, d_model]; got shape {u.shape}.")
         lam, B, C = self._complex_matrices()
         u_c = u.astype(jnp.complex64)
         Bu = jnp.einsum("sn,tbn->tbs", B, u_c)
@@ -225,9 +221,7 @@ class S5Diag(nnx.Module):
         self.C_im = nnx.Param(jax.random.normal(kC_i, (d_model, d_state)) * scale_C)
 
         self.use_skip = use_skip
-        self.D = (
-            nnx.Param(jax.random.normal(k_D, (d_model,))) if use_skip else None
-        )
+        self.D = nnx.Param(jax.random.normal(k_D, (d_model,))) if use_skip else None
 
         self.d_model = d_model
         self.d_state = d_state
@@ -245,9 +239,7 @@ class S5Diag(nnx.Module):
 
     def __call__(self, u: jax.Array) -> jax.Array:
         if u.ndim != 3:
-            raise ValueError(
-                f"S5Diag expects [T, B, d_model]; got shape {u.shape}."
-            )
+            raise ValueError(f"S5Diag expects [T, B, d_model]; got shape {u.shape}.")
         lam, B, C = self._complex_matrices()
         u_c = u.astype(jnp.complex64)
         Bu = jnp.einsum("sn,tbn->tbs", B, u_c)
@@ -337,7 +329,10 @@ class Mamba(nnx.Module):
         # A tiny projection that extracts (Δ_rank, B, C) from the already-SSM
         # input. Δ is a low-rank scalar-per-channel signal; B, C are state-sized.
         self.x_proj = nnx.Linear(
-            d_inner, dt_rank + 2 * d_state, use_bias=False, rngs=nnx.Rngs(0),
+            d_inner,
+            dt_rank + 2 * d_state,
+            use_bias=False,
+            rngs=nnx.Rngs(0),
         )
         # Re-init the x_proj kernel so we don't accidentally share RNG state
         # with other layers (x_proj needs its own stream).
@@ -368,11 +363,15 @@ class Mamba(nnx.Module):
         self.dt_proj.bias = nnx.Param(inv_dt)
 
         # A is a real-valued diagonal: A = -exp(A_log).
-        A_init = jnp.tile(jnp.arange(1, d_state + 1, dtype=jnp.float32)[None, :], (d_inner, 1))
+        A_init = jnp.tile(
+            jnp.arange(1, d_state + 1, dtype=jnp.float32)[None, :], (d_inner, 1)
+        )
         self.A_log = nnx.Param(jnp.log(A_init))
 
         # Skip-style D.
-        self.D = nnx.Param(jnp.ones((d_inner,)) + 0.1 * jax.random.normal(k_D, (d_inner,)))
+        self.D = nnx.Param(
+            jnp.ones((d_inner,)) + 0.1 * jax.random.normal(k_D, (d_inner,))
+        )
 
     def __call__(self, u: jax.Array) -> jax.Array:
         """Run the selective SSM.

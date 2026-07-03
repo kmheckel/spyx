@@ -11,21 +11,26 @@ from .axn import superspike
 _DEFAULT_ACTIVATION = superspike()
 
 
-class ALIF(nnx.Module): 
+class ALIF(nnx.Module):
     """
     Adaptive LIF Neuron based on the model used in LSNNs:
 
-    Bellec, G., Salaj, D., Subramoney, A., Legenstein, R. & Maass, Maass, W. 
-    Long short- term memory and learning-to-learn in networks of spiking neurons. 
+    Bellec, G., Salaj, D., Subramoney, A., Legenstein, R. & Maass, Maass, W.
+    Long short- term memory and learning-to-learn in networks of spiking neurons.
     32nd Conference on Neural Information Processing Systems (2018).
-    
+
     """
 
-    def __init__(self, hidden_shape, beta=None, gamma=None,
-                 threshold = 1,
-                 activation=None,
-                 *,
-                 rngs: nnx.Rngs):
+    def __init__(
+        self,
+        hidden_shape,
+        beta=None,
+        gamma=None,
+        threshold=1,
+        activation=None,
+        *,
+        rngs: nnx.Rngs,
+    ):
         """
         :hidden_shape: Hidden layer shape.
         :beta: Membrane decay/inverse time constant.
@@ -36,17 +41,23 @@ class ALIF(nnx.Module):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
-        
+
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+                nnx.initializers.truncated_normal(stddev=0.5)(
+                    rngs.params(), self.hidden_shape
+                )
+                + 0.25
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
-            
+
         if gamma is None:
             self.gamma = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+                nnx.initializers.truncated_normal(stddev=0.5)(
+                    rngs.params(), self.hidden_shape
+                )
+                + 0.25
             )
         else:
             self.gamma = nnx.Param(jnp.full((), gamma))
@@ -57,22 +68,23 @@ class ALIF(nnx.Module):
         :VT: Neuron state vector.
         """
         V, T = jnp.split(VT, 2, -1)
-        
+
         beta = jnp.clip(self.beta[...], 0, 1)
         gamma = jnp.clip(self.gamma[...], 0, 1)
 
         # calculate whether spike is generated, and update membrane potential
         thresh = self.threshold + T
-        spikes = self.spike(V - thresh) # T is the dynamic threshold adaptation
+        spikes = self.spike(V - thresh)  # T is the dynamic threshold adaptation
         V = beta * V + x - spikes * thresh
         T = gamma * T + (1 - gamma) * spikes
-        
+
         VT = jnp.concatenate([V, T], axis=-1)
         return spikes, VT
-    
+
     def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + tuple(2 * s for s in self.hidden_shape))
-         
+
+
 class LI(nnx.Module):
     """
     Leaky-Integrate (Non-spiking) neuron model.
@@ -88,27 +100,26 @@ class LI(nnx.Module):
             self.beta = nnx.Param(jnp.full(layer_shape, 0.8))
         else:
             self.beta = nnx.Param(jnp.full((), beta))
-    
+
     def __call__(self, x, Vin):
         """
         :x: Input tensor from previous layer.
-        :Vin: Neuron state tensor. 
+        :Vin: Neuron state tensor.
         """
         beta = jnp.clip(self.beta[...], 0, 1)
         Vout = beta * Vin + x
         return Vout, Vout
-    
+
     def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + self.layer_shape)
 
-class IF(nnx.Module): 
+
+class IF(nnx.Module):
     """
     Integrate and Fire neuron model.
     """
 
-    def __init__(self, hidden_shape,
-                 threshold = 1,
-                 activation=None):
+    def __init__(self, hidden_shape, threshold=1, activation=None):
         """
         :hidden_shape: Shape of the layer.
         :threshold: threshold for reset. Defaults to 1.
@@ -117,7 +128,7 @@ class IF(nnx.Module):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
-    
+
     def __call__(self, x, V):
         """
         :x: Vector coming from previous layer.
@@ -127,7 +138,7 @@ class IF(nnx.Module):
         V = V + x - spikes * self.threshold
         return spikes, V
 
-    def initial_state(self, batch_size): 
+    def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
 
@@ -136,13 +147,15 @@ class LIF(nnx.Module):
     Leaky Integrate and Fire neuron model.
     """
 
-    def __init__(self, 
-                 hidden_shape: tuple, 
-                 beta=None,
-                 threshold = 1.,
-                 activation=None,
-                 *,
-                 rngs: nnx.Rngs):
+    def __init__(
+        self,
+        hidden_shape: tuple,
+        beta=None,
+        threshold=1.0,
+        activation=None,
+        *,
+        rngs: nnx.Rngs,
+    ):
         """
         :hidden_shape: Shape of the layer.
         :beta: decay rate.
@@ -152,14 +165,17 @@ class LIF(nnx.Module):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
-        
+
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+                nnx.initializers.truncated_normal(stddev=0.5)(
+                    rngs.params(), self.hidden_shape
+                )
+                + 0.25
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
-    
+
     def __call__(self, x, V):
         """
         :x: input vector coming from previous layer.
@@ -170,38 +186,48 @@ class LIF(nnx.Module):
         V = beta * V + x - spikes * self.threshold
         return spikes, V
 
-    def initial_state(self, batch_size): 
+    def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
-class CuBaLIF(nnx.Module): 
-    def __init__(self, 
-                 hidden_shape, 
-                 alpha=None, beta=None,
-                 threshold = 1,
-                 activation=None,
-                 *,
-                 rngs: nnx.Rngs):
+
+class CuBaLIF(nnx.Module):
+    def __init__(
+        self,
+        hidden_shape,
+        alpha=None,
+        beta=None,
+        threshold=1,
+        activation=None,
+        *,
+        rngs: nnx.Rngs,
+    ):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
 
         if alpha is None:
             self.alpha = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+                nnx.initializers.truncated_normal(stddev=0.5)(
+                    rngs.params(), self.hidden_shape
+                )
+                + 0.25
             )
         else:
             self.alpha = nnx.Param(jnp.full((), alpha))
 
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+                nnx.initializers.truncated_normal(stddev=0.5)(
+                    rngs.params(), self.hidden_shape
+                )
+                + 0.25
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
-    
+
     def __call__(self, x, VI):
         V, current_I = jnp.split(VI, 2, -1)
-        
+
         alpha = jnp.clip(self.alpha[...], 0, 1)
         beta = jnp.clip(self.beta[...], 0, 1)
 
@@ -211,32 +237,31 @@ class CuBaLIF(nnx.Module):
         V = V - reset
         current_I = alpha * current_I + x
         V = beta * V + current_I - reset
-        
+
         VI = jnp.concatenate([V, current_I], axis=-1)
         return spikes, VI
-    
+
     def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + tuple(2 * v for v in self.hidden_shape))
-    
-class RIF(nnx.Module): 
+
+
+class RIF(nnx.Module):
     """
     Recurrent Integrate and Fire neuron model.
     """
 
-    def __init__(self, hidden_shape, 
-                 threshold = 1,
-                 activation=None,
-                 *,
-                 rngs: nnx.Rngs):
+    def __init__(self, hidden_shape, threshold=1, activation=None, *, rngs: nnx.Rngs):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
-        
+
         # recurrent weight matrix
         self.recurrent_w = nnx.Param(
-            nnx.initializers.truncated_normal()(rngs.params(), self.hidden_shape + self.hidden_shape)
+            nnx.initializers.truncated_normal()(
+                rngs.params(), self.hidden_shape + self.hidden_shape
+            )
         )
-    
+
     def __call__(self, x, V):
         """
         :x: Vector coming from previous layer.
@@ -246,85 +271,104 @@ class RIF(nnx.Module):
         spikes = self.spike(V - self.threshold)
         feedback = spikes @ self.recurrent_w[...]
         V = V + x + feedback - spikes * self.threshold
-        
+
         return spikes, V
 
-    def initial_state(self, batch_size): 
+    def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
-class RLIF(nnx.Module): 
+
+class RLIF(nnx.Module):
     """
     Recurrent LIF Neuron.
     """
 
-    def __init__(self, hidden_shape, beta=None,
-                 threshold = 1,
-                 activation=None,
-                 *,
-                 rngs: nnx.Rngs):
+    def __init__(
+        self, hidden_shape, beta=None, threshold=1, activation=None, *, rngs: nnx.Rngs
+    ):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
 
         # recurrent weight matrix
         self.recurrent_w = nnx.Param(
-            nnx.initializers.truncated_normal()(rngs.params(), self.hidden_shape + self.hidden_shape)
+            nnx.initializers.truncated_normal()(
+                rngs.params(), self.hidden_shape + self.hidden_shape
+            )
         )
 
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+                nnx.initializers.truncated_normal(stddev=0.5)(
+                    rngs.params(), self.hidden_shape
+                )
+                + 0.25
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
-    
+
     def __call__(self, x, V):
         """
         :x: The input data/latent vector from another layer.
         :V: The state tensor.
         """
         beta = jnp.clip(self.beta[...], 0, 1)
-        
+
         spikes = self.spike(V - self.threshold)
         feedback = spikes @ self.recurrent_w[...]
         V = beta * V + x + feedback - spikes * self.threshold
-        
+
         return spikes, V
 
     def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
-class RCuBaLIF(nnx.Module): 
-    def __init__(self, hidden_shape, alpha=None, beta=None,  
-                 threshold = 1, activation=None,
-                 *,
-                 rngs: nnx.Rngs):
+
+class RCuBaLIF(nnx.Module):
+    def __init__(
+        self,
+        hidden_shape,
+        alpha=None,
+        beta=None,
+        threshold=1,
+        activation=None,
+        *,
+        rngs: nnx.Rngs,
+    ):
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
 
         # recurrent weight matrix
         self.recurrent_w = nnx.Param(
-            nnx.initializers.truncated_normal()(rngs.params(), self.hidden_shape + self.hidden_shape)
+            nnx.initializers.truncated_normal()(
+                rngs.params(), self.hidden_shape + self.hidden_shape
+            )
         )
 
         if alpha is None:
             self.alpha = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+                nnx.initializers.truncated_normal(stddev=0.5)(
+                    rngs.params(), self.hidden_shape
+                )
+                + 0.25
             )
         else:
             self.alpha = nnx.Param(jnp.full((), alpha))
 
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(rngs.params(), self.hidden_shape) + 0.25
+                nnx.initializers.truncated_normal(stddev=0.5)(
+                    rngs.params(), self.hidden_shape
+                )
+                + 0.25
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
-    
+
     def __call__(self, x, VI):
         V, current_I = jnp.split(VI, 2, -1)
-        
+
         alpha = jnp.clip(self.alpha[...], 0, 1)
         beta = jnp.clip(self.beta[...], 0, 1)
 
@@ -334,12 +378,13 @@ class RCuBaLIF(nnx.Module):
         feedback = spikes @ self.recurrent_w[...]
         current_I = alpha * current_I + x + feedback
         V = beta * V + current_I
-        
+
         VI = jnp.concatenate([V, current_I], axis=-1)
         return spikes, VI
-    
+
     def initial_state(self, batch_size):
         return jnp.zeros((batch_size,) + tuple(2 * v for v in self.hidden_shape))
+
 
 class ActivityRegularization(nnx.Module):
     """
@@ -356,41 +401,52 @@ class ActivityRegularization(nnx.Module):
         :batch_size: Leading batch dimension of the spike-count buffer.
         :dtype: Storage dtype for the spike-count buffer.
         """
-        self.hidden_shape = tuple(hidden_shape) if not isinstance(hidden_shape, int) else (hidden_shape,)
+        self.hidden_shape = (
+            tuple(hidden_shape)
+            if not isinstance(hidden_shape, int)
+            else (hidden_shape,)
+        )
         self.dtype = dtype
-        self.spike_count = nnx.Variable(jnp.zeros((batch_size,) + self.hidden_shape, dtype=dtype))
+        self.spike_count = nnx.Variable(
+            jnp.zeros((batch_size,) + self.hidden_shape, dtype=dtype)
+        )
 
     def reset(self, batch_size):
-        self.spike_count[...] = jnp.zeros((batch_size,) + self.hidden_shape, dtype=self.dtype)
+        self.spike_count[...] = jnp.zeros(
+            (batch_size,) + self.hidden_shape, dtype=self.dtype
+        )
 
     def __call__(self, spikes):
         self.spike_count[...] = self.spike_count[...] + spikes.astype(self.dtype)
         return spikes
 
+
 def PopulationCode(num_classes):
     def _pop_code(x):
         return jnp.sum(jnp.reshape(x, (-1, num_classes)), axis=-1)
+
     return jax.jit(_pop_code)
+
 
 def _infer_shape(
     x: jax.Array,
     size: Union[int, Sequence[int]],
     channel_axis: Optional[int] = -1,
 ) -> tuple[int, ...]:
-  """Infer shape for pooling window or strides."""
-  if isinstance(size, int):
-    if channel_axis and not 0 <= abs(channel_axis) < x.ndim:
-      raise ValueError(f"Invalid channel axis {channel_axis} for {x.shape}")
-    if channel_axis and channel_axis < 0:
-      channel_axis = x.ndim + channel_axis
-    return (1,) + tuple(size if d != channel_axis else 1
-                        for d in range(1, x.ndim))
-  elif len(size) < x.ndim:
-    # Assume additional dimensions are batch dimensions.
-    return (1,) * (x.ndim - len(size)) + tuple(size)
-  else:
-    assert x.ndim == len(size)
-    return tuple(size)
+    """Infer shape for pooling window or strides."""
+    if isinstance(size, int):
+        if channel_axis and not 0 <= abs(channel_axis) < x.ndim:
+            raise ValueError(f"Invalid channel axis {channel_axis} for {x.shape}")
+        if channel_axis and channel_axis < 0:
+            channel_axis = x.ndim + channel_axis
+        return (1,) + tuple(size if d != channel_axis else 1 for d in range(1, x.ndim))
+    elif len(size) < x.ndim:
+        # Assume additional dimensions are batch dimensions.
+        return (1,) * (x.ndim - len(size)) + tuple(size)
+    else:
+        assert x.ndim == len(size)
+        return tuple(size)
+
 
 def sum_pool(
     value: jax.Array,
@@ -399,42 +455,50 @@ def sum_pool(
     padding: str,
     channel_axis: Optional[int] = -1,
 ) -> jax.Array:
-  """Sum pool."""
-  if padding not in ("SAME", "VALID"):
-    raise ValueError(f"Invalid padding '{padding}', must be 'SAME' or 'VALID'.")
+    """Sum pool."""
+    if padding not in ("SAME", "VALID"):
+        raise ValueError(f"Invalid padding '{padding}', must be 'SAME' or 'VALID'.")
 
-  window_shape = _infer_shape(value, window_shape, channel_axis)
-  strides = _infer_shape(value, strides, channel_axis)
+    window_shape = _infer_shape(value, window_shape, channel_axis)
+    strides = _infer_shape(value, strides, channel_axis)
 
-  return jax.lax.reduce_window(value, 0., jax.lax.add, window_shape, strides,
-                           padding)
+    return jax.lax.reduce_window(
+        value, 0.0, jax.lax.add, window_shape, strides, padding
+    )
+
 
 class SumPool(nnx.Module):
-  """Sum pool."""
+    """Sum pool."""
 
-  def __init__(
-      self,
-      window_shape: Union[int, Sequence[int]],
-      strides: Union[int, Sequence[int]],
-      padding: str,
-      channel_axis: Optional[int] = -1,
-  ):
-    self.window_shape = window_shape
-    self.strides = strides
-    self.padding = padding
-    self.channel_axis = channel_axis
+    def __init__(
+        self,
+        window_shape: Union[int, Sequence[int]],
+        strides: Union[int, Sequence[int]],
+        padding: str,
+        channel_axis: Optional[int] = -1,
+    ):
+        self.window_shape = window_shape
+        self.strides = strides
+        self.padding = padding
+        self.channel_axis = channel_axis
 
-  def __call__(self, value: jax.Array) -> jax.Array:
-    return sum_pool(value, self.window_shape, self.strides,
-                    self.padding, self.channel_axis)
+    def __call__(self, value: jax.Array) -> jax.Array:
+        return sum_pool(
+            value, self.window_shape, self.strides, self.padding, self.channel_axis
+        )
+
 
 class Sequential(nnx.Sequential):
     """
     A Sequential container that supports passing state through its layers.
     """
+
     def initial_state(self, batch_size):
-        return [layer.initial_state(batch_size) if hasattr(layer, "initial_state") else None for layer in self.layers]
-    
+        return [
+            layer.initial_state(batch_size) if hasattr(layer, "initial_state") else None
+            for layer in self.layers
+        ]
+
     def __call__(self, x, state):
         new_state = []
         for layer, s in zip(self.layers, state, strict=True):
@@ -445,6 +509,7 @@ class Sequential(nnx.Sequential):
                 x = layer(x)
                 new_state.append(None)
         return x, new_state
+
 
 def run(model, x, state=None):
     """
@@ -480,4 +545,3 @@ def run(model, x, state=None):
 
     final_state, outputs = jax.lax.scan(scan_fn, state, x)
     return outputs, final_state
-

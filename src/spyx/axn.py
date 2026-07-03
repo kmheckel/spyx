@@ -57,6 +57,7 @@ def custom(
 
     return jax.jit(f)
 
+
 def tanh(k: float = 1) -> Activation:
     """Hyperbolic-tangent surrogate gradient.
 
@@ -70,9 +71,10 @@ def tanh(k: float = 1) -> Activation:
         the threshold and closer to a true Heaviside derivative.
     :return: JIT-compiled tanh surrogate gradient function.
     """
+
     def grad_tanh(x):
         kx = k * x
-        return 4 / (jnp.exp(-kx) + jnp.exp(kx))**2
+        return 4 / (jnp.exp(-kx) + jnp.exp(kx)) ** 2
 
     return custom(grad_tanh, heaviside)
 
@@ -113,34 +115,34 @@ def triangular(k: float = 2) -> Activation:
     .. math::
         max(0, 1-|kx|)
 
-        
+
     :k: scale factor
     :return: JIT compiled triangular surrogate gradient function.
     """
 
     def grad_traingle(x):
-        return jnp.maximum(0, 1-jnp.abs(k*x))
-    
+        return jnp.maximum(0, 1 - jnp.abs(k * x))
+
     return custom(grad_traingle, heaviside)
 
 
 def arctan(k: float = 2) -> Activation:
     """
     This class implements the Arctangent surrogate gradient activation function for a spiking neuron.
-    
+
     The Arctangent function returns a value between -pi/2 and pi/2 for inputs in the range of -Infinity to Infinity.
-    It is often used in the context of spiking neurons because it provides a smooth approximation to the step function 
+    It is often used in the context of spiking neurons because it provides a smooth approximation to the step function
     that is differentiable everywhere, which is a requirement for gradient-based optimization methods.
-    
-    :k: A scaling factor that can be used to adjust the steepness of the 
+
+    :k: A scaling factor that can be used to adjust the steepness of the
                       Arctangent function. Default is 2.
     :return: JIT compiled arctangent-derived surrogate gradient function.
     """
-    k_pi = k*jnp.pi
-        
+    k_pi = k * jnp.pi
+
     def grad_arctan(x):
         k_pi_x = k_pi * x
-        return 1 / ((1+k_pi_x**2) * jnp.pi)
+        return 1 / ((1 + k_pi_x**2) * jnp.pi)
 
     return custom(grad_arctan, heaviside)
 
@@ -148,23 +150,24 @@ def arctan(k: float = 2) -> Activation:
 def superspike(k: float = 25) -> Activation:
     """
     This function implements the SuperSpike surrogate gradient activation function for a spiking neuron.
-    
+
     The SuperSpike function is defined as 1/(1+k|U|)^2, where U is the input to the function and k is a scaling factor.
     It returns a value between 0 and 1 for inputs in the range of -Infinity to Infinity.
-    
-    It is often used in the context of spiking neurons because it provides a smooth approximation to the step function 
+
+    It is often used in the context of spiking neurons because it provides a smooth approximation to the step function
     that is differentiable everywhere, which is a requirement for gradient-based optimization methods.
 
     It is a fast approximation of the Sigmoid function adapted from:
 
     F. Zenke, S. Ganguli (2018) SuperSpike: Supervised Learning in Multilayer Spiking Neural Networks. Neural Computation, pp. 1514-1541.
-    
-    
-    :k: A scaling factor that can be used to adjust the steepness of the 
+
+
+    :k: A scaling factor that can be used to adjust the steepness of the
                       SuperSpike function. Default is 25.
     :return: JIT compiled SuperSpike surrogate gradient function.
     """
+
     def grad_superspike(x):
-        return 1 / (1 + k*jnp.abs(x))**2
-    
+        return 1 / (1 + k * jnp.abs(x)) ** 2
+
     return custom(grad_superspike, heaviside)

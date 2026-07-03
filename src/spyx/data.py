@@ -7,6 +7,7 @@ import numpy as np
 
 try:
     from tonic import datasets, transforms
+
     tonic_installed = True
 except ImportError:
     tonic_installed = False
@@ -56,15 +57,11 @@ def _patch_tonic_hsd() -> None:
         return
 
     def __getitem__(self, index):
-        file = h5py.File(
-            os.path.join(self.location_on_system, self.data_filename), "r"
-        )
+        file = h5py.File(os.path.join(self.location_on_system, self.data_filename), "r")
         # Explicit float64 cast: tonic stores spikes/times as float32,
         # and (float32 * 1e6) overflows for a handful of malformed
         # samples even though the numerical value fits float64.
-        times_seconds = np.asarray(
-            file["spikes/times"][index], dtype=np.float64
-        )
+        times_seconds = np.asarray(file["spikes/times"][index], dtype=np.float64)
         units = np.asarray(file["spikes/units"][index])
 
         # A handful of SHD samples carry NaN / inf entries that would
@@ -99,10 +96,11 @@ State = namedtuple("State", "obs labels")
 
 # --- Functional Transforms ---
 
+
 def shift_augment(max_shift=10, axes=(-1,)):
     """Shift data augmentation tool. Rolls data along specified axes randomly up to a certain amount.
 
-        
+
     :max_shift: maximum to which values can be shifted.
     :axes: the data axis or axes along which the input will be randomly shifted.
     """
@@ -110,7 +108,7 @@ def shift_augment(max_shift=10, axes=(-1,)):
     def _shift(data, rng):
         shift = jax.random.randint(rng, (len(axes),), -max_shift, max_shift)
         return jnp.roll(data, shift, axes)
-    
+
     return jax.jit(_shift)
 
 
@@ -138,13 +136,13 @@ def shuffler(dataset, batch_size):
         obs, labels = x[indices], y[indices]
 
         obs = jnp.reshape(obs, data_shape)
-        labels = jnp.reshape(labels, (-1, batch_size)) # should make batch size a global
+        labels = jnp.reshape(
+            labels, (-1, batch_size)
+        )  # should make batch size a global
 
         return (obs, labels)
 
     return jax.jit(_shuffle)
-
-
 
 
 def rate_code(num_steps, max_r=0.75):
@@ -156,10 +154,9 @@ def rate_code(num_steps, max_r=0.75):
     def _call(data, key):
         data = jnp.array(data, dtype=jnp.float16)
         unrolled_data = jnp.repeat(data, num_steps, axis=1)
-        return jax.random.bernoulli(key, unrolled_data*max_r).astype(jnp.uint8)
-    
-    return jax.jit(_call)
+        return jax.random.bernoulli(key, unrolled_data * max_r).astype(jnp.uint8)
 
+    return jax.jit(_call)
 
 
 def angle_code(neuron_count, min_val, max_val):
@@ -213,12 +210,15 @@ def latency_code(num_steps, threshold=0.01):
 
     return jax.jit(_call)
 
+
 # --- Grain-compatible MapTransforms ---
+
 
 class RateCode(grain.MapTransform):
     """
     Grain MapTransform for rate encoding.
     """
+
     def __init__(self, sample_T, max_r=0.75, input_key="obs", output_key="obs"):
         self.sample_T = sample_T
         self.max_r = max_r
@@ -233,10 +233,12 @@ class RateCode(grain.MapTransform):
         record[self.output_key] = np.packbits(spikes.astype(np.uint8), axis=0)
         return record
 
+
 class ShiftAugment(grain.MapTransform):
     """
     Grain MapTransform for random shift augmentation.
     """
+
     def __init__(self, max_shift=10, axes=(-1,), input_key="obs"):
         self.max_shift = max_shift
         self.axes = axes
@@ -247,6 +249,7 @@ class ShiftAugment(grain.MapTransform):
         shift = np.random.randint(-self.max_shift, self.max_shift, size=len(self.axes))
         record[self.input_key] = np.roll(data, shift, axis=self.axes)
         return record
+
 
 class LatencyCode(grain.MapTransform):
     """Grain MapTransform for time-to-first-spike (latency) encoding.
@@ -279,7 +282,10 @@ class AngleCode(grain.MapTransform):
     """
     Grain MapTransform for angle encoding.
     """
-    def __init__(self, neuron_count, min_val, max_val, input_key="obs", output_key="obs"):
+
+    def __init__(
+        self, neuron_count, min_val, max_val, input_key="obs", output_key="obs"
+    ):
         self.neuron_count = neuron_count
         self.min_val = min_val
         self.max_val = max_val
@@ -294,13 +300,17 @@ class AngleCode(grain.MapTransform):
         record[self.output_key] = np.eye(self.neuron_count, dtype=np.uint8)[idx]
         return record
 
+
 # --- Grain Loaders (Merged from loaders.py) ---
+
 
 class TonicSource:
     def __init__(self, ds):
         self.ds = ds
+
     def __len__(self):
         return len(self.ds)
+
     def __getitem__(self, i):
         data, label = self.ds[i]
         # remove any dimensions of size 1 (e.g. for SHD)
@@ -308,13 +318,17 @@ class TonicSource:
         # Return as dict for Grain MapDataset
         return {"obs": np.packbits(data, axis=0), "labels": label}
 
+
 class SpyxMapDataset(grain.MapDataset):
     def __init__(self, source):
         self._source = source
+
     def __len__(self):
         return len(self._source)
+
     def __getitem__(self, i):
         return self._source[i]
+
 
 def _default_worker_count() -> int:
     """Choose a sane default worker count for Grain.
@@ -358,19 +372,20 @@ class GrainLoader:
             num_records=len(dataset),
             shuffle=shuffle,
             seed=seed,
-            shard_options=grain.NoSharding()
+            shard_options=grain.NoSharding(),
         )
 
         self.data_loader = grain.DataLoader(
             data_source=dataset,
             sampler=sampler,
             worker_count=worker_count,
-            operations=[grain.Batch(batch_size, drop_remainder=True)]
+            operations=[grain.Batch(batch_size, drop_remainder=True)],
         )
 
     def __iter__(self):
         for batch in self.data_loader:
             yield State(obs=batch["obs"], labels=batch["labels"])
+
 
 class NMNIST_loader:
     """Dataloader for the Neuromorphic MNIST dataset using Google Grain and Tonic.
@@ -382,20 +397,28 @@ class NMNIST_loader:
     """
 
     def __init__(
-        self, batch_size=32, sample_T=40, key=0, download_dir='./data',
+        self,
+        batch_size=32,
+        sample_T=40,
+        key=0,
+        download_dir="./data",
         worker_count=None,
     ):
         if not tonic_installed:
-            raise ImportError("Please install the optional dependencies by running 'pip install spyx[loaders]' to use this feature.")
+            raise ImportError(
+                "Please install the optional dependencies by running 'pip install spyx[loaders]' to use this feature."
+            )
 
         self.batch_size = batch_size
         self.sample_T = sample_T
         self.obs_shape = (2, 34, 34)
         self.act_shape = (10,)
 
-        transform = transforms.Compose([
-            transforms.ToFrame(sensor_size=(34, 34, 2), n_time_bins=sample_T),
-        ])
+        transform = transforms.Compose(
+            [
+                transforms.ToFrame(sensor_size=(34, 34, 2), n_time_bins=sample_T),
+            ]
+        )
 
         train_ds = datasets.NMNIST(download_dir, train=True, transform=transform)
         test_ds = datasets.NMNIST(download_dir, train=False, transform=transform)
@@ -403,14 +426,19 @@ class NMNIST_loader:
         train_mds = SpyxMapDataset(TonicSource(train_ds))
         test_mds = SpyxMapDataset(TonicSource(test_ds))
 
-        self._train_dl = GrainLoader(train_mds, batch_size, shuffle=True, seed=key, worker_count=worker_count)
-        self._test_dl = GrainLoader(test_mds, batch_size, shuffle=False, seed=key, worker_count=worker_count)
+        self._train_dl = GrainLoader(
+            train_mds, batch_size, shuffle=True, seed=key, worker_count=worker_count
+        )
+        self._test_dl = GrainLoader(
+            test_mds, batch_size, shuffle=False, seed=key, worker_count=worker_count
+        )
 
     def train_epoch(self):
         return iter(self._train_dl)
 
     def test_epoch(self):
         return iter(self._test_dl)
+
 
 class _SHD2Raster:
     """Rasterise SHD events directly into a binary spike frame.
@@ -469,11 +497,18 @@ class SHD_loader:
     """
 
     def __init__(
-        self, batch_size=256, sample_T=128, channels=128, key=0,
-        download_dir='./data', worker_count=None,
+        self,
+        batch_size=256,
+        sample_T=128,
+        channels=128,
+        key=0,
+        download_dir="./data",
+        worker_count=None,
     ):
         if not tonic_installed:
-            raise ImportError("Please install the optional dependencies by running 'pip install spyx[loaders]' to use this feature.")
+            raise ImportError(
+                "Please install the optional dependencies by running 'pip install spyx[loaders]' to use this feature."
+            )
 
         net_channels = channels
         self.obs_shape = (channels,)
@@ -493,13 +528,15 @@ class SHD_loader:
         # allocate a ~1e6-row tensor per sample and blow out memory.
         shd_timestep = 1e-6
         net_dt = 1 / sample_T
-        transform = transforms.Compose([
-            transforms.Downsample(
-                time_factor=shd_timestep / net_dt,
-                spatial_factor=net_channels / 700,
-            ),
-            _SHD2Raster(encoding_dim=net_channels, sample_T=sample_T),
-        ])
+        transform = transforms.Compose(
+            [
+                transforms.Downsample(
+                    time_factor=shd_timestep / net_dt,
+                    spatial_factor=net_channels / 700,
+                ),
+                _SHD2Raster(encoding_dim=net_channels, sample_T=sample_T),
+            ]
+        )
 
         train_ds = datasets.SHD(download_dir, train=True, transform=transform)
         test_ds = datasets.SHD(download_dir, train=False, transform=transform)
@@ -511,8 +548,12 @@ class SHD_loader:
         train_mds = SpyxMapDataset(TonicSource(train_ds))
         test_mds = SpyxMapDataset(TonicSource(test_ds))
 
-        self._train_dl = GrainLoader(train_mds, batch_size, shuffle=True, seed=key, worker_count=worker_count)
-        self._test_dl = GrainLoader(test_mds, batch_size, shuffle=False, seed=key, worker_count=worker_count)
+        self._train_dl = GrainLoader(
+            train_mds, batch_size, shuffle=True, seed=key, worker_count=worker_count
+        )
+        self._test_dl = GrainLoader(
+            test_mds, batch_size, shuffle=False, seed=key, worker_count=worker_count
+        )
 
     def prestage(self, split: str = "train"):
         """Bulk-load a split into a single on-device array, fast and torch-free.
@@ -554,11 +595,8 @@ class SHD_loader:
         obs_NBTC = jnp.asarray(
             packed[:cutoff].reshape(n_batches, self.batch_size, T_packed, C)
         )
-        labels_NB = jnp.asarray(
-            labels_np[:cutoff].reshape(n_batches, self.batch_size)
-        )
+        labels_NB = jnp.asarray(labels_np[:cutoff].reshape(n_batches, self.batch_size))
         return obs_NBTC, labels_NB
-
 
     def train_epoch(self):
         return iter(self._train_dl)

@@ -106,6 +106,7 @@ def test_fit_invokes_on_epoch_end_callback():
 def test_fit_raises_on_empty_train_iter():
     """fit() should raise a clear error when an epoch yields no batches."""
     import pytest
+
     model, _x, _targets, forward = _make_model_and_data()
     Loss = spyx.fn.integral_crossentropy()
 
