@@ -36,6 +36,8 @@ docs = [
     "mkdocs-jupyter>=0.25.1",
     "mkdocs-material>=9.7.1",
     "mkdocstrings[python]>=1.0.0",
+    # Tutorial notebooks plot with matplotlib; needed to execute/render them.
+    "matplotlib>=3.8",
 ]
 
 [tool.uv.sources]
