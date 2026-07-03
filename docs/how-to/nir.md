@@ -2,18 +2,15 @@
 
 To move a trained Spyx model onto neuromorphic hardware (or into another SNN framework), convert it to a [Neuromorphic Intermediate Representation](https://nnir.readthedocs.io/) graph with [`spyx.nir`](../reference/nir.md). The conversion is bidirectional: `to_nir` exports, `from_nir` imports.
 
-Fully supported (round-trips with numerical parity, covered by tests):
-`nnx.Linear`, `spyx.nn.Flatten`, `IF`, `LIF`, `CuBaLIF`, and the recurrent
-variants `RIF`, `RLIF`, `RCuBaLIF` (exported as NIR RNN subgraphs). The model
-must be a `spyx.nn.Sequential` (or a single layer).
+Supported layers (round-trip with numerical parity, covered by tests):
+`nnx.Linear`, `nnx.Conv`, `spyx.nn.Flatten`, `IF`, `LIF`, `CuBaLIF`, and the
+recurrent variants `RIF`, `RLIF`, `RCuBaLIF` (exported as NIR RNN subgraphs).
+The model must be a `spyx.nn.Sequential` (or a single layer).
 
-!!! warning "Convolutional models are partial"
-    `nnx.Conv` / `spyx.nn.SumPool` export is only validated for
-    convolution → `Flatten` → dense stacks. Graphs where a spiking neuron
-    follows a conv layer directly (spatial feature maps) hit NIR's strict
-    shape inference, and conv **import** (`from_nir`) is not yet complete. The
-    N-MNIST SCNN example exercises this path and is a work in progress; the
-    feed-forward and recurrent spiking paths above are the supported surface.
+Convolutional models — including spiking convolutions (a neuron directly after
+a conv, over the spatial feature map) — round-trip. NIR is channels-first
+`(C, H, W)` while Spyx is channels-last `(B, H, W, C)`; `spyx.nir` bridges the
+two, so a conv-following neuron in Spyx uses a channels-last `(H, W, C)` state.
 
 ## Export a feed-forward model
 
@@ -74,15 +71,21 @@ from flax import nnx
 import spyx.nir as snir
 
 nir_graph = nir.read("model.nir")
-model = snir.from_nir(nir_graph, dt=1, rngs=nnx.Rngs(0))
+
+# from_nir builds the model *and runs it* on time-major input (T, B, ...),
+# returning (model, outputs). outputs has shape (T, B, ...).
+model, outputs = snir.from_nir(nir_graph, input_data, dt=1, rngs=nnx.Rngs(0))
 ```
 
-`from_nir` returns a `spyx.nn.Sequential` with weights and time constants loaded from the graph, including RNN subgraphs (imported as `RIF` / `RLIF` / `RCuBaLIF`). Drive it with `spyx.nn.run` as usual:
+`from_nir` reconstructs a `spyx.nn.Sequential` with weights and time constants loaded from the graph (including RNN subgraphs, imported as `RIF` / `RLIF` / `RCuBaLIF`), scans it over the leading time axis of `input_data`, and returns `(model, outputs)`. Pass `return_all_states=True` to also get the per-layer final states:
 
 ```python
-state = model.initial_state(batch_size)
-out, state = model(x_t, state)
+model, (outputs, states) = snir.from_nir(
+    nir_graph, input_data, dt=1, return_all_states=True
+)
 ```
+
+Reuse the returned `model` directly for further inference with `spyx.nn.run`.
 
 !!! note "Graph topology"
     The importer assumes a linear input → ... → output chain of edges. Arbitrary branching NIR graphs are not supported.
@@ -100,12 +103,13 @@ trained = snir.reorder_layers(init_params, trained_params)
 Before deploying, confirm that export → import preserves behaviour:
 
 ```python
-imported = snir.from_nir(nir_graph, dt=1, rngs=nnx.Rngs(1))
+import spyx.nn as snn
 
-x = jnp.ones((5, 128))
-out_a, _ = model(x, model.initial_state(5))
-out_b, _ = imported(x, imported.initial_state(5))
-assert jnp.allclose(out_a, out_b)
+x = jnp.ones((10, 5, 128))  # (T, B, in)
+
+ref_out, _ = snn.run(original_model, x)
+_, imported_out = snir.from_nir(nir_graph, x, dt=1, rngs=nnx.Rngs(1))
+assert jnp.allclose(ref_out, imported_out, atol=1e-5)
 ```
 
 For a full worked example, see the [NIR Conversion notebook](../examples/nir/conversion.ipynb) and the NIR [Braille RSNN](../examples/nir/rsnn/braille_spyx.ipynb) / [N-MNIST SCNN](../examples/nir/scnn/nmnist_spyx.ipynb) notebooks.

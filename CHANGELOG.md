@@ -26,8 +26,11 @@ modules. This is a **breaking release** — see the
   Loaders are iterables of `State(obs, labels)` batches (was: return full
   arrays); constructor args are keyword-only; `obs` is bit-packed along time
   (`jnp.unpackbits` before use); `train_epoch()` no longer takes a PRNG key.
-- **`spyx.nir`** rewritten to walk NNX modules; `to_nir` / `from_nir` take and
-  return `nnx.Module` instances.
+- **`spyx.nir`** rewritten to walk NNX modules. `from_nir` is now run-and-return:
+  `from_nir(graph, input_data, dt=1, return_all_states=False) -> (model, outputs)`
+  (was `from_nir(graph, dt, rngs) -> model`). It reconstructs the model and runs
+  it over the time axis of `input_data`; `return_all_states=True` also returns
+  per-timestep neuron states (membrane traces).
 - **Mixed precision** via `jmp` removed; pass `dtype=` / `param_dtype=` to layers.
 - **Python support** is now `>=3.11, <3.13` (was `>=3.10`).
 - Dependencies: added `flax>=0.11`, `grain`; removed `dm-haiku`, `jmp`.
@@ -59,8 +62,12 @@ modules. This is a **breaking release** — see the
   is checked against the NNX attribute path, so `.*Linear.*` never matched and
   `quantize()` was a silent no-op. Rules now select dense/conv work by op
   (`dot_general` / `conv_general_dilated`).
-- NIR `Flatten` conversion referenced the non-existent `nnx.Flatten` and crashed;
-  it now uses `spyx.nn.Flatten`.
+- NIR export was broken for several layer types (untested before): `IF`
+  (`r=1` int vs. array), `Flatten` (referenced the non-existent `nnx.Flatten`;
+  malformed node), and `Conv2d` (missing `input_shape`, `padding="SAME"`).
+  All fixed, and `nnx.Conv` now round-trips — including **spiking convolutions**
+  (a neuron over the spatial feature map), via a channels-first↔channels-last
+  neuron-shape bridge. Covered by numerical round-trip tests.
 - SHD prestaging: "Too many open files" and empty-frame issues; a tonic `HSD`
   monkey-patch drops non-finite event timestamps.
 - Phasor weights stored as a real/imag pair so Optax converges.

@@ -180,8 +180,12 @@ def check_nir_roundtrip() -> str:
         snn.LIF((10,), beta=0.8, rngs=rngs),
     )
     nir_graph = snir.to_nir(model, input_shape={"input": (6,)}, output_shape={"output": (10,)})
-    restored = snir.from_nir(nir_graph, dt=1, rngs=nnx.Rngs(1))
+    # from_nir builds and runs the model (run-and-return API).
+    x = jnp.ones((4, 3, 6))  # (T, B, in)
+    restored, out = snir.from_nir(nir_graph, x, dt=1, rngs=nnx.Rngs(1))
     assert jnp.allclose(model.layers[0].kernel[...], restored.layers[0].kernel[...])
+    ref, _ = snn.run(model, x)
+    assert jnp.allclose(ref, out, atol=1e-5)
     return "LIF roundtrip equal"
 
 

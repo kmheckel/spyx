@@ -1,9 +1,21 @@
+import jax
 import jax.numpy as jnp
 import nir
 import numpy as np
 from flax import nnx
 
-from .nn import IF, LIF, RIF, RLIF, CuBaLIF, Flatten, RCuBaLIF, Sequential, SumPool
+from .nn import (
+    IF,
+    LIF,
+    RIF,
+    RLIF,
+    CuBaLIF,
+    Flatten,
+    RCuBaLIF,
+    Sequential,
+    SumPool,
+    run,
+)
 
 
 def reorder_layers(init_params, trained_params):
@@ -94,6 +106,40 @@ def _parse_rnn_subgraph(graph: nir.NIRGraph) -> tuple:
     return lif_node, wrec_node, lif_size
 
 
+# --- shape conventions -------------------------------------------------------
+# NIR tensors are channels-first (C, H, W); spyx / NNX run channels-last
+# (B, H, W, C). A spyx neuron after a conv therefore holds channels-last
+# (H, W, C) state/parameters. These helpers bridge the two so that
+# convolutional models round-trip.
+
+
+def _spyx_param_to_nir(param, nir_shape):
+    """spyx neuron param -> NIR array of ``nir_shape`` (channels-first).
+
+    A scalar fills the shape; a channels-last (H, W, C) param is transposed to
+    channels-first (C, H, W); a 1-D (dense) param is returned unchanged.
+    """
+    p = np.asarray(param, dtype=np.float32)
+    nir_shape = tuple(int(d) for d in nir_shape)
+    if p.ndim == 0:
+        return np.full(nir_shape, float(p), dtype=np.float32)
+    if len(nir_shape) == 3:  # (H, W, C) -> (C, H, W)
+        return p.transpose(2, 0, 1).astype(np.float32)
+    return p.astype(np.float32)
+
+
+def _nir_to_spyx_shape(shape):
+    """NIR channels-first (C, H, W) -> spyx channels-last (H, W, C); 1-D unchanged."""
+    shape = tuple(int(d) for d in shape)
+    return (shape[1], shape[2], shape[0]) if len(shape) == 3 else shape
+
+
+def _nir_to_spyx_param(arr):
+    """Transpose a channels-first (C, H, W) NIR param to channels-last (H, W, C)."""
+    a = np.asarray(arr)
+    return a.transpose(1, 2, 0) if a.ndim == 3 else a
+
+
 def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
     """Converts a single NIR node to a Spyx/NNX module."""
 
@@ -109,13 +155,22 @@ def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
         )
 
     elif isinstance(node, nir.Conv2d):
-        p0, p1 = node.padding[0], node.padding[1]
+        # nir stores 'same'/'valid' as a lowercase string, or an int pair.
+        pad = node.padding
+        if isinstance(pad, str):
+            padding = pad.upper()  # nnx.Conv wants 'SAME' / 'VALID'
+        else:
+            p0, p1 = int(pad[0]), int(pad[1])
+            padding = [(p0, p0), (p1, p1)]
+        stride = np.atleast_1d(np.asarray(node.stride)).tolist()
+        strides = tuple(int(s) for s in (stride * 2 if len(stride) == 1 else stride))
         return nnx.Conv(
-            in_features=node.weight.shape[1],
-            out_features=node.weight.shape[0],
-            kernel_size=node.weight.shape[-1],
-            strides=node.stride.tolist(),
-            padding=[(p0, p0), (p1, p1)],
+            in_features=int(node.weight.shape[1]),  # OIHW
+            out_features=int(node.weight.shape[0]),
+            kernel_size=tuple(int(k) for k in node.weight.shape[-2:]),
+            strides=strides,
+            padding=padding,
+            use_bias=node.bias is not None,
             rngs=rngs,
         )
 
@@ -123,13 +178,24 @@ def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
         return SumPool(node.kernel_size, node.stride.tolist(), "VALID", channel_axis=1)
 
     elif isinstance(node, nir.IF):
-        return IF(node.r.shape, threshold=node.v_threshold)
+        return IF(
+            _nir_to_spyx_shape(node.r.shape),
+            threshold=_nir_to_spyx_param(node.v_threshold),
+        )
 
     elif isinstance(node, nir.LIF):
-        return LIF(node.tau.shape, threshold=node.v_threshold, rngs=rngs)
+        return LIF(
+            _nir_to_spyx_shape(node.tau.shape),
+            threshold=_nir_to_spyx_param(node.v_threshold),
+            rngs=rngs,
+        )
 
     elif isinstance(node, nir.CubaLIF):
-        return CuBaLIF(node.tau_syn.shape, threshold=node.v_threshold, rngs=rngs)
+        return CuBaLIF(
+            _nir_to_spyx_shape(node.tau_syn.shape),
+            threshold=_nir_to_spyx_param(node.v_threshold),
+            rngs=rngs,
+        )
 
     elif isinstance(node, nir.Flatten):
         return Flatten()
@@ -148,10 +214,8 @@ def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
     return None
 
 
-def from_nir(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs | None = None):
-    """Converts a NIR graph to a Spyx/NNX model."""
-    if rngs is None:
-        rngs = nnx.Rngs(0)
+def _build_model(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs) -> Sequential:
+    """Reconstruct the Spyx/NNX Sequential from a NIR graph (no execution)."""
 
     nir_graph = _replace_rnn_subgraph_with_nirgraph(nir_graph)
 
@@ -198,15 +262,16 @@ def from_nir(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs | None = None):
             elif isinstance(node, nir.Linear):
                 mod.kernel[...] = jnp.array(node.weight.T)
             elif isinstance(node, nir.Conv2d):
-                # HWIO format for NNX Conv
+                # NIR weight is OIHW; NNX Conv kernel is HWIO.
                 weight = node.weight.transpose((2, 3, 1, 0))
                 mod.kernel[...] = jnp.array(weight)
-                mod.bias[...] = jnp.array(node.bias)
+                if node.bias is not None:
+                    mod.bias[...] = jnp.array(node.bias)
             elif isinstance(node, nir.LIF):
-                mod.beta[...] = jnp.array(1 - (dt / node.tau))
+                mod.beta[...] = jnp.array(_nir_to_spyx_param(1 - (dt / node.tau)))
             elif isinstance(node, nir.CubaLIF):
-                mod.alpha[...] = jnp.array(1 - (dt / node.tau_syn))
-                mod.beta[...] = jnp.array(1 - (dt / node.tau_mem))
+                mod.alpha[...] = jnp.array(_nir_to_spyx_param(1 - (dt / node.tau_syn)))
+                mod.beta[...] = jnp.array(_nir_to_spyx_param(1 - (dt / node.tau_mem)))
             elif isinstance(node, nir.NIRGraph):
                 lif_node, wrec_node, _ = _parse_rnn_subgraph(node)
                 # NIR weight is (out, in); spyx recurrent_w is (hidden, hidden).
@@ -221,6 +286,48 @@ def from_nir(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs | None = None):
                 # nir.IF carries no tau parameter; nothing to load for RIF.
 
     return Sequential(*modules)
+
+
+def from_nir(
+    nir_graph: nir.NIRGraph,
+    input_data,
+    dt: float = 1,
+    *,
+    return_all_states: bool = False,
+    rngs: nnx.Rngs | None = None,
+):
+    """Reconstruct a Spyx/NNX model from a NIR graph and run it on ``input_data``.
+
+    :param nir_graph: the NIR graph to import.
+    :param input_data: time-major input, shape ``(T, B, ...)``; scanned over the
+        leading time axis.
+    :param dt: simulation timestep used to convert NIR time constants back to
+        Spyx decay factors (must match the ``dt`` used on export).
+    :param return_all_states: when True, also return the per-layer neuron states
+        at *every* timestep (e.g. membrane-potential traces), as a pytree of
+        ``(T, B, ...)`` arrays mirroring ``model.initial_state``.
+    :param rngs: optional ``nnx.Rngs`` for reconstructing the modules.
+    :return: ``(model, outputs)`` where ``outputs`` is ``(T, B, ...)``; or
+        ``(model, (outputs, states))`` when ``return_all_states`` is True.
+    """
+    if rngs is None:
+        rngs = nnx.Rngs(0)
+
+    model = _build_model(nir_graph, dt, rngs)
+
+    if not return_all_states:
+        outputs, _ = run(model, input_data)
+        return model, outputs
+
+    # Capture the per-layer state at each timestep (membrane traces, etc.).
+    init_state = model.initial_state(input_data.shape[1])
+
+    def _step(state, x_t):
+        out, new_state = model(x_t, state)
+        return new_state, (out, new_state)
+
+    _, (outputs, states) = jax.lax.scan(_step, init_state, input_data)
+    return model, (outputs, states)
 
 
 def _spyx_recurrent_to_nirgraph(layer, node_key, dt) -> nir.NIRGraph:
@@ -333,34 +440,29 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
 
         elif isinstance(layer, IF):
             # nir.IF requires array-valued r / v_threshold shaped to the layer.
+            # cur_shape carries spatial dims when the neuron follows a conv.
             nodes[node_key] = nir.IF(
-                r=np.ones(layer.hidden_shape),
-                v_threshold=np.full(layer.hidden_shape, layer.threshold),
+                r=np.ones(cur_shape, dtype=np.float32),
+                v_threshold=_spyx_param_to_nir(layer.threshold, cur_shape),
             )
 
         elif isinstance(layer, LIF):
-            beta = np.array(layer.beta[...])
-            if beta.ndim == 0:
-                beta = np.full(layer.hidden_shape, beta)
+            beta = _spyx_param_to_nir(layer.beta[...], cur_shape)
             nodes[node_key] = nir.LIF(
                 tau=dt / (1 - beta),
-                v_threshold=np.full(layer.hidden_shape, layer.threshold),
-                v_leak=np.zeros(layer.hidden_shape),
+                v_threshold=_spyx_param_to_nir(layer.threshold, cur_shape),
+                v_leak=np.zeros(cur_shape, dtype=np.float32),
                 r=beta,
             )
 
         elif isinstance(layer, CuBaLIF):
-            alpha = np.array(layer.alpha[...])
-            beta = np.array(layer.beta[...])
-            if alpha.ndim == 0:
-                alpha = np.full(layer.hidden_shape, alpha)
-            if beta.ndim == 0:
-                beta = np.full(layer.hidden_shape, beta)
+            alpha = _spyx_param_to_nir(layer.alpha[...], cur_shape)
+            beta = _spyx_param_to_nir(layer.beta[...], cur_shape)
             nodes[node_key] = nir.CubaLIF(
                 tau_mem=dt / (1 - beta),
                 tau_syn=dt / (1 - alpha),
-                v_threshold=np.full(layer.hidden_shape, layer.threshold),
-                v_leak=np.zeros(layer.hidden_shape),
+                v_threshold=_spyx_param_to_nir(layer.threshold, cur_shape),
+                v_leak=np.zeros(cur_shape, dtype=np.float32),
                 r=beta,
             )
 
