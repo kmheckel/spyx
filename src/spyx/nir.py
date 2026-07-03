@@ -297,6 +297,12 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
     else:
         layers = model.layers
 
+    # Track the per-sample tensor shape (NIR shapes exclude the batch axis) so
+    # nodes that need it — Conv2d (spatial dims) and Flatten (full shape) — can
+    # be constructed correctly. NIR uses channels-first (C, N_x, N_y).
+    _in = next(iter(input_shape.values()))
+    cur_shape = tuple(int(d) for d in np.ravel(np.asarray(_in)))
+
     for i, layer in enumerate(layers):
         node_key = f"layer_{i}"
 
@@ -307,21 +313,30 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
                 )
             else:
                 nodes[node_key] = nir.Linear(np.array(layer.kernel[...].T))
+            cur_shape = cur_shape[:-1] + (int(layer.kernel.shape[-1]),)
 
         elif isinstance(layer, nnx.Conv):
             # NNX Conv is HWIO, NIR is OIHW
             weight = np.array(layer.kernel[...].transpose((3, 2, 0, 1)))
+            spatial = tuple(cur_shape[-2:])  # (N_x, N_y)
             nodes[node_key] = nir.Conv2d(
+                input_shape=spatial,  # required to disambiguate the shape
                 weight=weight,
                 bias=np.array(layer.bias[...]) if layer.bias is not None else None,
                 dilation=1,  # Default
                 stride=layer.strides,
-                padding="SAME",  # Default
+                padding="same",  # nir expects lowercase 'same' / 'valid'
                 groups=1,
             )
+            # 'same' padding preserves the spatial dims; channels -> out_features.
+            cur_shape = (int(layer.kernel.shape[-1]), *spatial)
 
         elif isinstance(layer, IF):
-            nodes[node_key] = nir.IF(r=1, v_threshold=np.array(layer.threshold))
+            # nir.IF requires array-valued r / v_threshold shaped to the layer.
+            nodes[node_key] = nir.IF(
+                r=np.ones(layer.hidden_shape),
+                v_threshold=np.full(layer.hidden_shape, layer.threshold),
+            )
 
         elif isinstance(layer, LIF):
             beta = np.array(layer.beta[...])
@@ -353,9 +368,12 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
             nodes[node_key] = _spyx_recurrent_to_nirgraph(layer, node_key, dt)
 
         elif isinstance(layer, Flatten):
+            # spyx.nn.Flatten collapses every non-batch dim; NIR shapes have no
+            # batch axis, so flatten the whole per-sample shape (start_dim=0).
             nodes[node_key] = nir.Flatten(
-                input_type={"input": input_shape}
-            )  # Simplified
+                input_type=cur_shape, start_dim=0, end_dim=-1
+            )
+            cur_shape = (int(np.prod(cur_shape)),)
 
         else:
             print(

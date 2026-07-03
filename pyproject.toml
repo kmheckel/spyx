@@ -88,14 +88,13 @@ include = ["src/spyx"]
 [tool.ty.rules]
 # These fire only where Spyx interfaces third-party libraries that ship no type
 # information — not on real defects. Everything else (unresolved-attribute,
-# not-subscriptable, ...) stays at error and is suppressed inline where a
-# runtime guard makes it a false positive, so genuine bugs still surface.
+# not-subscriptable, missing-argument, ...) stays at error and is suppressed
+# inline where a runtime guard makes it a false positive, so genuine bugs still
+# surface — e.g. `missing-argument` caught a real nir.Conv2d export defect.
 #   grain / tonic base classes we subclass and call are untyped:
 invalid-method-override = "ignore"
 #   values passed into untyped tonic / nir constructors:
 invalid-argument-type = "ignore"
-#   untyped nir.* node constructors report "missing" inferred-required args:
-missing-argument = "ignore"
 
 [tool.coverage.run]
 source = ["spyx"]

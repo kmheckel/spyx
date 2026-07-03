@@ -121,9 +121,46 @@ def test_nir_export_import_rcubalif():
     )
 
 
+def test_nir_export_import_if():
+    """IF export previously passed r=1 (int) to nir.IF, which requires arrays."""
+    rngs = nnx.Rngs(0)
+    model = nn.Sequential(nnx.Linear(10, 8, rngs=rngs), nn.IF((8,)))
+
+    graph = spyx_nir.to_nir(model, {"input": (10,)}, {"output": (8,)})
+    imported = spyx_nir.from_nir(graph, dt=1, rngs=nnx.Rngs(1))
+
+    x = jax.random.normal(jax.random.PRNGKey(42), (5, 10))
+    out_orig, _ = model(x, model.initial_state(5))
+    out_imp, _ = imported(x, imported.initial_state(5))
+    assert jnp.allclose(out_orig, out_imp)
+
+
+def test_nir_export_import_flatten():
+    """Flatten export previously built a malformed nir.Flatten (nested dict)."""
+    rngs = nnx.Rngs(0)
+    model = nn.Sequential(
+        nn.Flatten(),
+        nnx.Linear(2 * 3 * 3, 8, rngs=rngs),
+        nn.LIF((8,), beta=0.8, rngs=rngs),
+    )
+
+    graph = spyx_nir.to_nir(model, {"input": (2, 3, 3)}, {"output": (8,)})
+    # NIR flatten node carries the flattened shape.
+    assert int(graph.nodes["layer_0"].output_type["output"].prod()) == 2 * 3 * 3
+
+    imported = spyx_nir.from_nir(graph, dt=1, rngs=nnx.Rngs(1))
+    x = jax.random.normal(jax.random.PRNGKey(42), (5, 2, 3, 3))
+    out_orig, _ = model(x, model.initial_state(5))
+    out_imp, _ = imported(x, imported.initial_state(5))
+    assert out_orig.shape == (5, 8)
+    assert jnp.allclose(out_orig, out_imp)
+
+
 if __name__ == "__main__":
     test_nir_export_import_lif()
     test_nir_export_import_cubalif()
     test_nir_export_import_rlif()
     test_nir_export_import_rcubalif()
+    test_nir_export_import_if()
+    test_nir_export_import_flatten()
     print("NIR tests passed!")

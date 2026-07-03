@@ -2,7 +2,18 @@
 
 To move a trained Spyx model onto neuromorphic hardware (or into another SNN framework), convert it to a [Neuromorphic Intermediate Representation](https://nnir.readthedocs.io/) graph with [`spyx.nir`](../reference/nir.md). The conversion is bidirectional: `to_nir` exports, `from_nir` imports.
 
-Supported layers: `nnx.Linear`, `nnx.Conv`, `nnx.Flatten`, `spyx.nn.SumPool`, `IF`, `LIF`, `CuBaLIF`, and the recurrent variants `RIF`, `RLIF`, `RCuBaLIF` (exported as NIR RNN subgraphs). The model must be a `spyx.nn.Sequential` (or a single layer).
+Fully supported (round-trips with numerical parity, covered by tests):
+`nnx.Linear`, `spyx.nn.Flatten`, `IF`, `LIF`, `CuBaLIF`, and the recurrent
+variants `RIF`, `RLIF`, `RCuBaLIF` (exported as NIR RNN subgraphs). The model
+must be a `spyx.nn.Sequential` (or a single layer).
+
+!!! warning "Convolutional models are partial"
+    `nnx.Conv` / `spyx.nn.SumPool` export is only validated for
+    convolution → `Flatten` → dense stacks. Graphs where a spiking neuron
+    follows a conv layer directly (spatial feature maps) hit NIR's strict
+    shape inference, and conv **import** (`from_nir`) is not yet complete. The
+    N-MNIST SCNN example exercises this path and is a work in progress; the
+    feed-forward and recurrent spiking paths above are the supported surface.
 
 ## Export a feed-forward model
 
