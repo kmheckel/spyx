@@ -51,6 +51,7 @@ nav:
       - Phasor Networks: examples/phasor/phasor_intro.ipynb
   - How-to guides:
       - Install Spyx: how-to/install.md
+      - Migrate from Haiku to NNX: how-to/migrate-haiku-to-nnx.md
       - Train a model: how-to/train.md
       - Quantize a model: how-to/quantize.md
       - Export & import via NIR: how-to/nir.md
