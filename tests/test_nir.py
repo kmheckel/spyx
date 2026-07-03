@@ -129,6 +129,26 @@ def test_nir_export_import_spiking_conv():
     _roundtrip(original, (2, 8, 8), (10,), x)
 
 
+def test_nir_export_import_conv_sumpool_scnn():
+    """Full SCNN: Conv -> spatial IF -> SumPool -> Conv -> Flatten -> Linear -> LIF.
+
+    Covers channels-first (NIR) <-> channels-last (spyx) for SumPool as well as
+    spiking convs.
+    """
+    rngs = nnx.Rngs(0)
+    original = nn.Sequential(
+        nnx.Conv(2, 4, (3, 3), rngs=rngs),
+        nn.IF((8, 8, 4)),
+        nn.SumPool((2, 2), (2, 2), "VALID"),  # (8,8,4) -> (4,4,4)
+        nnx.Conv(4, 6, (3, 3), rngs=rngs),
+        nn.Flatten(),
+        nnx.Linear(6 * 4 * 4, 10, rngs=rngs),
+        nn.LIF((10,), beta=0.8, rngs=rngs),
+    )
+    x = jax.random.normal(jax.random.PRNGKey(7), (4, 3, 8, 8, 2))  # (T,B,H,W,C)
+    _roundtrip(original, (2, 8, 8), (10,), x)
+
+
 def test_from_nir_return_all_states():
     """return_all_states yields (outputs, per-layer states)."""
     rngs = nnx.Rngs(0)

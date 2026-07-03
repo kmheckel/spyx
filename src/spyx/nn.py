@@ -434,14 +434,24 @@ def _infer_shape(
     channel_axis: Optional[int] = -1,
 ) -> tuple[int, ...]:
     """Infer shape for pooling window or strides."""
+    if channel_axis and not 0 <= abs(channel_axis) < x.ndim:
+        raise ValueError(f"Invalid channel axis {channel_axis} for {x.shape}")
+    if channel_axis and channel_axis < 0:
+        channel_axis = x.ndim + channel_axis
+
     if isinstance(size, int):
-        if channel_axis and not 0 <= abs(channel_axis) < x.ndim:
-            raise ValueError(f"Invalid channel axis {channel_axis} for {x.shape}")
-        if channel_axis and channel_axis < 0:
-            channel_axis = x.ndim + channel_axis
         return (1,) + tuple(size if d != channel_axis else 1 for d in range(1, x.ndim))
     elif len(size) < x.ndim:
-        # Assume additional dimensions are batch dimensions.
+        # Distribute the window over the spatial axes — every axis except the
+        # batch axis (0) and the channel axis — respecting channel_axis so that
+        # channels-last (B, H, W, C) pools H/W, not the channels.
+        spatial = [d for d in range(x.ndim) if d != 0 and d != channel_axis]
+        if len(size) == len(spatial):
+            window = [1] * x.ndim
+            for ax, sz in zip(spatial, size, strict=True):
+                window[ax] = sz
+            return tuple(window)
+        # Fallback: treat leading extra dims as batch (channels-first layout).
         return (1,) * (x.ndim - len(size)) + tuple(size)
     else:
         assert x.ndim == len(size)

@@ -175,7 +175,10 @@ def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
         )
 
     elif isinstance(node, nir.SumPool2d):
-        return SumPool(node.kernel_size, node.stride.tolist(), "VALID", channel_axis=1)
+        ksize = tuple(int(k) for k in np.atleast_1d(node.kernel_size))
+        stride = tuple(int(s) for s in np.atleast_1d(node.stride))
+        # spyx runs channels-last, so pool the trailing spatial axes.
+        return SumPool(ksize, stride, "VALID", channel_axis=-1)
 
     elif isinstance(node, nir.IF):
         return IF(
@@ -437,6 +440,26 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
             )
             # 'same' padding preserves the spatial dims; channels -> out_features.
             cur_shape = (int(layer.kernel.shape[-1]), *spatial)
+
+        elif isinstance(layer, SumPool):
+            ksize = np.atleast_1d(np.asarray(layer.window_shape)).astype(int)
+            stride = np.atleast_1d(np.asarray(layer.strides)).astype(int)
+            if ksize.size == 1:
+                ksize = np.array([int(ksize[0])] * 2)
+            if stride.size == 1:
+                stride = np.array([int(stride[0])] * 2)
+            nodes[node_key] = nir.SumPool2d(
+                kernel_size=ksize,
+                stride=stride,
+                padding=np.array([0, 0]),  # spyx SumPool uses VALID padding
+            )
+            # VALID pooling shrinks the (channels-first) spatial dims.
+            ch, h, w = cur_shape
+            cur_shape = (
+                ch,
+                (h - int(ksize[0])) // int(stride[0]) + 1,
+                (w - int(ksize[1])) // int(stride[1]) + 1,
+            )
 
         elif isinstance(layer, IF):
             # nir.IF requires array-valued r / v_threshold shaped to the layer.

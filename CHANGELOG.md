@@ -65,9 +65,13 @@ modules. This is a **breaking release** — see the
 - NIR export was broken for several layer types (untested before): `IF`
   (`r=1` int vs. array), `Flatten` (referenced the non-existent `nnx.Flatten`;
   malformed node), and `Conv2d` (missing `input_shape`, `padding="SAME"`).
-  All fixed, and `nnx.Conv` now round-trips — including **spiking convolutions**
-  (a neuron over the spatial feature map), via a channels-first↔channels-last
-  neuron-shape bridge. Covered by numerical round-trip tests.
+  All fixed, and `nnx.Conv` / `spyx.nn.SumPool` now round-trip — including
+  **spiking convolutions** (a neuron over the spatial feature map) and full
+  SCNNs — via a channels-first↔channels-last neuron-shape bridge. Covered by
+  numerical round-trip tests.
+- `spyx.nn.sum_pool` ignored `channel_axis` when given a tuple window (it always
+  pooled the trailing axes), so channels-last `SumPool` pooled the channel
+  dimension. Now respects `channel_axis` for both int and sequence windows.
 - SHD prestaging: "Too many open files" and empty-frame issues; a tonic `HSD`
   monkey-patch drops non-finite event timestamps.
 - Phasor weights stored as a real/imag pair so Optax converges.
