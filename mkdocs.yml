@@ -35,9 +35,8 @@ plugins:
 
 nav:
   - Home: index.md
-  - Introduction: introduction.md
-  - Quickstart: quickstart.md
   - Tutorials:
+      - Your first SNN: tutorials/first-snn.md
       - Surrogate Gradient Tutorial: examples/surrogate_gradient/SurrogateGradientTutorial.ipynb
       - Cartpole Evolution: examples/neuroevolution/cartpole_evo.ipynb
       - Neuron Model Comparison: examples/surrogate_gradient/shd_sg_neuron_model_comparison.ipynb
@@ -50,7 +49,27 @@ nav:
       - Quantization-Aware Training: examples/quantization/qat_intro.ipynb
       - State-Space Models: examples/ssm/ssm_intro.ipynb
       - Phasor Networks: examples/phasor/phasor_intro.ipynb
-  - API Reference: api.md
+  - How-to guides:
+      - Install Spyx: how-to/install.md
+      - Train a model: how-to/train.md
+      - Quantize a model: how-to/quantize.md
+      - Export & import via NIR: how-to/nir.md
+      - Use SSM & phasor layers: how-to/recurrent-layers.md
+      - Load event data: how-to/load-data.md
+  - Reference:
+      - spyx.nn: reference/nn.md
+      - spyx.axn: reference/axn.md
+      - spyx.fn: reference/fn.md
+      - spyx.data: reference/data.md
+      - spyx.optimize: reference/optimize.md
+      - spyx.nir: reference/nir.md
+      - spyx.quant: reference/quant.md
+      - spyx.ssm: reference/ssm.md
+      - spyx.phasor: reference/phasor.md
+      - spyx.experimental: reference/experimental.md
+  - Explanation:
+      - Design & architecture: explanation/design.md
+      - SNN primer: explanation/snn-primer.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -61,6 +80,9 @@ markdown_extensions:
   - admonition
   - footnotes
   - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - md_in_html
   - pymdownx.arithmatex:
       generic: true

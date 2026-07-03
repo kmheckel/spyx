@@ -63,5 +63,6 @@ history = opt.fit(model, optax.lion(3e-4), loss_fn, train_iter, epochs=30)
 ## What to show next
 
 - `docs/examples/surrogate_gradient/SurrogateGradientTutorial.ipynb` — the canonical end-to-end walkthrough on SHD.
-- `docs/quickstart.md` — five-minute install + first SNN.
+- `docs/tutorials/first-snn.md` — guided install + first trained SNN.
+- `docs/explanation/snn-primer.md` — the reader-facing version of this primer.
 - For experiments: invoke the `new-experiment` skill to scaffold a training script.

@@ -25,18 +25,26 @@ spyx/
 │   ├── __init__.py     # Package initialization, public API exports
 │   ├── axn.py          # Surrogate gradient functions (activation/axon)
 │   ├── data.py         # Data loading utilities and Grain transforms
-│   ├── experimental.py # Experimental features (phasor networks, etc.)
-│   ├── fn.py           # Functional utilities (training loops, metrics)
+│   ├── experimental.py # Research-grade neurons (SPSN, stochastic LIF, PSU_LIF)
+│   ├── fn.py           # Functional utilities (losses, metrics, regularizers)
 │   ├── nir.py          # NIR (Neuromorphic Intermediate Representation) support
 │   ├── nn.py           # Neuron models (LIF, ALIF, CuBaLIF, etc.)
+│   ├── optimize.py     # High-level training loop (fit, make_train/eval_step)
+│   ├── phasor.py       # Complex-valued phasor & spiking-phasor networks
+│   ├── quant.py        # int8/int4/BitNet quantization (qwix wrapper, optional)
+│   ├── ssm.py          # State-space layers (LRU, S5Diag, Mamba, ChunkedSSM)
 │   └── _version.py     # Version information
-├── tests/              # Test suite
-├── docs/               # MkDocs documentation
-│   ├── examples/       # Tutorial notebooks
-│   └── *.md           # Documentation pages
+├── tests/              # Test suite (conftest.py pins JAX to CPU + seeds fixtures)
+├── docs/               # MkDocs docs, organized by Diátaxis
+│   ├── tutorials/      # Learning-oriented lessons
+│   ├── how-to/         # Goal-oriented guides
+│   ├── reference/      # API reference (mkdocstrings)
+│   ├── explanation/    # Background & design
+│   └── examples/       # Tutorial notebooks
 ├── research/           # Research experiments and benchmarks
-├── scripts/            # Utility scripts (release automation)
-├── data/               # Dataset storage (gitignored)
+├── scripts/            # Smoke tests, demos, release automation
+├── .claude/            # Agent skills, SessionStart hook, settings
+├── .github/workflows/  # CI (ci.yml) + PyPI publish (python-publish.yml)
 ├── pyproject.toml      # Project configuration and dependencies
 └── README.md           # User-facing documentation
 ```
@@ -132,10 +140,23 @@ uv run ruff format         # Format code
 
 ### Testing
 ```bash
-uv run pytest              # Run all tests
-uv run pytest -v           # Verbose output
+uv run pytest -m "not network"   # Full suite minus dataset-downloading tests (what CI runs)
+uv run pytest                     # Everything, including network-gated loader tests
+uv run pytest -v                  # Verbose output
 uv run pytest tests/test_data_grain.py  # Specific test
+uv run pytest --cov=spyx          # With coverage (pytest-cov + [tool.coverage] config)
 ```
+
+Tests that download a dataset carry `@pytest.mark.network` and are excluded
+from CI. Keep any new network-dependent test behind that marker. `conftest.py`
+forces JAX onto CPU and provides seeded `rngs` / `key` fixtures.
+
+### Continuous integration
+`.github/workflows/ci.yml` runs four jobs on every PR: `lint` (ruff check +
+format), `test` (pytest matrix over Python 3.11/3.12 with the quant extra),
+`docs` (`mkdocs build --strict`), and `smoke` (notebook-API drift). Match all
+four locally before pushing. `python-publish.yml` builds and publishes to PyPI
+when a GitHub release is published.
 
 ### Notebook smoke tests
 Before tagging a release (or whenever dependencies shift), verify that every
@@ -205,7 +226,7 @@ uv run mkdocs build        # Build static site
 1. Create class in `nn.py` inheriting from `nnx.Module`
 2. Implement `__init__`, `__call__`, and `initial_state`
 3. Add tests in `tests/`
-4. Document in `docs/api.md`
+4. Document in `docs/reference/nn.md` (auto-rendered from docstrings)
 
 ### Adding a new surrogate gradient
 1. Create class in `axn.py` inheriting from `Axon`
@@ -235,8 +256,19 @@ This repository ships skill files under `.claude/skills/` that Claude Code can i
 | `run-tutorial` | You want to open and execute one of the bundled tutorial notebooks. |
 | `new-experiment` | You want to scaffold a new Spyx training script against your own dataset. |
 | `debug-training` | Your SNN isn't learning: flat loss, NaN, silent neurons, or exploding gradients. |
+| `add-neuron-model` | You're implementing a new spiking neuron in `spyx.nn` (the `(x, state) -> (out, state)` contract, tests, NIR export). |
+| `quantize-model` | You want int8 / int4 / BitNet-ternary quantization of a model via `spyx.quant`. |
+| `sequence-models` | You're adding an SSM (LRU/S5/Mamba/ChunkedSSM) or phasor layer, or mixing them with spiking layers. |
+| `nir-export` | You're exporting to / importing from NIR for neuromorphic-hardware interop. |
+| `cut-release` | You're bumping the version, tagging, and publishing to PyPI. |
 
-Invoke via `/snn-primer`, `/setup-gpu`, etc. from Claude Code. Each skill is self-contained; see the file in `.claude/skills/` for the full instructions.
+Invoke via `/snn-primer`, `/quantize-model`, etc. from Claude Code. Each skill is self-contained; see the file in `.claude/skills/` for the full instructions.
+
+### Environment automation
+`.claude/hooks/session-start.sh` runs on Claude Code on the web sessions and
+`uv sync --extra quant`s the environment so tests/linters/docs work on the
+first turn. `.claude/settings.json` registers that hook and allowlists common
+read-only commands. A `.github/PULL_REQUEST_TEMPLATE.md` structures new PRs.
 
 ## Public API
 
@@ -249,7 +281,9 @@ The package exports the following in `src/spyx/__init__.py`:
 - `nir` - NIR conversion
 - `nn` - Neuron models
 - `optimize` - High-level training loop (`fit`, `make_train_step`, `make_eval_step`)
+- `phasor` - Complex-valued phasor & spiking-phasor networks
 - `quant` - Quantization helpers (qwix wrapper, optional)
+- `ssm` - State-space layers (LRU, S5Diag, Mamba, MambaBlock, ChunkedSSM)
 - `__version__` - Version string
 
 All exports are defined in `__all__` for explicit API declaration.

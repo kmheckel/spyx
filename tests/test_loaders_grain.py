@@ -6,6 +6,11 @@ from spyx import data
 # rather than failing the default `uv run pytest` sweep (issue #35).
 pytest.importorskip("tonic")
 
+# They also download real datasets on first run, so they're gated behind the
+# `network` marker and excluded from CI (`pytest -m "not network"`). Run them
+# locally with `uv sync --all-extras && uv run pytest -m network`.
+pytestmark = pytest.mark.network
+
 
 def test_nmnist_loader():
     batch_size = 4

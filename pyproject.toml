@@ -59,11 +59,32 @@ dev = [
     "mkdocs-material>=9.7.1",
     "mkdocstrings[python]>=1.0.0",
     "pytest>=9.0.2",
+    "pytest-cov>=5.0.0",
     "ruff>=0.14.10",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/spyx"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `-ra` prints a short reason for every skip/xfail so gated tests stay visible.
+addopts = "-ra"
+markers = [
+    "network: test downloads a dataset or otherwise needs network access; excluded from CI via `-m 'not network'`.",
+]
+
+[tool.coverage.run]
+source = ["spyx"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
