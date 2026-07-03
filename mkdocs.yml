@@ -49,6 +49,7 @@ nav:
       - NIR Single Neuron LIF: examples/nir/single_neuron/lif_spyx.ipynb
       - Quantization-Aware Training: examples/quantization/qat_intro.ipynb
       - State-Space Models: examples/ssm/ssm_intro.ipynb
+      - Phasor Networks: examples/phasor/phasor_intro.ipynb
   - API Reference: api.md
 
 markdown_extensions:
