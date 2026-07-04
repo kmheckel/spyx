@@ -58,7 +58,8 @@ else:
     K = int(os.environ.get("K", "64"))
 
 SIGMA = float(os.environ.get("SIGMA", "0.02"))
-LAM = float(os.environ.get("LAM", "0.5"))
+LAM = float(os.environ.get("LAM", "0.5"))  # raw-mode weight on g_orth
+LAM_NORM = float(os.environ.get("LAM_NORM", "0.3"))  # normalize-mode fraction
 LR = float(os.environ.get("LR", "5e-3"))
 SEED = int(os.environ.get("SEED", "0"))
 
@@ -176,16 +177,21 @@ def train_es(train, test):
     return {"true_loss": tl, "acc": ta, "train_s": dt}
 
 
-def train_hybrid(train, test):
-    """Hybrid g_s + lam * g_orth; also logs the mean correction diagnostics."""
+def train_hybrid(train, test, *, normalize, lam):
+    """Hybrid g_s + lam_eff * g_orth; logs the mean correction diagnostics.
+
+    ``normalize=False`` uses ``lam`` as a raw scale on ``g_orth``;
+    ``normalize=True`` treats ``lam`` as a fraction of the surrogate step so the
+    applied correction has norm ``lam·‖g_s‖`` (see ``spyx.experimental.hybrid``).
+    """
     model = fresh_model()
     opt = nnx.Optimizer(model, optax.adam(LR), wrt=nnx.Param)
     step = make_hybrid_train_step(
-        loss_fn, loss_fn, num_samples=K, sigma=SIGMA, lam=LAM
+        loss_fn, loss_fn, num_samples=K, sigma=SIGMA, lam=lam, normalize=normalize
     )
     xs, ys = train
     key = jax.random.PRNGKey(SEED)
-    cosines, orth_norms, s_norms = [], [], []
+    cosines, orth_norms, s_norms, fracs = [], [], [], []
     t0 = time.perf_counter()
     for ep in range(EPOCHS):
         for x, y in zip(xs, ys):
@@ -195,21 +201,25 @@ def train_hybrid(train, test):
                 key, dk = jax.random.split(key)
                 d = hybrid_diagnostics(
                     model, loss_fn, loss_fn, dk, batch=(x, y),
-                    num_samples=K, sigma=SIGMA, lam=LAM,
+                    num_samples=K, sigma=SIGMA, lam=lam, normalize=normalize,
                 )
                 cosines.append(float(d["cosine"]))
                 orth_norms.append(float(d["g_orth_norm"]))
                 s_norms.append(float(d["g_s_norm"]))
+                fracs.append(float(d["correction_fraction"]))
     dt = time.perf_counter() - t0
     tl, ta = evaluate(model, test)
     return {
         "true_loss": tl,
         "acc": ta,
         "train_s": dt,
+        "normalize": normalize,
+        "lam": lam,
         "diag": {
             "mean_cosine_es_vs_surrogate": float(np.mean(cosines)) if cosines else None,
             "mean_g_orth_norm": float(np.mean(orth_norms)) if orth_norms else None,
             "mean_g_s_norm": float(np.mean(s_norms)) if s_norms else None,
+            "mean_correction_fraction": float(np.mean(fracs)) if fracs else None,
         },
     }
 
@@ -219,7 +229,7 @@ def main():
     print(
         f"backend={jax.default_backend()}  SMOKE={SMOKE}  "
         f"C={CHANNELS} H={HIDDEN} classes={N_CLASSES} T={SAMPLE_T}  "
-        f"epochs={EPOCHS} K={K} sigma={SIGMA} lam={LAM}",
+        f"epochs={EPOCHS} K={K} sigma={SIGMA} lam={LAM} lam_norm={LAM_NORM}",
         flush=True,
     )
     train, test = synthetic_data()
@@ -241,35 +251,48 @@ def main():
         flush=True,
     )
 
-    print("== 3. hybrid ==", flush=True)
-    r_hy = train_hybrid(train, test)
-    print(
-        f"  true_loss={r_hy['true_loss']:.4f}  acc={r_hy['acc'] * 100:.2f}%  "
-        f"({r_hy['train_s']:.2f}s)",
-        flush=True,
-    )
+    print("== 3. hybrid (raw lam) ==", flush=True)
+    r_hy = train_hybrid(train, test, normalize=False, lam=LAM)
     d = r_hy["diag"]
     print(
-        f"  diagnostics: mean cosine(g_es,g_s)={d['mean_cosine_es_vs_surrogate']}  "
-        f"mean ||g_orth||={d['mean_g_orth_norm']}  mean ||g_s||={d['mean_g_s_norm']}",
+        f"  true_loss={r_hy['true_loss']:.4f}  acc={r_hy['acc'] * 100:.2f}%  "
+        f"({r_hy['train_s']:.2f}s)  "
+        f"mean ||g_orth||/||g_s||="
+        f"{d['mean_g_orth_norm'] / d['mean_g_s_norm']:.2f}  "
+        f"correction_frac={d['mean_correction_fraction']:.2f}",
         flush=True,
     )
 
-    print("\n== three-arm comparison (final TRUE loss / accuracy) ==", flush=True)
-    rows = [("surrogate", r_sur), ("es", r_es), ("hybrid", r_hy)]
-    print(f"  {'arm':<10} {'true_loss':>10} {'accuracy':>10} {'train_s':>9}")
+    print("== 4. hybrid (normalized lam) ==", flush=True)
+    r_hyn = train_hybrid(train, test, normalize=True, lam=LAM_NORM)
+    dn = r_hyn["diag"]
+    print(
+        f"  true_loss={r_hyn['true_loss']:.4f}  acc={r_hyn['acc'] * 100:.2f}%  "
+        f"({r_hyn['train_s']:.2f}s)  "
+        f"correction_frac={dn['mean_correction_fraction']:.2f} (== lam_norm)",
+        flush=True,
+    )
+
+    print("\n== four-arm comparison (final TRUE loss / accuracy) ==", flush=True)
+    rows = [
+        ("surrogate", r_sur),
+        ("es", r_es),
+        ("hybrid-raw", r_hy),
+        ("hybrid-norm", r_hyn),
+    ]
+    print(f"  {'arm':<12} {'true_loss':>10} {'accuracy':>10} {'train_s':>9}")
     for name, r in rows:
         print(
-            f"  {name:<10} {r['true_loss']:>10.4f} "
+            f"  {name:<12} {r['true_loss']:>10.4f} "
             f"{r['acc'] * 100:>9.2f}% {r['train_s']:>9.2f}"
         )
 
     best = min(rows, key=lambda kv: kv[1]["true_loss"])[0]
+    delta = r_hyn["true_loss"] - r_sur["true_loss"]
     print(f"\n  lowest true loss: {best}", flush=True)
     print(
-        "  (honest note: in the smoke regime pure-ES trails and the ES "
-        "correction can exceed ||g_s|| in magnitude, dragging hybrid below the "
-        "surrogate unless lam is scaled down; see README.)",
+        f"  hybrid-norm − surrogate true_loss = {delta:+.4f} "
+        f"({'hybrid-norm wins' if delta < 0 else 'surrogate wins'})",
         flush=True,
     )
 
@@ -284,11 +307,18 @@ def main():
             "num_samples_K": K,
             "sigma": SIGMA,
             "lam": LAM,
+            "lam_norm": LAM_NORM,
             "lr": LR,
             "seed": SEED,
         },
-        "results": {"surrogate": r_sur, "es": r_es, "hybrid": r_hy},
+        "results": {
+            "surrogate": r_sur,
+            "es": r_es,
+            "hybrid_raw": r_hy,
+            "hybrid_norm": r_hyn,
+        },
         "lowest_true_loss_arm": best,
+        "hybrid_norm_minus_surrogate": delta,
     }
     here = os.path.dirname(os.path.abspath(__file__))
     with open(os.path.join(here, "study_results.json"), "w") as f:

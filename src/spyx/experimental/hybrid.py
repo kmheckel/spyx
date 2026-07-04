@@ -45,6 +45,18 @@ complement of **Guided-ES** (Maheswaranathan et al. 2019), which restricts the
 ES *search* to the surrogate's subspace; here we restrict it to the orthogonal
 complement and add it as an error-correction term.
 
+Self-normalising ``λ``
+----------------------
+With a *raw* ``λ`` the correction magnitude ``λ·‖g_orth‖`` depends on the ES
+smoothing ``σ`` and sample count ``K`` — when ``‖g_orth‖ ≫ ‖g_s‖`` (common with a
+high-variance estimate) even a modest ``λ`` lets the correction swamp the bulk
+direction and *hurt*. Passing ``normalize=True`` reinterprets ``λ`` as a
+dimensionless **fraction of the surrogate step**: the correction is rescaled by
+``λ · ‖g_s‖ / ‖g_orth‖`` so that ``‖applied correction‖ = λ · ‖g_s‖`` exactly,
+regardless of the ES scale. ``λ = 0.2`` then means "nudge the surrogate step by at
+most 20 % in the direction it is blind to," which transfers across regimes and
+keeps the ES term from ever dominating.
+
 All the linear algebra happens on the flat parameter vector via
 :func:`jax.flatten_util.ravel_pytree`, and perturbations are applied by
 ``nnx.split`` → perturb-flat → ``nnx.merge``, so the machinery is agnostic to
@@ -145,6 +157,7 @@ def _hybrid_flat(
     sigma: float,
     lam: float,
     eps: float,
+    normalize: bool,
 ):
     """Core routine: returns ``(unravel, g_flat, diagnostics)`` on the flat vector.
 
@@ -168,17 +181,30 @@ def _hybrid_flat(
     g_s_hat = g_s / (g_s_norm + eps)
     proj = jnp.dot(g_es, g_s_hat)
     g_orth = g_es - proj * g_s_hat
-    # 4. Corrected gradient: bulk surrogate + orthogonal ES correction.
-    g = g_s + lam * g_orth
+    # 4. Effective correction weight. In ``normalize`` mode ``lam`` is a
+    #    dimensionless *fraction of the surrogate step*: the correction is rescaled
+    #    so ``‖lam_eff · g_orth‖ = lam · ‖g_s‖`` regardless of the ES variance /
+    #    smoothing scale. This is the self-normalising ``λ · ‖g_s‖ / ‖g_orth‖`` that
+    #    keeps the high-variance ES term from ever dominating the bulk direction
+    #    (the failure mode when ‖g_orth‖ ≫ ‖g_s‖ at a fixed raw ``lam``).
+    g_orth_norm = jnp.linalg.norm(g_orth)
+    lam_eff = jnp.where(
+        normalize, lam * g_s_norm / (g_orth_norm + eps), jnp.asarray(lam, theta.dtype)
+    )
+    # 5. Corrected gradient: bulk surrogate + orthogonal ES correction.
+    g = g_s + lam_eff * g_orth
 
     g_es_norm = jnp.linalg.norm(g_es)
     diagnostics = {
         # cosine ⟨g_es, ĝ_s⟩ / ‖g_es‖ : how aligned ES is with the surrogate.
         "cosine": jnp.dot(g_es, g_s) / (g_es_norm * g_s_norm + eps),
-        "g_orth_norm": jnp.linalg.norm(g_orth),  # magnitude of the correction
+        "g_orth_norm": g_orth_norm,  # magnitude of the raw correction
         "g_s_norm": g_s_norm,
         "g_es_norm": g_es_norm,
         "proj": proj,  # ⟨g_es, ĝ_s⟩
+        "lam_eff": lam_eff,  # weight actually applied to g_orth
+        # ‖applied correction‖ / ‖g_s‖ — in normalize mode this equals ``lam``.
+        "correction_fraction": lam_eff * g_orth_norm / (g_s_norm + eps),
         # Flat vectors, exposed for tests / research inspection.
         "g_s": g_s,
         "g_es": g_es,
@@ -198,6 +224,7 @@ def hybrid_gradient(
     sigma: float = 0.01,
     lam: float = 1.0,
     eps: float = 1e-8,
+    normalize: bool = False,
     return_diagnostics: bool = False,
 ):
     r"""Surrogate gradient corrected by orthogonalised evolutionary strategies.
@@ -221,11 +248,16 @@ def hybrid_gradient(
     :param num_samples: number ``K`` of antithetic perturbation pairs.
     :param sigma: ES perturbation scale ``σ``.
     :param lam: weight ``λ`` on the orthogonal ES correction. ``λ = 0`` recovers
-        pure surrogate descent.
+        pure surrogate descent. With ``normalize=True`` it is a dimensionless
+        *fraction of the surrogate step* rather than a raw scale.
     :param eps: numerical floor for the normalisation of ``g_s``.
+    :param normalize: if ``True``, self-normalise the correction so its magnitude
+        is exactly ``λ · ‖g_s‖`` — the ES term becomes a bounded fraction of the
+        surrogate step, immune to the ES variance/``σ`` scaling that otherwise lets
+        ``‖g_orth‖`` swamp ``‖g_s‖``. Recommended when tuning ``λ`` across regimes.
     :param return_diagnostics: if ``True`` also return the diagnostics dict from
-        :func:`hybrid_diagnostics` (``cosine``, ``g_orth_norm``, the flat vectors,
-        …).
+        :func:`hybrid_diagnostics` (``cosine``, ``g_orth_norm``, ``lam_eff``,
+        ``correction_fraction``, the flat vectors, …).
     :return: an ``nnx.State`` of grads, or ``(grads, diagnostics)`` if
         ``return_diagnostics``.
     """
@@ -239,6 +271,7 @@ def hybrid_gradient(
         sigma=sigma,
         lam=lam,
         eps=eps,
+        normalize=normalize,
     )
     grads = unravel(g)
     if return_diagnostics:
@@ -257,6 +290,7 @@ def hybrid_diagnostics(
     sigma: float = 0.01,
     lam: float = 1.0,
     eps: float = 1e-8,
+    normalize: bool = False,
 ) -> dict[str, jax.Array]:
     r"""Diagnostics for a hybrid step *without* applying it.
 
@@ -266,9 +300,13 @@ def hybrid_diagnostics(
       surrogate direction. Near ``±1`` means ES mostly re-derives the surrogate
       (little to correct); near ``0`` means ES points somewhere the surrogate is
       blind (the regime where hybrid should help).
-    - ``g_orth_norm`` — ``‖g_orth‖``: magnitude of the orthogonal correction.
+    - ``g_orth_norm`` — ``‖g_orth‖``: magnitude of the (raw) orthogonal correction.
     - ``g_s_norm`` / ``g_es_norm`` — the two source magnitudes.
     - ``proj`` — the scalar projection ``⟨g_es, ĝ_s⟩``.
+    - ``lam_eff`` — the weight actually applied to ``g_orth`` (equals ``lam`` unless
+      ``normalize``, where it is ``lam · ‖g_s‖ / ‖g_orth‖``).
+    - ``correction_fraction`` — ``‖lam_eff · g_orth‖ / ‖g_s‖`` (equals ``lam`` in
+      ``normalize`` mode); how big the applied correction is next to the surrogate.
     - ``g_s`` / ``g_es`` / ``g_orth`` — the flat vectors themselves.
 
     Same signature as :func:`hybrid_gradient` (minus ``return_diagnostics``).
@@ -283,6 +321,7 @@ def hybrid_diagnostics(
         sigma=sigma,
         lam=lam,
         eps=eps,
+        normalize=normalize,
     )
     return diagnostics
 
@@ -294,6 +333,7 @@ def make_hybrid_train_step(
     num_samples: int = 8,
     sigma: float = 0.01,
     lam: float = 1.0,
+    normalize: bool = False,
 ) -> Callable[..., jax.Array]:
     r"""Build a single-step hybrid updater.
 
@@ -308,6 +348,8 @@ def make_hybrid_train_step(
     :param num_samples: number ``K`` of antithetic perturbation pairs.
     :param sigma: ES perturbation scale ``σ``.
     :param lam: weight ``λ`` on the orthogonal ES correction.
+    :param normalize: self-normalise the correction to ``λ · ‖g_s‖`` (see
+        :func:`hybrid_gradient`).
     :return: ``step(model, optimizer, key, *batch) -> true_loss``.
     """
 
@@ -321,6 +363,7 @@ def make_hybrid_train_step(
             num_samples=num_samples,
             sigma=sigma,
             lam=lam,
+            normalize=normalize,
         )
         loss = loss_true(model, *batch)
         optimizer.update(model, grads)

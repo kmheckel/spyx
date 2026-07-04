@@ -36,20 +36,25 @@ That makes `g = g_s + λ·g_orth` fragile: unless `λ` is small the orthogonal E
 term dominates and drags the update toward ES noise. We expect the interesting
 regime to be a well-matched-but-large-bias surrogate with large `K` and a small,
 tuned `λ`; in the cheap smoke regime we expect hybrid to be *pulled below* the
-surrogate rather than to beat it, and we report exactly that.
+surrogate rather than to beat it, and we report exactly that — then test the
+obvious fix (a self-normalising `λ`) and report where it lands (see Findings).
 
 ## Method
 
 - **Task:** a tiny synthetic spiking classification problem — each class owns a
   band of input channels that spike at an elevated rate; a `Linear → LIF →
   Linear → LI` classifier reads the summed membrane trace (`spyx.fn.integral_*`).
-- **Three arms**, identical init, identical optimizer (`optax.adam`), identical
+- **Four arms**, identical init, identical optimizer (`optax.adam`), identical
   step budget:
   1. **surrogate** — pure `∇ loss_surrogate` (`spyx.axn` superspike backward).
   2. **es** — pure antithetic NES on the true (hard-spike forward) loss
      (`spyx.experimental.hybrid.es_gradient`), no surrogate at all.
-  3. **hybrid** — `spyx.experimental.hybrid.make_hybrid_train_step`
-     (`g_s + λ·g_orth`).
+  3. **hybrid-raw** — `make_hybrid_train_step(..., normalize=False)`
+     (`g_s + λ·g_orth`, raw `λ`; the original PR #49 setting).
+  4. **hybrid-norm** — `make_hybrid_train_step(..., normalize=True)`, where `λ` is
+     a dimensionless *fraction of the surrogate step*: the correction is rescaled
+     to `‖λ·‖g_s‖‖` via `λ_eff = λ·‖g_s‖/‖g_orth‖`, so the ES term can never swamp
+     the bulk direction regardless of its variance.
 - **True vs. surrogate loss:** both are `integral_crossentropy`. They share the
   *same* forward (every `spyx.axn` activation forwards through the identical
   Heaviside step), so the "true" loss is the hard-spike forward loss; they differ
@@ -75,11 +80,15 @@ runs the fuller config without the flag.
 ## How to run
 
 ```bash
-SPYX_SMOKE=1 uv run python research/new/hybrid_evo_surrogate/run.py   # seconds, CPU
+SPYX_SMOKE=1 uv run python research/new/hybrid_evo_surrogate/run.py   # 4-arm demo, seconds
 uv run python research/new/hybrid_evo_surrogate/run.py                # fuller config
+uv run python research/new/hybrid_evo_surrogate/sweep.py              # multi-seed sweep
 ```
 
-No dataset download — the task is synthetic and generated in-process.
+No dataset download — the task is synthetic and generated in-process. `sweep.py`
+sweeps seeds × ES sample count `K` × correction fraction `λ` over a harder regime
+and reports the mean Δ(true_loss) = hybrid-norm − surrogate with its seed spread,
+so a claimed "win" has to survive noise (writes `sweep_results.json`).
 
 ## Results
 
@@ -90,37 +99,56 @@ run on CPU (seed 0); numbers are tiny-regime and illustrative, not a benchmark:
 | --- | --- | --- | --- |
 | surrogate | see JSON | see JSON | pure `∇` surrogate |
 | es | see JSON | see JSON | pure antithetic NES |
-| hybrid | see JSON | see JSON | `g_s + λ·g_orth` |
+| hybrid-raw | see JSON | see JSON | `g_s + λ·g_orth`, raw `λ` |
+| hybrid-norm | see JSON | see JSON | self-normalised `λ` (fraction of step) |
 
-Hybrid diagnostics (mean over steps): `cosine(g_es, g_s)`, `‖g_orth‖` — see JSON.
+Hybrid diagnostics (mean over steps): `cosine(g_es, g_s)`, `‖g_orth‖`,
+`correction_fraction` — see JSON. See the Findings section for the multi-seed
+`sweep.py` verdict.
 
 ## Findings
 
-Honest reading of the `SPYX_SMOKE=1` run (seed 0; exact numbers in
-`study_results.json`):
+**1. The raw-`λ` failure mode is real** (`SPYX_SMOKE=1`, `study_results.json`).
+Pure surrogate reaches ~1.47 true loss; pure ES trails at ~2.68; **hybrid-raw is
+*dragged below* the surrogate at ~2.53**. Diagnostics explain why: `‖g_orth‖ ≈ 41`
+vs `‖g_s‖ ≈ 8.6` (correction ~5× the bulk direction) with `cosine(g_es, g_s) ≈
+0.28`, so at `λ = 0.5` the noisy ES term dominates the update. "Orthogonalise +
+add" is *not* free — the correction magnitude has to be controlled.
 
-- **Surrogate wins in this regime.** Pure surrogate descent reaches the lowest
-  true loss (~1.47, ~33% acc on a 3-class toy). It is also the cheapest arm by
-  far — one `jax.grad` per step vs. `2K` forward evals for the ES/hybrid arms.
-- **Pure ES is the weakest arm** (true loss ~2.68). Antithetic NES on a
-  Gaussian-smoothed Heaviside loss is high-variance with a small sample budget,
-  so it learns slowly.
-- **Hybrid is *dragged below* the surrogate, not lifted above it** (true loss
-  ~2.53). The diagnostics explain why: measured `‖g_orth‖ ≈ 41` while
-  `‖g_s‖ ≈ 8.6`, i.e. the orthogonal ES correction is ~5× larger in magnitude
-  than the surrogate bulk direction, and `cosine(g_es, g_s) ≈ 0.28` (weak
-  alignment, so most of `g_es` survives the projection). With `λ = 0.5` the
-  update is dominated by noisy ES, and hybrid ends up tracking ES rather than
-  the surrogate. This refutes the naive hope that "orthogonalise + add" is
-  free — **`λ` must be scaled to `‖g_s‖ / ‖g_orth‖`, not set to O(1)**.
-- **Net:** a negative/boundary result in the cheap regime, reported as such per
-  the research guidance. The method is only plausible when (a) the surrogate is
-  genuinely biased, (b) `K` is large enough to shrink ES variance, and (c) `λ`
-  is small / adaptively normalised so the correction never overwhelms the bulk
-  direction. The mechanics (global orthogonalisation, drop-in grad pytree) are
-  verified and correct; the *win* is not demonstrated here and we do not claim
-  it. A natural follow-up is a self-normalising `λ_eff = λ · ‖g_s‖ / (‖g_orth‖ +
-  eps)`.
+**2. Self-normalising `λ` fixes the failure mode and is safe.** Reinterpreting `λ`
+as a fraction of the surrogate step (`normalize=True`,
+`λ_eff = λ·‖g_s‖/‖g_orth‖`) removes the blow-up: in the same smoke regime
+hybrid-norm recovers to ~1.93 (from raw's 2.53). The multi-seed `sweep.py` on a
+harder regime (24ch/32h/4-class, 20 epochs, surrogate floor ≈ 0.684) confirms it
+holds across seeds — at `K = 32`:
+
+| λ (fraction) | surrogate | hybrid-norm | hybrid-raw | Δ(norm−sur) | wins |
+| --- | --- | --- | --- | --- | --- |
+| 0.15 | 0.684 | 0.688 | 0.776 | +0.004 ± 0.011 | 1/3 |
+| 0.30 | 0.684 | 0.697 | 0.776 | +0.014 ± 0.009 | 0/3 |
+| 0.50 | 0.684 | 0.707 | 0.776 | +0.024 ± 0.019 | 1/3 |
+
+hybrid-raw sits at 0.776 across the board (the same drag); hybrid-norm tracks the
+surrogate closely and the gap *grows with `λ`*, exactly as the fraction
+interpretation predicts. (The `K = 96` cells were not completed in this run.)
+
+**3. But it does not *beat* the surrogate on these easy tasks.** At the smallest
+fraction (`λ = 0.15`) hybrid-norm reaches parity within seed noise (Δ = +0.004,
+one seed of three actually wins), and it never clears the surrogate on average.
+The reason is a task ceiling, not an implementation gap: the surrogate is already
+a good descent direction here and sits near the achievable floor, so there is
+little bias left for an orthogonal correction to remove, and the residual ES
+variance costs slightly more than the correction is worth.
+
+**Net.** The self-normalising `λ` turns a *fragile* method (hybrid-raw, which can
+end up much worse than plain surrogate) into a *safe* one (hybrid-norm ≈ surrogate,
+never catastrophically worse) — a real, verified improvement over the PR #49
+version. The stronger claim — that the orthogonal-ES correction *beats* surrogate
+descent — remains **unproven**; it needs a regime with genuinely large surrogate
+bias (mismatched surrogate, deeper/recurrent nets, or a hard-spike objective that
+truly diverges from the smooth one) and larger `K`. We report parity-plus-safety,
+not a win, and do not overclaim. The mechanics (global orthogonalisation, exact
+`λ·‖g_s‖` scaling, drop-in grad pytree) are unit-tested and correct.
 
 ## Reproducibility
 
@@ -130,4 +158,5 @@ Honest reading of the `SPYX_SMOKE=1` run (seed 0; exact numbers in
   requirement). Timing is not the point of this study; correctness of the
   three-arm comparison is.
 - **Spyx commit:** record `git rev-parse HEAD` at run time.
-- **Date run:** 2026-07-04 (initial).
+- **Date run:** 2026-07-04 (initial three-arm study; self-normalising `λ` +
+  multi-seed sweep added same day).

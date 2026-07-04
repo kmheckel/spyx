@@ -9,6 +9,7 @@
     "num_samples_K": 16,
     "sigma": 0.02,
     "lam": 0.5,
+    "lam_norm": 0.3,
     "lr": 0.005,
     "seed": 0
   },
@@ -16,23 +17,40 @@
     "surrogate": {
       "true_loss": 1.4665851593017578,
       "acc": 0.3333333432674408,
-      "train_s": 0.4818916039985197
+      "train_s": 0.4320368469998357
     },
     "es": {
       "true_loss": 2.683535099029541,
       "acc": 0.25,
-      "train_s": 3.0998199909990944
+      "train_s": 2.9637580330017954
     },
-    "hybrid": {
+    "hybrid_raw": {
       "true_loss": 2.5337307453155518,
       "acc": 0.25,
-      "train_s": 6.08069483899817,
+      "train_s": 6.0417883720001555,
+      "normalize": false,
+      "lam": 0.5,
       "diag": {
         "mean_cosine_es_vs_surrogate": 0.28151483833789825,
         "mean_g_orth_norm": 41.257680892944336,
-        "mean_g_s_norm": 8.57182502746582
+        "mean_g_s_norm": 8.57182502746582,
+        "mean_correction_fraction": 2.5755189657211304
+      }
+    },
+    "hybrid_norm": {
+      "true_loss": 1.9268078804016113,
+      "acc": 0.3333333432674408,
+      "train_s": 5.7739303529997414,
+      "normalize": true,
+      "lam": 0.3,
+      "diag": {
+        "mean_cosine_es_vs_surrogate": 0.2818133756518364,
+        "mean_g_orth_norm": 41.34477615356445,
+        "mean_g_s_norm": 7.498959541320801,
+        "mean_correction_fraction": 0.30000001192092896
       }
     }
   },
-  "lowest_true_loss_arm": "surrogate"
+  "lowest_true_loss_arm": "surrogate",
+  "hybrid_norm_minus_surrogate": 0.4602227210998535
 }

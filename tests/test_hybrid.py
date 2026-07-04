@@ -119,6 +119,76 @@ def test_orthogonality_and_lambda_zero():
     assert jnp.allclose(g1_flat, diag["g_s"] + diag["g_orth"], atol=1e-6)
 
 
+def test_normalize_bounds_correction_to_fraction_of_surrogate():
+    """normalize=True makes ‖applied correction‖ == λ·‖g_s‖ (and still ⟂ g_s)."""
+    key = jax.random.PRNGKey(7)
+    model = VecModel(jnp.linspace(-1.0, 1.0, 6))
+
+    def loss_surrogate(m, target):
+        return jnp.sum((m.w[...] - target) ** 2)
+
+    def loss_true(m, target):
+        return jnp.sum((m.w[...] + 0.5) ** 2 + 0.1 * m.w[...] ** 4)
+
+    target = jnp.zeros((6,))
+    lam = 0.3
+    kw = dict(batch=(target,), num_samples=256, sigma=0.02)
+
+    grads, diag = hybrid_gradient(
+        model,
+        loss_surrogate,
+        loss_true,
+        key,
+        lam=lam,
+        normalize=True,
+        return_diagnostics=True,
+        **kw,
+    )
+    g = jax.flatten_util.ravel_pytree(grads)[0]
+    g_s = diag["g_s"]
+    correction = g - g_s
+
+    # The applied correction has norm exactly λ·‖g_s‖ ...
+    assert jnp.allclose(
+        jnp.linalg.norm(correction), lam * jnp.linalg.norm(g_s), rtol=1e-4
+    )
+    # ... points along g_orth ...
+    assert jnp.allclose(correction, diag["lam_eff"] * diag["g_orth"], atol=1e-5)
+    # ... stays orthogonal to the surrogate ...
+    dot = float(jnp.dot(correction, g_s))
+    scale = float(jnp.linalg.norm(correction) * jnp.linalg.norm(g_s))
+    assert abs(dot) <= 1e-4 * (scale + 1.0)
+    # ... and the reported fraction equals λ.
+    assert jnp.allclose(diag["correction_fraction"], lam, rtol=1e-4)
+
+    # normalize=False leaves λ as a raw scale (correction == λ·g_orth).
+    _, diag_raw = hybrid_gradient(
+        model,
+        loss_surrogate,
+        loss_true,
+        key,
+        lam=lam,
+        normalize=False,
+        return_diagnostics=True,
+        **kw,
+    )
+    assert jnp.allclose(diag_raw["lam_eff"], lam, rtol=1e-6)
+
+    # λ = 0 still recovers pure surrogate even in normalize mode.
+    g0 = jax.flatten_util.ravel_pytree(
+        hybrid_gradient(
+            model,
+            loss_surrogate,
+            loss_true,
+            key,
+            lam=0.0,
+            normalize=True,
+            **kw,
+        )
+    )[0]
+    assert jnp.allclose(g0, g_s, atol=1e-6)
+
+
 def test_grads_match_param_pytree_and_finite(rngs):
     """Returned grads share the model's Param structure and are finite."""
     model = TinyClassifier(4, 8, 3, axn.superspike(), rngs=rngs)
