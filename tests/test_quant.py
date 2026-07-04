@@ -185,6 +185,162 @@ def test_bitnet_ternary_rules_quantize_a_real_snn():
     assert jnp.all(jnp.isfinite(out))
 
 
+def _dequant_kernel(qmodel, path):
+    """Reconstruct a quantized Linear kernel (``qvalue * scale``) from state.
+
+    ``path`` is the tuple of attribute keys leading to the ``nnx.Linear`` whose
+    kernel we want (e.g. ``("lin",)``). Returns the dequantized fp32 weight.
+    """
+    state = nnx.state(qmodel)
+    node = state
+    for key in path:
+        node = node[key]
+    array = node["kernel"]["array"]
+    qvalue = jnp.asarray(array["qvalue"].value, dtype=jnp.float32)
+    scale = jnp.asarray(array["scale"].value, dtype=jnp.float32)
+    return qvalue * scale
+
+
+# --- binary-activation-aware quantization -----------------------------------
+
+
+def test_binary_activation_error_is_zero_for_spikes():
+    """A genuine {0,1} spike train round-trips through int quant with zero error.
+
+    No qwix required: this is the pure-math core of the losslessness claim.
+    """
+    spikes = jnp.array(
+        [[0.0, 1.0, 0.0, 1.0, 1.0], [1.0, 1.0, 0.0, 0.0, 1.0]], dtype=jnp.float32
+    )
+    for qtype in ("int8", "int4", "int2"):
+        assert spyx.quant.binary_activation_error(spikes, weight_qtype=qtype) == 0.0
+
+
+def test_binary_activation_error_flags_non_binary_input():
+    """Graded (non-spike) activations do lose precision; the check catches it."""
+    graded = jnp.array([[0.0, 0.37, 1.0, 0.63]], dtype=jnp.float32)
+    assert spyx.quant.binary_activation_error(graded, weight_qtype="int8") > 0.0
+
+
+def test_binary_activation_error_rejects_non_integer_qtype():
+    with pytest.raises(ValueError, match="integer qtypes"):
+        spyx.quant.binary_activation_error(jnp.array([0.0, 1.0]), weight_qtype="fp8")
+
+
+@needs_qwix
+def test_spiking_feedforward_rules_are_weight_only_and_skip_einsum():
+    """The recipe quantizes feedforward weights only and never touches einsum.
+
+    Weight-only (``act_qtype is None``) keeps the binary spikes untouched -
+    lossless on the activation side - and excluding ``einsum`` keeps the
+    recurrent / SSM state transition in fp32 (Q-S5, arXiv:2406.09477).
+    """
+    rules = spyx.quant.spiking_feedforward_rules(weight_qtype="int8")
+    assert len(rules) == 1
+    rule = rules[0]
+    assert rule.weight_qtype == "int8"
+    assert rule.act_qtype is None  # activations (spikes) left alone
+    ops = set(rule.op_names)
+    assert {"dot_general", "conv_general_dilated"} <= ops
+    assert "einsum" not in ops  # recurrent path stays fp32
+
+
+@needs_qwix
+@pytest.mark.parametrize("weight_qtype", ["int8", "int4"])
+def test_feedforward_quant_is_lossless_on_binary_activations(weight_qtype):
+    """Quantized output == fp matmul with the SAME quantized weights on spikes.
+
+    Demonstrates the headline property: because the input is exactly {0,1},
+    weight-only quantization introduces ZERO activation-side error. The only
+    difference from full precision is the weight rounding, and reconstructing
+    ``dequant(quant(W)) @ spikes`` reproduces the model output bit-for-bit.
+    """
+    rngs = nnx.Rngs(0)
+    lin = nnx.Linear(12, 7, use_bias=False, rngs=rngs)
+
+    B = 4
+    spikes = (jax.random.uniform(jax.random.PRNGKey(1), (B, 12)) > 0.5).astype(
+        jnp.float32
+    )
+    assert spyx.quant.binary_activation_error(spikes) == 0.0  # input really is {0,1}
+
+    qmodel = spyx.quant.quantize(
+        lin,
+        spikes,
+        rules=spyx.quant.spiking_feedforward_rules(weight_qtype),
+        mode="ptq",
+    )
+    q_out = qmodel(spikes)
+
+    # fp reference computed with the exact same (dequantized) quantized weights.
+    Wq = _dequant_kernel(qmodel, ())  # kernel lives at top level for a bare Linear
+    ref = spikes @ Wq
+
+    # Exactly equal: no activation was quantized, and spikes need no rounding.
+    assert jnp.array_equal(q_out, ref)
+
+
+@needs_qwix
+def test_feedforward_quant_is_not_a_silent_noop():
+    """Guard against the historical ``.*Linear.*`` no-op: weights must change.
+
+    The stored kernel must be genuine int8 (not fp32 passthrough), and the
+    quantized output must differ measurably from the full-precision matmul.
+    """
+    rngs = nnx.Rngs(0)
+    lin = nnx.Linear(12, 7, use_bias=False, rngs=rngs)
+    W = jnp.asarray(lin.kernel.value, dtype=jnp.float32)
+
+    spikes = (jax.random.uniform(jax.random.PRNGKey(2), (4, 12)) > 0.5).astype(
+        jnp.float32
+    )
+    qmodel = spyx.quant.quantize(
+        lin, spikes, rules=spyx.quant.spiking_feedforward_rules("int8"), mode="ptq"
+    )
+
+    # The kernel is actually stored as int8, with a per-channel fp32 scale.
+    state = nnx.state(qmodel)
+    array = state["kernel"]["array"]
+    assert array["qvalue"].value.dtype == jnp.int8
+    assert array["scale"].value.dtype == jnp.float32
+
+    # And the quantized weights genuinely differ from fp32 (rounding happened).
+    Wq = _dequant_kernel(qmodel, ())
+    assert float(jnp.max(jnp.abs(Wq - W))) > 0.0
+    # ...hence the spike output differs from the fp reference.
+    assert float(jnp.max(jnp.abs(qmodel(spikes) - spikes @ W))) > 1e-6
+
+
+@needs_qwix
+def test_spiking_feedforward_leaves_recurrent_einsum_in_fp32():
+    """A recurrent einsum weight stays fp32 while the feedforward kernel is int8."""
+
+    class Recurrent(nnx.Module):
+        def __init__(self, *, rngs):
+            self.lin = nnx.Linear(6, 6, use_bias=False, rngs=rngs)
+            self.A = nnx.Param(jax.random.normal(rngs.params(), (6, 6)))
+
+        def __call__(self, x):
+            h = self.lin(x)  # dot_general -> feedforward, quantized
+            return jnp.einsum("ij,bj->bi", self.A.value, h)  # recurrent -> fp32
+
+    rngs = nnx.Rngs(0)
+    model = Recurrent(rngs=rngs)
+    spikes = (jax.random.uniform(jax.random.PRNGKey(3), (2, 6)) > 0.5).astype(
+        jnp.float32
+    )
+    qmodel = spyx.quant.quantize(
+        model, spikes, rules=spyx.quant.spiking_feedforward_rules("int8"), mode="ptq"
+    )
+
+    state = nnx.state(qmodel)
+    # Feedforward kernel became int8...
+    assert state["lin"]["kernel"]["array"]["qvalue"].value.dtype == jnp.int8
+    # ...but the recurrent einsum weight is untouched fp32 (no qvalue leaf).
+    assert state["A"].value.dtype == jnp.float32
+    assert not hasattr(state["A"].value, "qvalue")
+
+
 @needs_qwix
 def test_unknown_mode_raises():
     rngs = nnx.Rngs(0)

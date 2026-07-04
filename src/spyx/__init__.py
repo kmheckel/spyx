@@ -6,6 +6,7 @@ import jax.numpy as jnp
 from . import (
     axn,
     bench,
+    compress,
     data,
     experimental,
     fn,
@@ -23,6 +24,7 @@ __all__ = [
     "jnp",
     "axn",
     "bench",
+    "compress",
     "data",
     "experimental",
     "fn",

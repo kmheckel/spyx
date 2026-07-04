@@ -10,10 +10,42 @@ via :func:`qwix.quantize_model`. ``spyx.quant`` provides:
   precision, since their state recurrences are sensitive to integer rounding.
 * :func:`linear_only_rules` and :func:`weights_only_rules` - shorthand
   :class:`qwix.QuantizationRule` lists for the common cases.
+* :func:`spiking_feedforward_rules` - a weight-only recipe for the
+  spike->Linear feedforward path that is **lossless on binary activations**.
+* :func:`binary_activation_error` - a qwix-free check that proves spikes lie
+  exactly on the integer grid.
 * :func:`available` - cheap test for whether qwix is installed.
 
 The functions deliberately raise :class:`ImportError` with an actionable hint
 when qwix is missing, so that ``import spyx.quant`` is always safe.
+
+Binary-activation losslessness
+------------------------------
+
+An SNN's activations are *spikes*: each is exactly ``0`` or ``1`` (see
+:mod:`spyx.data`, which bit-packs them). A binary vector is already a 1-bit
+signal, so it lands **exactly** on the symmetric-integer grid used by
+quantization: with absmax calibration the scale is ``1/max_int`` and
+``round(x / scale) * scale`` maps ``0->0`` and ``1->1`` with zero error, for
+int8, int4 or even int2 (:func:`binary_activation_error` returns ``0.0``).
+
+The practical consequence is that a **weight-only** scheme on the feedforward
+``spike -> Linear`` path introduces *no activation-side error at all*. The
+matmul ``dequant(quant(W)) @ spikes`` is simply a masked sum of weight columns;
+because the activation carries no fractional part there is nothing for an
+activation quantizer to round away. Weight-only int8 is therefore not a
+compromise for spiking nets - the activation is already maximally compressed at
+1 bit - and :func:`spiking_feedforward_rules` builds exactly this recipe while
+leaving ``einsum`` (the recurrent / SSM state transition) in fp32.
+
+This heterogeneous precision - low-bit feedforward weights, high-precision
+recurrent path - matches the empirical finding of **Q-S5** (Abreu, Pedersen,
+Heckel & Pierro, *Q-S5: Towards Quantized State Space Models*,
+arXiv:2406.09477, 2024): a fully quantized S5 loses <1% on sMNIST and most of
+LRA, but the *recurrent* weights need >=8 bits while other components compress
+much further, giving ~6x memory savings at heterogeneous precision. Keeping the
+einsum-based recurrence in fp32 (as every rule builder here does) is the
+conservative end of that trade-off.
 
 .. _qwix: https://github.com/google/qwix
 """
@@ -22,6 +54,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from typing import Any
+
+import jax.numpy as jnp
 
 try:
     import qwix as _qwix
@@ -125,6 +159,107 @@ def weights_only_rules(
     ]
 
 
+def spiking_feedforward_rules(
+    weight_qtype: str = "int8",
+    *,
+    module_path: str = ".*",
+    extra_op_names: Sequence[str] = (),
+) -> list[Any]:
+    """Weight-only quantization of the ``spike -> Linear`` feedforward path.
+
+    This is the recommended recipe for spiking networks. It quantizes the
+    *weights* of the dense / conv feedforward transforms while leaving both the
+    activations and the recurrent ``einsum`` state transitions in full
+    precision. On an SNN the feedforward activation is a spike train - values in
+    ``{0, 1}`` - so a weight-only scheme is **lossless on the activation side**:
+    the spike already lies exactly on the integer grid, so there is nothing for
+    an activation quantizer to round away (see the module docstring and
+    :func:`binary_activation_error`). The quantized forward pass therefore
+    equals ``dequant(quant(W)) @ spikes`` *exactly* - the only error is the
+    (unavoidable) weight rounding, never the activation.
+
+    Because the activation carries no fractional information, the feedforward
+    weights can be pushed below int8 without incurring activation error; pass
+    ``weight_qtype="int4"`` (or ``"int2"``) to compress the feedforward path
+    further, mirroring the Q-S5 finding that non-recurrent components tolerate
+    aggressive quantization (arXiv:2406.09477).
+
+    ``einsum`` is deliberately **excluded** from ``op_names`` so that recurrent
+    / SSM state transitions (:mod:`spyx.ssm`, :class:`spyx.nn.PSU_LIF`,
+    :class:`spyx.phasor.ResonateFire`) keep fp32 precision, which Q-S5 shows the
+    recurrent path requires.
+
+    :param weight_qtype: dtype string for the feedforward weights (``"int8"``
+        default; ``"int4"`` / ``"int2"`` for more compression). Activations are
+        never quantized here.
+    :param module_path: qwix ``module_path`` regex (matched against the NNX
+        attribute path, *not* the class name - see :func:`linear_only_rules`).
+    :param extra_op_names: additional feedforward op names to quantize. Do
+        **not** add ``"einsum"`` unless you intend to quantize the recurrent
+        path (which Q-S5 advises against).
+    :return: a single-element list with a weight-only qwix
+        :class:`QuantizationRule`.
+    """
+    qwix = _require_qwix()
+    op_names = ("dot_general", "conv_general_dilated", *extra_op_names)
+    return [
+        qwix.QuantizationRule(
+            module_path=module_path,
+            op_names=op_names,
+            weight_qtype=weight_qtype,
+            act_qtype=None,
+        )
+    ]
+
+
+def _qtype_bits(qtype: str) -> int:
+    """Return the bit-width of an integer qtype string like ``"int8"``.
+
+    :raises ValueError: if ``qtype`` is not an ``"int<N>"`` string. The binary
+        losslessness argument is specific to symmetric *integer* grids.
+    """
+    if not qtype.startswith("int"):
+        raise ValueError(
+            f"binary_activation_error is defined for integer qtypes "
+            f"(e.g. 'int8', 'int4'); got {qtype!r}."
+        )
+    try:
+        bits = int(qtype[3:])
+    except ValueError as exc:  # pragma: no cover - defensive
+        raise ValueError(f"Malformed integer qtype {qtype!r}.") from exc
+    if bits < 2:
+        raise ValueError(
+            f"Need at least 2 bits for signed quantization; got {qtype!r}."
+        )
+    return bits
+
+
+def binary_activation_error(spikes: Any, *, weight_qtype: str = "int8") -> float:
+    """Max absolute error of round-tripping ``spikes`` through symmetric int quant.
+
+    This is the qwix-free proof behind :func:`spiking_feedforward_rules`: it
+    applies textbook symmetric absmax integer quantization
+    (``scale = amax / max_int``; ``round(x / scale) * scale``) to ``spikes`` and
+    returns ``max|x - dequant(quant(x))|``. For a genuine spike train - values
+    in ``{0, 1}`` - this is **exactly** ``0.0`` at int8, int4 and int2, because
+    a binary signal already lies on the integer grid. A non-zero result means
+    the input is not truly binary (e.g. a graded / surrogate activation), which
+    is the only way the feedforward activation could lose precision.
+
+    :param spikes: array-like of activations, expected in ``{0, 1}``.
+    :param weight_qtype: integer qtype whose grid to test against (default
+        ``"int8"``).
+    :return: the maximum absolute round-trip error as a Python ``float``.
+    """
+    bits = _qtype_bits(weight_qtype)
+    x = jnp.asarray(spikes, dtype=jnp.float32)
+    max_int = float(2 ** (bits - 1) - 1)
+    amax = jnp.max(jnp.abs(x))
+    scale = jnp.where(amax > 0, amax / max_int, 1.0)
+    dequant = jnp.clip(jnp.round(x / scale), -max_int, max_int) * scale
+    return float(jnp.max(jnp.abs(x - dequant)))
+
+
 def bitnet_ternary_rules(act_qtype: str = "int8") -> list[Any]:
     """BitNet b1.58-style "ternary" weight quantization for dense / conv layers.
 
@@ -220,8 +355,10 @@ def quantize(
 
 __all__ = [
     "available",
+    "binary_activation_error",
     "bitnet_ternary_rules",
     "linear_only_rules",
-    "weights_only_rules",
     "quantize",
+    "spiking_feedforward_rules",
+    "weights_only_rules",
 ]

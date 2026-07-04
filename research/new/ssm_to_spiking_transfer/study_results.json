@@ -1,0 +1,36 @@
+{
+  "config": {
+    "smoke": true,
+    "sample_T": 16,
+    "channels": 16,
+    "n_classes": 4,
+    "hidden": 16,
+    "pretrain_epochs": 3,
+    "finetune_epochs": 3
+  },
+  "transfer_diagnostics": {
+    "pole_max_err": 0.0,
+    "n_states": 16,
+    "n_clamped_unstable": 0,
+    "lam_mag_min": 0.9775651693344116,
+    "lam_mag_max": 0.999333918094635
+  },
+  "results": {
+    "s5_backbone": {
+      "acc": 0.625,
+      "train_s": 0.015285417000995949
+    },
+    "rf_transfer_at_init": {
+      "acc": 0.0
+    },
+    "rf_transfer_finetuned": {
+      "acc": 0.125,
+      "finetune_s": 0.010528685001190752,
+      "total_s": 0.0258141020021867
+    },
+    "rf_scratch": {
+      "acc": 0.25,
+      "train_s": 0.011497547995531932
+    }
+  }
+}
