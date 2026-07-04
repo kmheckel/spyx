@@ -69,6 +69,19 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/spyx"]
 
+# The default sdist would ship the whole example/research corpus (~7 MB of .npy /
+# .pt fixtures and rendered notebooks). Keep it to what's needed to build and
+# test the package from source.
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/spyx",
+    "tests",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # `-ra` prints a short reason for every skip/xfail so gated tests stay visible.
