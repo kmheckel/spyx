@@ -207,6 +207,11 @@ def _leaky_associative_op(element_i, element_j):
 class PSU_LIF(nnx.Module):
     r"""Parallel Spiking Unit LIF: a reset-free leaky integrate-and-fire neuron.
 
+    .. note::
+       **Experimental.** Its supported entry point is
+       :class:`spyx.experimental.PSU_LIF`; the API may change without a
+       deprecation cycle. It is defined here for locality with the other neurons.
+
     A standard :class:`LIF` subtracts a reset ``spikes * threshold`` from the
     membrane every step, which couples each timestep to the (nonlinear) spike
     of the previous step and forces a strictly sequential ``O(T)`` scan.

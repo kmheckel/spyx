@@ -67,7 +67,7 @@ import jax.numpy as jnp
 import optax
 from flax import nnx
 
-from spyx.raven import RavenRSM, SpikingSlotMemory, make_recall_batch
+from spyx.experimental.raven import RavenRSM, SpikingSlotMemory, make_recall_batch
 from spyx.ssm import S5Diag
 
 SMOKE = bool(os.environ.get("SMOKE"))

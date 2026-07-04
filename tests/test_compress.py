@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from spyx.compress import pack_spikes, packed_spike_dense, unpack_spikes
+from spyx.experimental.compress import pack_spikes, packed_spike_dense, unpack_spikes
 
 
 def _naive_dense(spikes, weight):

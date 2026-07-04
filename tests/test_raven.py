@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import optax
 from flax import nnx
 
-from spyx import raven
+from spyx.experimental import raven
 
 # ---------------------------------------------------------------------------
 # shapes / dtypes / basic run

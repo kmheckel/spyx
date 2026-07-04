@@ -42,7 +42,7 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
-from .axn import superspike
+from ..axn import superspike
 
 # Module-level singleton for the default surrogate spike (avoids B008 and
 # matches the default used by spyx.nn.PSU_LIF / spyx.phasor.ResonateFire).

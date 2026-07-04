@@ -6,7 +6,6 @@ import jax.numpy as jnp
 from . import (
     axn,
     bench,
-    compress,
     data,
     experimental,
     fn,
@@ -15,7 +14,6 @@ from . import (
     optimize,
     phasor,
     quant,
-    raven,
     ssm,
 )
 from ._version import __version__
@@ -25,7 +23,6 @@ __all__ = [
     "jnp",
     "axn",
     "bench",
-    "compress",
     "data",
     "experimental",
     "fn",
@@ -34,7 +31,6 @@ __all__ = [
     "optimize",
     "phasor",
     "quant",
-    "raven",
     "ssm",
     "__version__",
 ]

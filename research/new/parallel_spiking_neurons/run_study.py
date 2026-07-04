@@ -30,7 +30,7 @@ from flax import nnx
 import spyx
 import spyx.nn as snn
 from spyx import bench
-from spyx.phasor import ResonateFire
+from spyx.experimental import PSU_LIF, ResonateFire
 
 SAMPLE_T = 128
 CHANNELS = 128
@@ -83,7 +83,7 @@ def make_neuron(kind, shape, rngs):
     if kind == "LIF":
         return snn.LIF(shape, activation=act, rngs=rngs)
     if kind == "PSU_LIF":
-        return snn.PSU_LIF(shape, activation=act, rngs=rngs)
+        return PSU_LIF(shape, activation=act, rngs=rngs)
     if kind == "ResonateFire":
         return ResonateFire(shape, activation=act, rngs=rngs)
     raise ValueError(kind)

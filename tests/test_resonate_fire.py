@@ -14,7 +14,7 @@ import numpy as np
 from flax import nnx
 
 import spyx.nn as snn
-from spyx.phasor import ResonateFire
+from spyx.experimental import ResonateFire
 
 
 def _membrane_trace(neuron, x):

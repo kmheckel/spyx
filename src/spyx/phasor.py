@@ -335,6 +335,12 @@ def _inverse_softplus(y: jax.Array) -> jax.Array:
 class ResonateFire(nnx.Module):
     r"""Resonate-and-fire neuron: the complex/oscillatory sibling of ``PSU_LIF``.
 
+    .. note::
+       **Experimental.** Its supported entry point is
+       :class:`spyx.experimental.ResonateFire`; the API may change without a
+       deprecation cycle. It is defined here for locality with the phasor layers.
+
+
     A resonate-and-fire neuron carries a **complex** membrane that behaves as a
     damped harmonic oscillator. Written reset-free, its subthreshold dynamics
     are a *complex linear recurrence*
@@ -491,7 +497,6 @@ __all__ = [
     "PhasorActivation",
     "PhasorReadout",
     "PhasorMLP",
-    "ResonateFire",
     "SpikingPhasor",
     "real_to_phasor",
     "phasor_to_real",

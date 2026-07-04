@@ -45,6 +45,7 @@ from flax import nnx
 
 import spyx
 import spyx.nn as snn
+from spyx.experimental import PSU_LIF
 
 SMOKE = os.environ.get("SMOKE", "0") == "1" or "--smoke" in sys.argv
 
@@ -128,7 +129,7 @@ def make_neuron(kind, shape, rngs):
     if kind == "LIF":
         return snn.LIF(shape, activation=act, rngs=rngs)
     if kind == "PSU_LIF":
-        return snn.PSU_LIF(shape, activation=act, rngs=rngs)
+        return PSU_LIF(shape, activation=act, rngs=rngs)
     raise ValueError(kind)
 
 

@@ -79,7 +79,7 @@ from flax import nnx
 import spyx
 import spyx.axn
 import spyx.fn
-from spyx.phasor import ResonateFire
+from spyx.experimental import ResonateFire
 from spyx.ssm import S5Diag
 
 SMOKE = bool(os.environ.get("SMOKE"))

@@ -1,8 +1,14 @@
+"""Experimental stochastic / parallelizable spiking-neuron prototypes.
+
+Stochastic (Bernoulli-spiking) neurons and the SPSN prototype, all built on the
+parallel prefix-scan (``_pscan``) membrane. Research-stage; the promoted,
+production reset-free neuron is :class:`spyx.experimental.PSU_LIF` (in
+``spyx.nn``). See [[SPSN]] (arXiv:2306.12666).
+"""
+
 import jax
 import jax.numpy as jnp
 from flax import nnx
-
-from .axn import arctan
 
 
 def sigmoid_bernoulli(k=10, threshold=1.0, max_prob=0.8):
@@ -40,32 +46,6 @@ def _binary_operator(element_i, element_j):
 def _pscan(tau, x):
     tau = jnp.repeat(tau[None, ...], x.shape[0], axis=0)
     return jax.lax.associative_scan(_binary_operator, (tau, x))
-
-
-class PSU_LIF(nnx.Module):
-    def __init__(self, hidden_shape, threshold=1, k=2, spike=True, *, rngs: nnx.Rngs):
-        self.hidden_shape = hidden_shape
-        self.threshold = threshold
-        if spike:
-            self.spike = arctan(k)
-        else:
-            self.spike = lambda x: x
-
-        self.beta = nnx.Param(
-            nnx.initializers.truncated_normal(stddev=0.5)(
-                rngs.params(), self.hidden_shape
-            )
-            + 0.25
-        )
-
-    # x.shape = B, T, C
-    def __call__(self, x):
-        beta = jnp.clip(self.beta[:], 0, 1)
-
-        _, V = jax.vmap(_pscan, in_axes=(None, 0))(beta, x)
-        _, R = jax.vmap(_pscan, in_axes=(None, 0))(beta, jax.nn.sigmoid(V))
-
-        return self.spike(V - R - self.threshold), V
 
 
 class StochasticAssociativeLIF(nnx.Module):
