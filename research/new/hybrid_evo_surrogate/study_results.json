@@ -1,0 +1,38 @@
+{
+  "config": {
+    "smoke": true,
+    "channels": 12,
+    "hidden": 12,
+    "n_classes": 3,
+    "sample_T": 8,
+    "epochs": 8,
+    "num_samples_K": 16,
+    "sigma": 0.02,
+    "lam": 0.5,
+    "lr": 0.005,
+    "seed": 0
+  },
+  "results": {
+    "surrogate": {
+      "true_loss": 1.4665851593017578,
+      "acc": 0.3333333432674408,
+      "train_s": 0.4818916039985197
+    },
+    "es": {
+      "true_loss": 2.683535099029541,
+      "acc": 0.25,
+      "train_s": 3.0998199909990944
+    },
+    "hybrid": {
+      "true_loss": 2.5337307453155518,
+      "acc": 0.25,
+      "train_s": 6.08069483899817,
+      "diag": {
+        "mean_cosine_es_vs_surrogate": 0.28151483833789825,
+        "mean_g_orth_norm": 41.257680892944336,
+        "mean_g_s_norm": 8.57182502746582
+      }
+    }
+  },
+  "lowest_true_loss_arm": "surrogate"
+}
