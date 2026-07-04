@@ -397,6 +397,15 @@ wheels = [
 ]
 
 [[package]]
+name = "dotmap"
+version = "1.3.30"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bc/68/c186606e4f2bf731abd18044ea201e70c3c244bf468f41368820d197fca5/dotmap-1.3.30.tar.gz", hash = "sha256:5821a7933f075fb47563417c0e92e0b7c031158b4c9a6a7e56163479b658b368", size = 12391, upload-time = "2022-04-06T16:26:49.211Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/f9/976d6813c160d6c89196d81e9466dca1503d20e609d8751f3536daf37ec6/dotmap-1.3.30-py3-none-any.whl", hash = "sha256:bd9fa15286ea2ad899a4d1dc2445ed85a1ae884a42effb87c89a6ecce71243c6", size = 11464, upload-time = "2022-04-06T16:26:47.103Z" },
+]
+
+[[package]]
 name = "etils"
 version = "1.13.0"
 source = { registry = "https://pypi.org/simple" }
@@ -414,6 +423,22 @@ epath = [
 ]
 epy = [
     { name = "typing-extensions" },
+]
+
+[[package]]
+name = "evosax"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dotmap" },
+    { name = "flax" },
+    { name = "jax" },
+    { name = "matplotlib" },
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/61/1f/93fc7c5db0f71f7fc7b47586c83ad6d865528c5a98f36707796fb3ebf2d9/evosax-0.2.0.tar.gz", hash = "sha256:7fefc9be3ea3f18a8346bd473a34d722723644a6096609b6ec9030e9fa4ebdd6", size = 170689, upload-time = "2025-03-11T10:38:37.284Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/79/90/1bc31c864bcc1ecd22c035bffd7e6a0752e69f3bb3cdc5a41f3030c15fca/evosax-0.2.0-py3-none-any.whl", hash = "sha256:4e4aa4426ca1eb139b3783466c8b67a2e1a1060a75ee3013e54a7cd2a2c1cd14", size = 214037, upload-time = "2025-03-11T10:38:35.579Z" },
 ]
 
 [[package]]
@@ -2117,6 +2142,9 @@ docs = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
 ]
+evo = [
+    { name = "evosax" },
+]
 loaders = [
     { name = "numba" },
     { name = "tonic" },
@@ -2139,6 +2167,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "evosax", marker = "extra == 'evo'", specifier = ">=0.2.0" },
     { name = "flax", specifier = ">=0.11.0" },
     { name = "grain" },
     { name = "jax-tqdm" },
@@ -2153,7 +2182,7 @@ requires-dist = [
     { name = "qwix", marker = "extra == 'quant'", git = "https://github.com/google/qwix" },
     { name = "tonic", marker = "extra == 'loaders'" },
 ]
-provides-extras = ["loaders", "quant", "docs"]
+provides-extras = ["loaders", "evo", "quant", "docs"]
 
 [package.metadata.requires-dev]
 dev = [

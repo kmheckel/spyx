@@ -24,6 +24,11 @@ loaders = [
     "tonic",
     "numba>=0.59.0",
 ]
+evo = [
+    # Gradient-free training via evolution strategies (evosax 0.2 API). Used by
+    # the cartpole tutorial and the research/misc neuroevolution notebooks.
+    "evosax>=0.2.0",
+]
 quant = [
     # Qwix is Google's JAX quantization library; published from GitHub today
     # (no PyPI release yet). Install via `uv pip install "spyx[quant]"` together

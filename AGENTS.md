@@ -268,6 +268,8 @@ uv run mkdocs build        # Build static site
 - **Core**: optax, jax_tqdm, nir, flax>=0.11.0, grain
 - **Optional** (`[loaders]`): tonic, numba>=0.59.0
 - **Optional** (`[quant]`): qwix (installed from GitHub via `tool.uv.sources`)
+- **Optional** (`[evo]`): evosax>=0.2.0 (gradient-free evolution; cartpole tutorial
+  + `research/misc` neuroevolution notebooks)
 - **Dev**: pytest, ruff, mkdocs, mkdocs-material, mkdocstrings
 
 ## Common Tasks for Agents
