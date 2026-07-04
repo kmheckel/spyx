@@ -114,33 +114,44 @@ curriculum         1       4     0.35     0.00      0.36    31.25    0.79x
 curriculum         2       4     0.55     0.00      0.55    31.25    0.51x
 ```
 
-**Full SHD (40 epochs, hidden=64, GPU):** _TODO — maintainer's run._ Fill from
-`results.json`:
+**Full SHD (40 epochs, hidden=64, Radeon 8060S / gfx1151), commit `78ef9db`:**
 
-| Method | K | Pretrain (s) | Finetune (s) | Total (s) | Test acc | Speedup vs baseline |
+| Method | K | Pretrain (s) | Finetune (s) | Total (s) | Test acc | Speedup |
 | --- | --- | --- | --- | --- | --- | --- |
-| `baseline` (LIF from scratch) | – | – | TODO | TODO | TODO | 1.00x |
-| `curriculum` | 5 | TODO | TODO | TODO | TODO | TODO |
-| `curriculum` | 10 | TODO | TODO | TODO | TODO | TODO |
+| `baseline` (LIF from scratch) | – | 0.00 | 9.36 | 9.36 | **34.1%** | 1.00× |
+| `curriculum` | 5 | 2.13 | 7.29 | 9.42 | 29.7% | 0.99× |
+| `curriculum` | 10 | 2.23 | 6.24 | 8.46 | 28.4% | 1.11× |
 
-**What to look for.** The curriculum wins if a `curriculum(K)` row reaches
-`baseline` accuracy (or within noise) at `total_s < baseline.total_s`. Because
-each pretrain epoch is ~8x cheaper than a sequential epoch (sibling-study
-neuron-primitive number), replacing `K` expensive epochs with `K` cheap ones
-should cut total time by roughly `K/N * (1 - 1/8)` if the warm-start does not
-hurt final accuracy. The open risk is the opposite of a free lunch: PSU_LIF's
-reset-free dynamics may drift the weights somewhere the hard-reset finetune has
-to spend epochs undoing — the sweep over `K` is there to find where the
-warm-start stops helping and starts hurting.
+**Result: the curriculum did not win at this configuration** — it was slightly
+*slower*-to-no-faster and *lost* 4–6 points of accuracy.
 
 ## Findings
 
-- _TODO after the SHD/GPU run._ Expected narrative to confirm or refute: a small
-  `K` warm-start is a net wall-clock win at equal accuracy; a large `K`
-  eventually degrades final accuracy as the reset-free pretraining pulls the
-  shared weights toward a regime the hard-reset finetune cannot fully recover
-  (mirroring the sibling study's PSU_LIF-alone collapse — the failure mode this
-  curriculum is designed to *bound* rather than avoid entirely).
+This is an honest negative result, and it pins down *why* — a boundary condition
+worth recording:
+
+1. **No speed lever in a Linear-dominated net.** The parallel-scan advantage is on
+   the *neuron primitive* (~8× fwd/bwd in the sibling study). But a real SNN layer
+   is `Linear → neuron → Linear`, and the `Linear` matmuls dominate the FLOPs; the
+   neuron recurrence is a small fraction. So parallelising only the neuron barely
+   moves end-to-end time — pretrain ran at ~0.22 s/epoch vs baseline's ~0.23 s/epoch
+   (essentially equal). The 8× neuron speedup is *diluted* to ~1×.
+2. **Saturated regime.** At batch 256 / hidden 64 / T 128 the GPU is throughput-
+   bound (the sibling study's "saturated" end), exactly where the parallel scan's
+   O(log T) depth advantage is smallest. The curriculum's premise (cheap parallel
+   pretrain) only has teeth in the *device-slack* regime — small batch, long T,
+   neuron-dominated compute — which standard SHD-at-batch-256 is not.
+3. **Weak warm-start hurts slightly.** PSU_LIF only reached 7–11% before transfer
+   (barely above chance), so the transferred init was a *worse* starting point than
+   fresh random for the hard-reset finetune, costing a few points.
+
+**Takeaway.** Parallelising the neuron is not, by itself, an end-to-end training
+speedup for standard SNN architectures — the Linear layers must also be made
+time-parallel (apply them batched over T, run only the neuron via `.parallel`),
+and the pretrain must be long enough to give a genuinely useful init. Both are
+concrete follow-ups; until then, the curriculum's premise doesn't hold here. The
+speedup and the warm-start are *separable* problems, and this config delivered
+neither.
 
 ## Reproducibility
 

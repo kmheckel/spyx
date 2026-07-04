@@ -1,37 +1,37 @@
 {
   "config": {
-    "smoke": true,
-    "epochs": 4
+    "smoke": false,
+    "epochs": 40
   },
   "rows": [
     {
       "method": "baseline",
       "K": null,
-      "epochs": 4,
+      "epochs": 40,
       "pretrain_s": 0.0,
-      "finetune_s": 0.2841684109880589,
-      "total_s": 0.2841684109880589,
-      "test_acc": 0.3125
+      "finetune_s": 9.35865653801011,
+      "total_s": 9.35865653801011,
+      "test_acc": 0.34130859375
     },
     {
       "method": "curriculum",
-      "K": 1,
-      "epochs": 4,
-      "pretrain_s": 0.3446224649960641,
-      "finetune_s": 0.004472025990253314,
-      "total_s": 0.3490944909863174,
-      "test_acc": 0.3125,
-      "psu_pretrain_acc": 0.3125
+      "K": 5,
+      "epochs": 40,
+      "pretrain_s": 2.1324311350181233,
+      "finetune_s": 7.286070339003345,
+      "total_s": 9.418501474021468,
+      "test_acc": 0.29736328125,
+      "psu_pretrain_acc": 0.072265625
     },
     {
       "method": "curriculum",
-      "K": 2,
-      "epochs": 4,
-      "pretrain_s": 0.5615350610169116,
-      "finetune_s": 0.0036304529930930585,
-      "total_s": 0.5651655140100047,
-      "test_acc": 0.3125,
-      "psu_pretrain_acc": 0.3125
+      "K": 10,
+      "epochs": 40,
+      "pretrain_s": 2.2268821139878128,
+      "finetune_s": 6.236350088001927,
+      "total_s": 8.46323220198974,
+      "test_acc": 0.2841796875,
+      "psu_pretrain_acc": 0.10986328125
     }
   ]
 }

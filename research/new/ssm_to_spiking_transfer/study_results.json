@@ -1,36 +1,36 @@
 {
   "config": {
-    "smoke": true,
-    "sample_T": 16,
-    "channels": 16,
-    "n_classes": 4,
-    "hidden": 16,
-    "pretrain_epochs": 3,
-    "finetune_epochs": 3
+    "smoke": false,
+    "sample_T": 128,
+    "channels": 128,
+    "n_classes": 20,
+    "hidden": 64,
+    "pretrain_epochs": 40,
+    "finetune_epochs": 40
   },
   "transfer_diagnostics": {
-    "pole_max_err": 0.0,
-    "n_states": 16,
-    "n_clamped_unstable": 0,
-    "lam_mag_min": 0.9775651693344116,
-    "lam_mag_max": 0.999333918094635
+    "pole_max_err": 8.429369557916289e-08,
+    "n_states": 64,
+    "n_clamped_unstable": 39,
+    "lam_mag_min": 0.9544955492019653,
+    "lam_mag_max": 1.0223101377487183
   },
   "results": {
     "s5_backbone": {
-      "acc": 0.625,
-      "train_s": 0.015285417000995949
+      "acc": 0.61474609375,
+      "train_s": 4.539465238020057
     },
     "rf_transfer_at_init": {
-      "acc": 0.0
+      "acc": 0.0556640625
     },
     "rf_transfer_finetuned": {
-      "acc": 0.125,
-      "finetune_s": 0.010528685001190752,
-      "total_s": 0.0258141020021867
+      "acc": 0.2763671875,
+      "finetune_s": 1.2147836119984277,
+      "total_s": 5.7542488500184845
     },
     "rf_scratch": {
-      "acc": 0.25,
-      "train_s": 0.011497547995531932
+      "acc": 0.48681640625,
+      "train_s": 1.205968741007382
     }
   }
 }

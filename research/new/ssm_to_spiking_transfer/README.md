@@ -140,30 +140,45 @@ HIPPO-LegS init the eigenvalue transfer is **exact**:
 | S5 states clamped for instability | 0 / 16 |
 | S5 discrete `\|λ\|` range | `[0.978, 0.999]` (stable) |
 
-The accuracy/wall-clock table (transferred-then-finetuned vs from-scratch, plus
-S5 pretraining cost) is emitted to `study_results.json` on every run; the SMOKE
-values are synthetic-data noise and are intentionally **omitted here** — fill this
-in from a real SHD run before drawing conclusions.
+**Full SHD (40 epochs, hidden=64, Radeon 8060S / gfx1151), commit `78ef9db`:**
+
+| Stage | Test acc | Train time | Note |
+| --- | --- | --- | --- |
+| S5Diag backbone (non-spiking) | **61.5%** | 4.54 s | trained, stable |
+| ResonateFire — transfer @init | 5.6% | – | before any finetune (≈ chance) |
+| ResonateFire — transfer + finetune | 27.6% | 1.21 s (5.75 s total) | **worse than scratch** |
+| ResonateFire — from scratch | **48.7%** | 1.21 s | baseline |
+
+At transfer time: pole match `max|a−λ| = 8.4e-8` (exact), but **39 / 64 S5 states
+were unstable** (`|λ| ∈ [0.954, 1.022]`, i.e. at/above the unit circle) and had to
+be clamped.
+
+**Result: the transfer hurt** — warm-started ResonateFire (27.6%) trained *worse*
+than ResonateFire from scratch (48.7%).
 
 ## Findings
 
-- **The two modules are provably the same recurrence.** The pole match is exact
-  and closed-form, so ResonateFire *is* a spiking-thresholded S5Diag state with a
-  softplus-enforced stability constraint. This is the reusable result regardless
-  of downstream accuracy.
-- **The stability constraint is a real asymmetry.** S5Diag can hold `|λ| ≥ 1`
-  poles; ResonateFire cannot. Transfer is lossless *only* for stable S5 states —
-  the pipeline counts violations rather than pretending they map.
-- **Dynamics transfer, input-coupling does not (yet).** The low pre-finetune
-  `@init` accuracy is expected and honest: the poles + outer linear maps carry
-  over, but S5's complex `B`/`C` input/output coupling has no spiking counterpart,
-  so the thresholded neuron must relearn that part during finetuning.
+- **The two modules are provably the same recurrence** — pole match is exact and
+  closed-form, so ResonateFire *is* a spiking-thresholded S5Diag state. This
+  mechanism is the reusable, verified result regardless of downstream accuracy.
+- **But naive eigenvalue transfer does not help — it hurts.** Two reasons, both
+  real: (1) **most of S5's useful modes sit at the stability boundary** (39/64 had
+  `|λ| ≥ 1`), which a softplus-stable resonate-and-fire neuron cannot represent, so
+  clamping discards exactly the dynamics S5 relied on; (2) **only the poles
+  transfer, not the `B`/`C` input/output coupling** where much of S5's learning
+  lives — so you warm-start a fraction of the model into a constrained regime and
+  the spiking finetune spends its budget fighting the clamp rather than benefiting.
+- **The loudest signal is orthogonal to the hypothesis:** the *non-spiking* S5Diag
+  backbone (61.5%) beat every spiking neuron measured here — LIF 34%, RF-scratch
+  49%, PSU_LIF 8%. On SHD accuracy, the continuous SSM is simply the stronger
+  model; the interesting efficiency question is therefore **not** "SSM → spiking"
+  but "how cheap can the SSM itself be" — which is exactly Q-S5's quantized-S5
+  program (see [`../../reproductions/qs5/`](../../reproductions/qs5/)).
 
-**Next:** run the real SHD comparison (does warm-started ResonateFire beat
-scratch on accuracy-per-second?); try transferring a **quantized** Q-S5 backbone
-(≥8-bit recurrent poles are exactly the quantity read out here); and design a
-principled `B`/`C` → input-current initialisation so more than just the poles
-transfer.
+**Next:** rather than transfer S5 → spiking, pursue efficient S5 directly
+(quantized per Q-S5, or a hybrid SSM-mixer + spiking readout); if transfer is
+revisited, it needs a principled `B`/`C` → input-current map and a way to honour
+boundary poles instead of clamping them.
 
 ## Reproducibility
 
