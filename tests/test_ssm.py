@@ -116,6 +116,63 @@ def test_s5diag_hippo_init_is_stable():
     assert jnp.all(jnp.abs(lam) < 1.0)
 
 
+def test_s5diag_stays_stable_under_training():
+    """FIX 6: after gradient steps the spectrum must stay inside the unit disk.
+
+    The continuous real part is reparameterised as ``A_re = -softplus(raw)``,
+    so ``A_re ≤ 0`` and ``|λ| = exp(A_re·dt) ≤ 1`` by construction — no amount
+    of optimisation can push an eigenvalue outside the unit circle.
+    """
+    rngs = nnx.Rngs(0)
+    layer = ssm.S5Diag(d_model=4, d_state=16, rngs=rngs)
+    optimizer = nnx.Optimizer(layer, optax.adam(1e-1), wrt=nnx.Param)
+
+    T, B = 16, 4
+    u = jax.random.normal(jax.random.PRNGKey(0), (T, B, 4))
+    # A large target pushes the parameters hard, which (pre-fix) drove the raw
+    # A_re param positive and blew |λ| past 1.
+    target = 10.0 * u
+
+    @nnx.jit
+    def step(model, optimizer, u, target):
+        def loss_fn(m):
+            return jnp.mean((m(u) - target) ** 2)
+
+        loss, grads = nnx.value_and_grad(loss_fn)(model)
+        optimizer.update(model, grads)
+        return loss
+
+    for _ in range(50):
+        step(layer, optimizer, u, target)
+
+    lam, _, _ = layer._complex_matrices()
+    assert jnp.all(jnp.abs(lam) <= 1.0 + 1e-5), (
+        f"max |λ| = {float(jnp.max(jnp.abs(lam))):.4f} exceeded 1 after training"
+    )
+
+
+def test_s5diag_zoh_handles_zero_eigenvalue():
+    """FIX 7: a continuous eigenvalue of exactly 0 must not produce NaNs.
+
+    Forcing ``A_re[0] = A_im[0] = 0`` makes ``A_c[0] = 0``, so the ZOH factor
+    ``(λ - 1) / A_c`` is a raw 0/0. The analytic small-|A| limit is ``dt``; the
+    guard must supply it and keep the discretised B (and the forward pass)
+    finite.
+    """
+    rngs = nnx.Rngs(0)
+    layer = ssm.S5Diag(d_model=4, d_state=8, rngs=rngs)
+    # softplus(-inf) == 0 exactly, so A_re[0] = -softplus(-inf) = 0.
+    layer.A_re_raw = nnx.Param(layer.A_re_raw[...].at[0].set(-jnp.inf))
+    layer.A_im = nnx.Param(layer.A_im[...].at[0].set(0.0))
+
+    lam, B_discrete, _ = layer._complex_matrices()
+    assert jnp.all(jnp.isfinite(B_discrete))
+    assert jnp.isclose(jnp.abs(lam[0]), 1.0)
+
+    y = layer(jnp.ones((6, 2, 4)))
+    assert jnp.all(jnp.isfinite(y))
+
+
 # ---------------------------------------------------------------------------
 # composition with the rest of Spyx
 # ---------------------------------------------------------------------------

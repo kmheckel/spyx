@@ -91,7 +91,11 @@ def _parse_rnn_subgraph(graph: nir.NIRGraph) -> tuple:
     try:
         input_node = [n for n in sub_nodes if isinstance(n, nir.Input)][0]
         output_node = [n for n in sub_nodes if isinstance(n, nir.Output)][0]
-        lif_node = [n for n in sub_nodes if isinstance(n, (nir.LIF, nir.CubaLIF))][0]
+        # RIF exports its recurrent neuron as nir.IF (no leak), so IF must be in
+        # this lookup or the RIF subgraph import raises "could not find all nodes".
+        lif_node = [
+            n for n in sub_nodes if isinstance(n, (nir.IF, nir.LIF, nir.CubaLIF))
+        ][0]
         wrec_node = [n for n in sub_nodes if isinstance(n, (nir.Affine, nir.Linear))][0]
     except IndexError:
         raise ValueError(
@@ -142,6 +146,20 @@ def _nir_to_spyx_param(arr):
     return a.transpose(1, 2, 0) if a.ndim == 3 else a
 
 
+def _nnx_pad_to_nir(pad):
+    """Translate an ``nnx.Conv`` padding to NIR's convolution padding form.
+
+    NIR accepts the lowercase strings ``'same'`` / ``'valid'`` or explicit
+    (symmetric) integer pad amounts per spatial dim. nnx stores either an
+    uppercase ``'SAME'`` / ``'VALID'`` string or a sequence of ``(low, high)``
+    pairs; NIR only models symmetric padding, so the low pad of each pair is
+    used (spyx never emits asymmetric conv padding).
+    """
+    if isinstance(pad, str):
+        return pad.lower()
+    return tuple(int(lo) for (lo, _hi) in pad)
+
+
 def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
     """Converts a single NIR node to a Spyx/NNX module."""
 
@@ -179,8 +197,12 @@ def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
     elif isinstance(node, nir.SumPool2d):
         ksize = tuple(int(k) for k in np.atleast_1d(node.kernel_size))
         stride = tuple(int(s) for s in np.atleast_1d(node.stride))
+        # spyx SumPool only models VALID / SAME; a non-zero NIR pad amount means
+        # SAME (export records zeros for VALID, non-zero for SAME).
+        pad = np.atleast_1d(np.asarray(node.padding))
+        padding = "SAME" if np.any(pad != 0) else "VALID"
         # spyx runs channels-last, so pool the trailing spatial axes.
-        return SumPool(ksize, stride, "VALID", channel_axis=-1)
+        return SumPool(ksize, stride, padding, channel_axis=-1)
 
     elif isinstance(node, nir.IF):
         return IF(
@@ -462,17 +484,23 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
             # NNX Conv is HWIO, NIR is OIHW
             weight = np.array(layer.kernel[...].transpose((3, 2, 0, 1)))
             spatial = tuple(cur_shape[-2:])  # (N_x, N_y)
-            nodes[node_key] = nir.Conv2d(
+            conv_node = nir.Conv2d(
                 input_shape=spatial,  # required to disambiguate the shape
                 weight=weight,
                 bias=np.array(layer.bias[...]) if layer.bias is not None else None,
                 dilation=1,  # Default
                 stride=layer.strides,
-                padding="same",  # nir expects lowercase 'same' / 'valid'
+                # Honour the layer's actual padding (SAME / VALID / explicit)
+                # instead of assuming SAME, which mis-shapes VALID convs.
+                padding=_nnx_pad_to_nir(layer.padding),
                 groups=1,
             )
-            # 'same' padding preserves the spatial dims; channels -> out_features.
-            cur_shape = (int(layer.kernel.shape[-1]), *spatial)
+            nodes[node_key] = conv_node
+            # nir.Conv2d infers the exact output shape (C_out, N_x, N_y) from the
+            # padding/stride/dilation, so read it back rather than assuming SAME.
+            cur_shape = tuple(
+                int(d) for d in np.asarray(conv_node.output_type["output"])
+            )
 
         elif isinstance(layer, SumPool):
             ksize = np.atleast_1d(np.asarray(layer.window_shape)).astype(int)
@@ -481,17 +509,30 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
                 ksize = np.array([int(ksize[0])] * 2)
             if stride.size == 1:
                 stride = np.array([int(stride[0])] * 2)
+            ch, h, w = cur_shape
+            if str(layer.padding).upper() == "SAME":
+                # SAME: output = ceil(in / stride); record the explicit symmetric
+                # NIR pad amount that realises that output size.
+                out_h = -(-h // int(stride[0]))
+                out_w = -(-w // int(stride[1]))
+                # Total pad each spatial dim needs to reach the SAME output size;
+                # stored as-is so a non-zero value flags SAME on re-import (spyx
+                # SumPool models only VALID / SAME, not per-side pad amounts).
+                pad_h = max(0, (out_h - 1) * int(stride[0]) + int(ksize[0]) - h)
+                pad_w = max(0, (out_w - 1) * int(stride[1]) + int(ksize[1]) - w)
+                padding = np.array([pad_h, pad_w])
+                cur_shape = (ch, out_h, out_w)
+            else:  # VALID pooling shrinks the (channels-first) spatial dims.
+                padding = np.array([0, 0])
+                cur_shape = (
+                    ch,
+                    (h - int(ksize[0])) // int(stride[0]) + 1,
+                    (w - int(ksize[1])) // int(stride[1]) + 1,
+                )
             nodes[node_key] = nir.SumPool2d(
                 kernel_size=ksize,
                 stride=stride,
-                padding=np.array([0, 0]),  # spyx SumPool uses VALID padding
-            )
-            # VALID pooling shrinks the (channels-first) spatial dims.
-            ch, h, w = cur_shape
-            cur_shape = (
-                ch,
-                (h - int(ksize[0])) // int(stride[0]) + 1,
-                (w - int(ksize[1])) // int(stride[1]) + 1,
+                padding=padding,
             )
 
         elif isinstance(layer, IF):

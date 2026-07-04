@@ -44,20 +44,20 @@ class ALIF(nnx.Module):
 
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(
+                nnx.initializers.truncated_normal(stddev=0.25)(
                     rngs.params(), self.hidden_shape
                 )
-                + 0.25
+                + 0.5
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
 
         if gamma is None:
             self.gamma = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(
+                nnx.initializers.truncated_normal(stddev=0.25)(
                     rngs.params(), self.hidden_shape
                 )
-                + 0.25
+                + 0.5
             )
         else:
             self.gamma = nnx.Param(jnp.full((), gamma))
@@ -168,10 +168,10 @@ class LIF(nnx.Module):
 
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(
+                nnx.initializers.truncated_normal(stddev=0.25)(
                     rngs.params(), self.hidden_shape
                 )
-                + 0.25
+                + 0.5
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
@@ -264,10 +264,10 @@ class PSU_LIF(nnx.Module):
 
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(
+                nnx.initializers.truncated_normal(stddev=0.25)(
                     rngs.params(), self.hidden_shape
                 )
-                + 0.25
+                + 0.5
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
@@ -325,20 +325,20 @@ class CuBaLIF(nnx.Module):
 
         if alpha is None:
             self.alpha = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(
+                nnx.initializers.truncated_normal(stddev=0.25)(
                     rngs.params(), self.hidden_shape
                 )
-                + 0.25
+                + 0.5
             )
         else:
             self.alpha = nnx.Param(jnp.full((), alpha))
 
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(
+                nnx.initializers.truncated_normal(stddev=0.25)(
                     rngs.params(), self.hidden_shape
                 )
-                + 0.25
+                + 0.5
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
@@ -417,10 +417,10 @@ class RLIF(nnx.Module):
 
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(
+                nnx.initializers.truncated_normal(stddev=0.25)(
                     rngs.params(), self.hidden_shape
                 )
-                + 0.25
+                + 0.5
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
@@ -466,20 +466,20 @@ class RCuBaLIF(nnx.Module):
 
         if alpha is None:
             self.alpha = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(
+                nnx.initializers.truncated_normal(stddev=0.25)(
                     rngs.params(), self.hidden_shape
                 )
-                + 0.25
+                + 0.5
             )
         else:
             self.alpha = nnx.Param(jnp.full((), alpha))
 
         if beta is None:
             self.beta = nnx.Param(
-                nnx.initializers.truncated_normal(stddev=0.5)(
+                nnx.initializers.truncated_normal(stddev=0.25)(
                     rngs.params(), self.hidden_shape
                 )
-                + 0.25
+                + 0.5
             )
         else:
             self.beta = nnx.Param(jnp.full((), beta))
@@ -506,11 +506,20 @@ class RCuBaLIF(nnx.Module):
 
 class ActivityRegularization(nnx.Module):
     """
-    Add state to the SNN to track the cumulative number of spikes emitted per neuron per batch.
+    Track the cumulative number of spikes emitted per neuron per batch.
 
-    The spike count is exposed as ``self.spike_count`` (an ``nnx.Variable``) and can be
-    fed to ``spyx.fn.silence_reg`` / ``spyx.fn.sparsity_reg`` for activity penalties.
-    Use ``reset(batch_size)`` between training steps to zero the buffer.
+    The running spike count is threaded through :func:`spyx.nn.run` (and
+    :class:`Sequential`) as part of the scan carry, exactly like a neuron's
+    membrane state: :meth:`initial_state` seeds a zero buffer and each
+    :meth:`__call__` returns the incoming spikes unchanged plus the updated
+    count. The final accumulated count comes back as this layer's entry in the
+    ``final_state`` returned by ``run``, and can be fed to
+    ``spyx.fn.silence_reg`` / ``spyx.fn.sparsity_reg`` for activity penalties.
+
+    Threading the count through the carry (rather than mutating an
+    ``nnx.Variable`` in place) is what lets it accumulate inside the raw
+    ``jax.lax.scan`` used by :func:`spyx.nn.run`, where in-place variable
+    mutation raises ``TraceContextError``.
     """
 
     def __init__(self, hidden_shape, batch_size=1, dtype=jnp.float32):
@@ -525,18 +534,18 @@ class ActivityRegularization(nnx.Module):
             else (hidden_shape,)
         )
         self.dtype = dtype
-        self.spike_count = nnx.Variable(
-            jnp.zeros((batch_size,) + self.hidden_shape, dtype=dtype)
-        )
 
-    def reset(self, batch_size):
-        self.spike_count[...] = jnp.zeros(
-            (batch_size,) + self.hidden_shape, dtype=self.dtype
-        )
+    def initial_state(self, batch_size):
+        return jnp.zeros((batch_size,) + self.hidden_shape, dtype=self.dtype)
 
-    def __call__(self, spikes):
-        self.spike_count[...] = self.spike_count[...] + spikes.astype(self.dtype)
-        return spikes
+    def __call__(self, spikes, spike_count):
+        """
+        :spikes: Spikes emitted by the previous layer at this timestep.
+        :spike_count: Running per-neuron spike count carried through the scan.
+        :return: ``(spikes, spike_count + spikes)`` -- the spikes pass through
+            unchanged while the count accumulates.
+        """
+        return spikes, spike_count + spikes.astype(self.dtype)
 
 
 def PopulationCode(num_classes):

@@ -78,6 +78,70 @@ def test_nir_export_import_rcubalif():
     assert jnp.allclose(original.layers[1].beta[...], imported.layers[1].beta[...])
 
 
+def test_nir_export_import_rif():
+    """RIF exports its recurrent neuron as nir.IF; the RNN-subgraph parser must
+    find an nir.IF (not only LIF/CubaLIF) or the whole RIF import path is dead.
+    """
+    rngs = nnx.Rngs(0)
+    original = nn.Sequential(
+        nnx.Linear(8, 10, use_bias=False, rngs=rngs),
+        nn.RIF((10,), rngs=rngs),
+    )
+    x = jax.random.normal(jax.random.PRNGKey(11), (6, 4, 8))
+    imported, _ = _roundtrip(original, (8,), (10,), x)
+
+    assert isinstance(imported.layers[1], nn.RIF)
+    assert jnp.allclose(
+        original.layers[1].recurrent_w[...], imported.layers[1].recurrent_w[...]
+    )
+
+
+def test_nir_export_import_conv_valid_padding():
+    """VALID-padding conv must shrink the spatial dims on export (the old code
+    hardcoded SAME and kept them unchanged, mis-shaping every downstream layer).
+    """
+    rngs = nnx.Rngs(0)
+    original = nn.Sequential(
+        nnx.Conv(2, 4, (3, 3), padding="VALID", rngs=rngs),  # 8x8 -> 6x6
+        nn.Flatten(),
+        nnx.Linear(4 * 6 * 6, 10, rngs=rngs),
+        nn.LIF((10,), beta=0.8, rngs=rngs),
+    )
+    x = jax.random.normal(jax.random.PRNGKey(12), (4, 3, 8, 8, 2))  # (T,B,H,W,C)
+    _, graph = _roundtrip(original, (2, 8, 8), (10,), x)
+
+    # Exported conv output is channels-first (C_out, N_x, N_y) = (4, 6, 6).
+    assert tuple(int(d) for d in graph.nodes["layer_0"].output_type["output"]) == (
+        4,
+        6,
+        6,
+    )
+
+
+def test_nir_export_import_sumpool_same_padding():
+    """SAME-padding SumPool must export explicit (non-zero) NIR pad and re-import
+    as a SAME pool, reproducing the original output on an odd spatial size.
+    """
+    rngs = nnx.Rngs(0)
+    original = nn.Sequential(
+        nnx.Conv(2, 4, (3, 3), rngs=rngs),  # SAME: 5x5 -> 5x5
+        nn.IF((5, 5, 4)),
+        nn.SumPool((2, 2), (2, 2), "SAME"),  # ceil(5/2) -> 3x3
+        nn.Flatten(),
+        nnx.Linear(4 * 3 * 3, 8, rngs=rngs),
+        nn.LIF((8,), beta=0.8, rngs=rngs),
+    )
+    x = jax.random.normal(jax.random.PRNGKey(13), (4, 3, 5, 5, 2))  # (T,B,H,W,C)
+    imported, graph = _roundtrip(original, (2, 5, 5), (8,), x)
+
+    # SAME pool records a non-zero NIR pad amount ...
+    assert bool((graph.nodes["layer_2"].padding != 0).any())
+    # ... and re-imports as a SAME SumPool.
+    pool = imported.layers[2]
+    assert isinstance(pool, nn.SumPool)
+    assert pool.padding == "SAME"
+
+
 def test_nir_export_import_if():
     """IF export previously passed r=1 (int) to nir.IF, which requires arrays."""
     rngs = nnx.Rngs(0)

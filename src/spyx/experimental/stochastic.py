@@ -58,10 +58,10 @@ class StochasticAssociativeLIF(nnx.Module):
             self.spike = lambda x, k: x
 
         self.beta = nnx.Param(
-            nnx.initializers.truncated_normal(stddev=0.5)(
+            nnx.initializers.truncated_normal(stddev=0.25)(
                 rngs.params(), self.hidden_shape
             )
-            + 0.25
+            + 0.5
         )
 
     # x.shape = B, T, C
@@ -80,16 +80,16 @@ class StochasticAssociativeCuBaLIF(nnx.Module):
         self.spike = refractory_sigmoid_bernoulli(k, threshold)
 
         self.alpha = nnx.Param(
-            nnx.initializers.truncated_normal(stddev=0.5)(
+            nnx.initializers.truncated_normal(stddev=0.25)(
                 rngs.params(), self.hidden_shape
             )
-            + 0.25
+            + 0.5
         )
         self.beta = nnx.Param(
-            nnx.initializers.truncated_normal(stddev=0.5)(
+            nnx.initializers.truncated_normal(stddev=0.25)(
                 rngs.params(), self.hidden_shape
             )
-            + 0.25
+            + 0.5
         )
 
     def __call__(self, key, u):
@@ -116,26 +116,25 @@ class SPSN(nnx.Module):
         self.spike = sigmoid_bernoulli(k, threshold)
 
         self.beta = nnx.Param(
-            nnx.initializers.truncated_normal(stddev=0.5)(
+            nnx.initializers.truncated_normal(stddev=0.25)(
                 rngs.params(), self.hidden_shape
             )
-            + 0.25
+            + 0.5
         )
 
     def __call__(self, key, x):
         beta = jnp.clip(self.beta[:], 0, 1)
 
-        B = jnp.power(beta, jnp.arange(x.shape[1])) * (1 - beta)
+        # per-neuron, per-timestep decay kernel B[t, c] = beta[c]**t * (1 - beta[c])
+        T = x.shape[1]
+        B = jnp.power(beta[None, :], jnp.arange(T)[:, None]) * (1 - beta[None, :])
 
-        fft_B = jnp.expand_dims(jnp.fft.rfft(B, n=2 * x.shape[1]), 1)
-        fft_X = jnp.fft.rfft(x, n=2 * x.shape[1], axis=1)
+        fft_B = jnp.fft.rfft(B, n=2 * T, axis=0)[None, :, :]
+        fft_X = jnp.fft.rfft(x, n=2 * T, axis=1)
 
-        V = jnp.fft.irfft(fft_X * fft_B, n=2 * x.shape[1], axis=1)[
-            :,
-            : x.shape[1] :,
-        ]
+        V = jnp.fft.irfft(fft_X * fft_B, n=2 * T, axis=1)[:, :T, :]
 
         # calculate whether spike is generated, and update membrane potential
-        spikes = self.spike(key, V)
+        spikes = self.spike(V, key)
 
         return spikes, V

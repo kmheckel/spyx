@@ -120,6 +120,28 @@ def test_topk_router_leaves_unselected_slots_unchanged():
     assert jnp.max(jnp.abs(unchanged)) == 0.0
 
 
+def test_topk_ties_keep_exactly_k_slots():
+    """Boundary ties must not inflate the active set: exactly k slots survive.
+
+    Feed a router row whose two largest entries are *equal* at k=1. A value
+    threshold (``r >= kth``) would keep both tied slots (k+1 active); index-based
+    top-k must keep exactly one.
+    """
+    # Two equal maxima (0.9) at positions 0 and 1, rest strictly smaller.
+    r = jnp.array([[0.9, 0.9, 0.1, 0.2, 0.3]])
+    hard = raven._straight_through_topk(r, 1)
+    assert jnp.sum(hard > 0) == 1
+    # Shielding: every unselected slot is exactly zero.
+    assert jnp.sum(hard == 0.0) == r.shape[-1] - 1
+    # The surviving entry keeps its (soft) gate value unchanged.
+    assert jnp.max(hard) == r[0, 0]
+
+    # And with several tied rows / larger k the count is exactly k per row.
+    r2 = jnp.array([[0.5, 0.5, 0.5, 0.5], [0.7, 0.7, 0.1, 0.7]])
+    hard2 = raven._straight_through_topk(r2, 2)
+    assert jnp.array_equal(jnp.sum(hard2 > 0, axis=-1), jnp.array([2, 2]))
+
+
 # ---------------------------------------------------------------------------
 # gradients flow to router, decay, write, readout
 # ---------------------------------------------------------------------------

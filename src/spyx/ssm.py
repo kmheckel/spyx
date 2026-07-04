@@ -169,6 +169,15 @@ class LRU(nnx.Module):
         return y
 
 
+def _inv_softplus(y: jax.Array) -> jax.Array:
+    """Inverse of ``softplus``: return ``x`` such that ``softplus(x) == y``.
+
+    Defined for ``y > 0`` as ``log(exp(y) - 1)``; uses :func:`jnp.expm1` for
+    numerical stability near zero.
+    """
+    return jnp.log(jnp.expm1(y))
+
+
 def _hippo_legs_diagonal(d_state: int) -> jax.Array:
     """Diagonal approximation of the HiPPO-LegS transition matrix.
 
@@ -202,7 +211,12 @@ class S5Diag(nnx.Module):
         k_dt, k_B, k_C, k_D = jax.random.split(rngs.params(), 4)
 
         legs = _hippo_legs_diagonal(d_state)
-        self.A_re = nnx.Param(legs.real)
+        # Store the continuous-time real part through an inverse-softplus so
+        # that ``A_re = -softplus(A_re_raw) <= 0`` for *any* value the raw param
+        # takes. This keeps |λ| = exp(A_re·dt) ≤ 1 throughout training (the
+        # HiPPO-LegS real part is a constant -0.5, so this simply reparameterises
+        # a strictly-negative quantity without changing the initial spectrum).
+        self.A_re_raw = nnx.Param(_inv_softplus(-legs.real))
         self.A_im = nnx.Param(legs.imag)
 
         log_dt = jax.random.uniform(
@@ -228,13 +242,23 @@ class S5Diag(nnx.Module):
 
     def _complex_matrices(self) -> tuple[jax.Array, jax.Array, jax.Array]:
         """Discretise (A, B) via zero-order hold; assemble complex C."""
-        A_c = (self.A_re[...] + 1j * self.A_im[...]).astype(jnp.complex64)
+        # A_re = -softplus(raw) ≤ 0 ⇒ the continuous eigenvalue stays in the
+        # left half-plane, so |λ| = exp(A_re·dt) ≤ 1 for any dt > 0.
+        A_re = -jax.nn.softplus(self.A_re_raw[...])
+        A_c = (A_re + 1j * self.A_im[...]).astype(jnp.complex64)
         dt = jnp.exp(self.log_dt[...]).astype(A_c.dtype)
         lam = jnp.exp(A_c * dt)
         # ZOH discretisation: B_d = A^{-1} (e^{A dt} - I) B ≈ dt * B when A is small.
         B_c = (self.B_re[...] + 1j * self.B_im[...]).astype(jnp.complex64)
         C_c = (self.C_re[...] + 1j * self.C_im[...]).astype(jnp.complex64)
-        B_discrete = ((lam - 1.0) / A_c)[:, None] * B_c
+        # Guard the A^{-1} factor against 0/0: as |A_c| → 0 the analytic limit of
+        # (e^{A dt} - 1) / A is exactly dt. Using a safe denominator in the
+        # unselected branch keeps both the forward value and its gradient finite.
+        eps = 1e-4
+        near_zero = jnp.abs(A_c) < eps
+        A_c_safe = jnp.where(near_zero, jnp.ones_like(A_c), A_c)
+        factor = jnp.where(near_zero, dt, (lam - 1.0) / A_c_safe)
+        B_discrete = factor[:, None] * B_c
         return lam, B_discrete, C_c
 
     def __call__(self, u: jax.Array) -> jax.Array:

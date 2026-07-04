@@ -569,7 +569,7 @@ class SHD_loader:
         :split: ``"train"`` or ``"test"``.
         :return: ``(obs_NBTC, labels_NB)`` — ``obs`` is
             ``uint8[n_batches, batch_size, T_packed, channels]`` with
-            time packed along axis 1, ``labels`` is
+            time packed along axis 2 (axis 1 is ``batch_size``), ``labels`` is
             ``int[n_batches, batch_size]``. Trailing partial batch is
             dropped so the training loop can scan over a fixed ``N``.
         """

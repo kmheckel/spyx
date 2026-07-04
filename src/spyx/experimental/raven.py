@@ -70,9 +70,11 @@ def _straight_through_topk(r: jax.Array, k: int) -> jax.Array:
     m = r.shape[-1]
     if k >= m:
         return r
-    # kth-largest value per row as an inclusive threshold.
-    kth = jnp.sort(r, axis=-1)[..., m - k][..., None]
-    mask = (r >= kth).astype(r.dtype)
+    # Select the k largest entries by *index* (not by a value threshold) so that
+    # boundary ties keep exactly k slots -- top_k breaks ties deterministically,
+    # whereas a ``r >= kth`` threshold would keep every tied entry (> k slots).
+    _, idx = jax.lax.top_k(r, k)  # (..., k) distinct indices
+    mask = jnp.sum(jax.nn.one_hot(idx, m, dtype=r.dtype), axis=-2)  # (..., M)
     r_hard = r * mask
     # Forward == r_hard; gradient == d r  (STE).
     return r + jax.lax.stop_gradient(r_hard - r)

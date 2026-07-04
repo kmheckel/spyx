@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 from flax import nnx
 
@@ -39,15 +40,15 @@ def test_activity_reg():
     spikes = jnp.array([[0, 1], [1, 0]], dtype=jnp.float32)
     model = nn.ActivityRegularization(hidden_shape=(2,), batch_size=2)
 
-    out = model(spikes)
+    count = model.initial_state(batch_size=2)
+    assert jnp.array_equal(count, jnp.zeros((2, 2), dtype=jnp.float32))
+
+    out, count = model(spikes, count)
     assert jnp.array_equal(out, spikes)
-    assert jnp.array_equal(model.spike_count[...], spikes)
+    assert jnp.array_equal(count, spikes)
 
-    model(spikes)
-    assert jnp.array_equal(model.spike_count[...], spikes * 2)
-
-    model.reset(batch_size=2)
-    assert jnp.array_equal(model.spike_count[...], jnp.zeros((2, 2), dtype=jnp.float32))
+    out, count = model(spikes, count)
+    assert jnp.array_equal(count, spikes * 2)
 
 
 def test_activity_reg_under_jit():
@@ -55,12 +56,13 @@ def test_activity_reg_under_jit():
     model = nn.ActivityRegularization(hidden_shape=(2,), batch_size=2)
 
     @nnx.jit
-    def step(m, s):
-        return m(s)
+    def step(m, s, c):
+        return m(s, c)
 
-    out = step(model, spikes)
+    count = model.initial_state(batch_size=2)
+    out, count = step(model, spikes, count)
     assert jnp.array_equal(out, spikes)
-    assert jnp.array_equal(model.spike_count[...], spikes)
+    assert jnp.array_equal(count, spikes)
 
 
 def test_if():
@@ -207,3 +209,60 @@ def test_flatten_collapses_non_batch_dims():
     seq = nn.Sequential(nn.Flatten(), nnx.Linear(18, 5, rngs=nnx.Rngs(0)))
     out, _ = seq(x, seq.initial_state(4))
     assert out.shape == (4, 5)
+
+
+def test_default_decay_init_no_negatives():
+    """Default decay-param init must lie in [0, 1] with NO negatives.
+
+    Regression for the Haiku->NNX port bug where the init produced values in
+    [-0.75, 1.25], leaving ~30% of decay params negative; those get clipped to
+    0 in __call__ and freeze there (clip zeroes the gradient).
+    """
+    rngs = nnx.Rngs(0)
+    hidden_shape = (4096,)
+
+    lif = nn.LIF(hidden_shape, rngs=rngs)
+    alif = nn.ALIF(hidden_shape, rngs=rngs)
+    cuba = nn.CuBaLIF(hidden_shape, rngs=rngs)
+    psu = nn.PSU_LIF(hidden_shape, rngs=rngs)
+
+    decay_params = [
+        lif.beta[...],
+        alif.beta[...],
+        alif.gamma[...],
+        cuba.alpha[...],
+        cuba.beta[...],
+        psu.beta[...],
+    ]
+    for p in decay_params:
+        assert jnp.all(p >= 0.0), "decay init produced negative values"
+        assert jnp.all(p <= 1.0), "decay init produced values above 1"
+        # sanity: distribution actually populated (not all identical / degenerate)
+        assert p.shape == hidden_shape
+
+
+def test_activity_reg_accumulates_under_run():
+    """Sequential(LIF, ActivityRegularization) through nn.run accumulates spikes.
+
+    The final carried spike count must equal the per-neuron sum of the emitted
+    spikes over the time axis.
+    """
+    rngs = nnx.Rngs(0)
+    C = 6
+    model = nn.Sequential(
+        nn.LIF((C,), rngs=rngs),
+        nn.ActivityRegularization((C,)),
+    )
+
+    T, B = 20, 4
+    x = jax.random.normal(jax.random.key(0), (T, B, C)) * 2.0
+
+    outputs, final_state = nn.run(model, x)
+    assert outputs.shape == (T, B, C)
+
+    # ActivityRegularization is the second (index 1) layer of the Sequential.
+    accumulated = final_state[1]
+    assert accumulated.shape == (B, C)
+
+    expected = jnp.sum(outputs, axis=0)
+    assert jnp.array_equal(accumulated, expected)
