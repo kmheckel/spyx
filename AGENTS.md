@@ -203,7 +203,7 @@ forces JAX onto CPU and provides seeded `rngs` / `key` fixtures.
 
 ### Continuous integration
 `.github/workflows/ci.yml` runs four jobs on every PR: `lint` (ruff check +
-format), `test` (pytest matrix over Python 3.11/3.12 with the quant extra),
+format), `test` (pytest matrix over Python 3.11/3.12/3.13 with the quant extra),
 `docs` (`mkdocs build --strict`), and `smoke` (notebook-API drift). Match all
 four locally before pushing. `python-publish.yml` builds and publishes to PyPI
 when a GitHub release is published.
@@ -259,7 +259,7 @@ uv run mkdocs build        # Build static site
 ## Configuration
 
 ### Ruff (`pyproject.toml`)
-- Target: Python 3.11–3.12 (`requires-python = ">=3.11, <3.13"`)
+- Target: Python 3.11–3.13 (`requires-python = ">=3.11, <3.14"`)
 - Line length: 88 (Black-compatible)
 - Enabled rules: Pyflakes (F), pycodestyle errors (E), flake8-bugbear (B), import sorting (I)
 - Excluded: research/, docs/, scripts/, data/

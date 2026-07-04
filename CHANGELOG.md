@@ -32,7 +32,7 @@ modules. This is a **breaking release** — see the
   it over the time axis of `input_data`; `return_all_states=True` also returns
   per-timestep neuron states (membrane traces).
 - **Mixed precision** via `jmp` removed; pass `dtype=` / `param_dtype=` to layers.
-- **Python support** is now `>=3.11, <3.13` (was `>=3.10`).
+- **Python support** is now `>=3.11, <3.14` (was `>=3.10`).
 - Dependencies: added `flax>=0.11`, `grain`; removed `dm-haiku`, `jmp`.
 
 ### Added
