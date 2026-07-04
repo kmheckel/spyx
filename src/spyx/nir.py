@@ -1,59 +1,61 @@
 import jax
 import jax.numpy as jnp
-
 import nir
 import numpy as np
-import haiku as hk
+from flax import nnx
 
-from .nn import IF
-from .nn import LIF
-from .nn import CuBaLIF
+from .nn import (
+    IF,
+    LIF,
+    PSU_LIF,
+    RIF,
+    RLIF,
+    CuBaLIF,
+    Flatten,
+    RCuBaLIF,
+    Sequential,
+    SumPool,
+    run,
+)
+from .phasor import ResonateFire
 
-from .nn import RIF
-from .nn import RLIF
-from .nn import RCuBaLIF
-
-from .nn import SumPool
 
 def reorder_layers(init_params, trained_params):
     """
-    Some optimization libraries may permute the keys of the network's PyTree; 
+    Some optimization libraries may permute the keys of the network's PyTree;
     this is an issue as exporting to NIR assumes the keys are in their original order
     after initializing the network. This simple function takes the original and trained parameters
     and returns the trained parameters in the proper order for exportation.
     """
-    return {k:trained_params[k] for k in init_params.keys() }
+    return {k: trained_params[k] for k in init_params.keys()}
+
 
 def _create_rnn_subgraph(graph: nir.NIRGraph, lif_nk: str, w_nk: str) -> nir.NIRGraph:
     """Take a NIRGraph plus the node keys for a LIF and a W_rec, and return a new NIRGraph
     which has the RNN subgraph replaced with a subgraph (i.e., a single NIRGraph node).
     """
-    # NOTE: assuming that the LIF and W_rec have keys of form `xyz.abc`
-    sg_key = lif_nk.split('.')[0]  # TODO: make this more general?
+    sg_key = lif_nk.split(".")[0]
 
-    # create subgraph for RNN
     sg_edges = [
-        (lif_nk, w_nk), (w_nk, lif_nk), (lif_nk, f'{sg_key}.output'), (f'{sg_key}.input', w_nk)
+        (lif_nk, w_nk),
+        (w_nk, lif_nk),
+        (lif_nk, f"{sg_key}.output"),
+        (f"{sg_key}.input", w_nk),
     ]
     sg_nodes = {
         lif_nk: graph.nodes[lif_nk],
         w_nk: graph.nodes[w_nk],
-        f'{sg_key}.input': nir.Input(graph.nodes[lif_nk].input_type),
-        f'{sg_key}.output': nir.Output(graph.nodes[lif_nk].output_type),
+        f"{sg_key}.input": nir.Input(graph.nodes[lif_nk].input_type),  # ty: ignore[unresolved-attribute]  # untyped NIR node
+        f"{sg_key}.output": nir.Output(graph.nodes[lif_nk].output_type),  # ty: ignore[unresolved-attribute]  # untyped NIR node
     }
     sg = nir.NIRGraph(nodes=sg_nodes, edges=sg_edges)
 
-    # remove subgraph edges from graph
     graph.edges = [e for e in graph.edges if e not in [(lif_nk, w_nk), (w_nk, lif_nk)]]
-    # remove subgraph nodes from graph
     graph.nodes = {k: v for k, v in graph.nodes.items() if k not in [lif_nk, w_nk]}
 
-    # change edges of type (x, lif_nk) to (x, sg_key)
     graph.edges = [(e[0], sg_key) if e[1] == lif_nk else e for e in graph.edges]
-    # change edges of type (lif_nk, x) to (sg_key, x)
     graph.edges = [(sg_key, e[1]) if e[0] == lif_nk else e for e in graph.edges]
 
-    # insert subgraph into graph and return
     graph.nodes[sg_key] = sg
     return graph
 
@@ -61,10 +63,9 @@ def _create_rnn_subgraph(graph: nir.NIRGraph, lif_nk: str, w_nk: str) -> nir.NIR
 def _replace_rnn_subgraph_with_nirgraph(graph: nir.NIRGraph) -> nir.NIRGraph:
     """Take a NIRGraph and replace any RNN subgraphs with a single NIRGraph node."""
     if len(set(graph.edges)) != len(graph.edges):
-        print('[WARNING] duplicate edges found, removing')
+        print("[WARNING] duplicate edges found, removing")
         graph.edges = list(set(graph.edges))
 
-    # find cycle of LIF <> Dense nodes
     for edge1 in graph.edges:
         for edge2 in graph.edges:
             if not edge1 == edge2:
@@ -75,446 +76,556 @@ def _replace_rnn_subgraph_with_nirgraph(graph: nir.NIRGraph) -> nir.NIRGraph:
                     w_n = graph.nodes[w_nk]
                     is_lif = isinstance(lif_n, (nir.LIF, nir.CubaLIF))
                     is_dense = isinstance(w_n, (nir.Affine, nir.Linear))
-                    # check if the dense only connects to the LIF
                     w_out_nk = [e[1] for e in graph.edges if e[0] == w_nk]
                     w_in_nk = [e[0] for e in graph.edges if e[1] == w_nk]
                     is_rnn = len(w_out_nk) == 1 and len(w_in_nk) == 1
-                    # check if we found an RNN - if so, then parse it
                     if is_rnn and is_lif and is_dense:
-                        print('[INFO] found RNN subgraph, replacing with NIRGraph node')
-                        print(f'[INFO] subgraph edges: {edge1}, {edge2}')
+                        print("[INFO] found RNN subgraph, replacing with NIRGraph node")
                         graph = _create_rnn_subgraph(graph, edge1[0], edge1[1])
     return graph
 
 
-def _parse_rnn_subgraph(graph: nir.NIRGraph) -> (nir.NIRNode, nir.NIRNode, int):
-    """Try parsing the graph as a RNN subgraph.
-
-    Assumes four nodes: Input, Output, LIF | CubaLIF, Affine | Linear
-    Checks that all nodes have consistent shapes.
-    Will throw an error if either not all nodes are found or consistent shapes are found.
-
-    Returns:
-        lif_node: LIF | CubaLIF node
-        wrec_node: Affine | Linear node
-        lif_size: int, number of neurons in the RNN
-    """
+def _parse_rnn_subgraph(graph: nir.NIRGraph) -> tuple:
     sub_nodes = graph.nodes.values()
-    assert len(sub_nodes) == 4, 'only 4-node RNN allowed in subgraph'
+    assert len(sub_nodes) == 4, "only 4-node RNN allowed in subgraph"
     try:
         input_node = [n for n in sub_nodes if isinstance(n, nir.Input)][0]
         output_node = [n for n in sub_nodes if isinstance(n, nir.Output)][0]
-        lif_node = [n for n in sub_nodes if isinstance(n, (nir.LIF, nir.CubaLIF))][0]
+        # RIF exports its recurrent neuron as nir.IF (no leak), so IF must be in
+        # this lookup or the RIF subgraph import raises "could not find all nodes".
+        lif_node = [
+            n for n in sub_nodes if isinstance(n, (nir.IF, nir.LIF, nir.CubaLIF))
+        ][0]
         wrec_node = [n for n in sub_nodes if isinstance(n, (nir.Affine, nir.Linear))][0]
     except IndexError:
-        raise ValueError('invalid RNN subgraph - could not find all required nodes')
+        raise ValueError(
+            "invalid RNN subgraph - could not find all required nodes"
+        ) from None
     lif_size = list(input_node.input_type.values())[0][0]
-    assert lif_size == list(output_node.output_type.values())[0][0], 'output size mismatch'
-    assert lif_size == lif_node.v_threshold.size, 'lif size mismatch (v_threshold)'
-    assert lif_size == wrec_node.weight.shape[0], 'w_rec shape mismatch'
-    assert lif_size == wrec_node.weight.shape[1], 'w_rec shape mismatch'
+    assert lif_size == list(output_node.output_type.values())[0][0], (
+        "output size mismatch"
+    )
+    assert lif_size == lif_node.v_threshold.size, "lif size mismatch (v_threshold)"
+    assert lif_size == wrec_node.weight.shape[0], "w_rec shape mismatch"
+    assert lif_size == wrec_node.weight.shape[1], "w_rec shape mismatch"
 
     return lif_node, wrec_node, lif_size
 
 
-def _nir_node_to_spyx_node(node_pair: nir.NIRNode):
-    """Converts a NIR node to a Spyx node."""
-    # NOTE: all nodes have node.input_type and node.output_type
-    # which specify the input and output shape of the node.
-    node, next_node = node_pair
+# --- shape conventions -------------------------------------------------------
+# NIR tensors are channels-first (C, H, W); spyx / NNX run channels-last
+# (B, H, W, C). A spyx neuron after a conv therefore holds channels-last
+# (H, W, C) state/parameters. These helpers bridge the two so that
+# convolutional models round-trip.
+
+
+def _spyx_param_to_nir(param, nir_shape):
+    """spyx neuron param -> NIR array of ``nir_shape`` (channels-first).
+
+    A scalar fills the shape; a channels-last (H, W, C) param is transposed to
+    channels-first (C, H, W); a 1-D (dense) param is returned unchanged.
+    """
+    p = np.asarray(param, dtype=np.float32)
+    nir_shape = tuple(int(d) for d in nir_shape)
+    if p.ndim == 0:
+        return np.full(nir_shape, float(p), dtype=np.float32)
+    if len(nir_shape) == 3:  # (H, W, C) -> (C, H, W)
+        return p.transpose(2, 0, 1).astype(np.float32)
+    return p.astype(np.float32)
+
+
+def _nir_to_spyx_shape(shape):
+    """NIR channels-first (C, H, W) -> spyx channels-last (H, W, C); 1-D unchanged."""
+    shape = tuple(int(d) for d in shape)
+    return (shape[1], shape[2], shape[0]) if len(shape) == 3 else shape
+
+
+def _nir_to_spyx_param(arr):
+    """Transpose a channels-first (C, H, W) NIR param to channels-last (H, W, C)."""
+    a = np.asarray(arr)
+    return a.transpose(1, 2, 0) if a.ndim == 3 else a
+
+
+def _nnx_pad_to_nir(pad):
+    """Translate an ``nnx.Conv`` padding to NIR's convolution padding form.
+
+    NIR accepts the lowercase strings ``'same'`` / ``'valid'`` or explicit
+    (symmetric) integer pad amounts per spatial dim. nnx stores either an
+    uppercase ``'SAME'`` / ``'VALID'`` string or a sequence of ``(low, high)``
+    pairs; NIR only models symmetric padding, so the low pad of each pair is
+    used (spyx never emits asymmetric conv padding).
+    """
+    if isinstance(pad, str):
+        return pad.lower()
+    return tuple(int(lo) for (lo, _hi) in pad)
+
+
+def _nir_node_to_spyx_module(node, rngs: nnx.Rngs):
+    """Converts a single NIR node to a Spyx/NNX module."""
 
     if isinstance(node, (nir.Input, nir.Output)):
-        node.input_type
         return None
 
     elif isinstance(node, nir.Affine):
-        # NOTE: node.weight, node.bias are npy arrays
-        return hk.Linear(node.weight.shape[-1], with_bias=True)
+        return nnx.Linear(node.weight.shape[1], node.weight.shape[0], rngs=rngs)
 
     elif isinstance(node, nir.Linear):
-        # NOTE: node.weight
-        return hk.Linear(node.weight.shape[-1], with_bias=False)
-
-    elif isinstance(node, nir.Conv1d):  # not needed atm
-        # NOTE: node.bias, node.weight
-        # node.dilation, node.groups, node.padding, node.stride
-        pass
+        return nnx.Linear(
+            node.weight.shape[1], node.weight.shape[0], use_bias=False, rngs=rngs
+        )
 
     elif isinstance(node, nir.Conv2d):
-        # NOTE: node.bias, node.weight
-        # node.dilation, node.groups, node.padding, node.stride
-        p0, p1 = node.padding[0], node.padding[1]
-        return hk.Conv2D(
-            output_channels=node.weight.shape[0],
-            kernel_shape=node.weight.shape[-1],
-            rate=node.dilation.tolist(),
-            padding=[(p0, p0), (p1, p1)],
-            stride=node.stride.tolist(),
-            data_format="NCHW",
-            feature_group_count=node.groups,
+        # nir stores 'same'/'valid' as a lowercase string, or an int pair.
+        pad = node.padding
+        if isinstance(pad, str):
+            padding = pad.upper()  # nnx.Conv wants 'SAME' / 'VALID'
+        else:
+            p0, p1 = int(pad[0]), int(pad[1])
+            padding = [(p0, p0), (p1, p1)]
+        stride = np.atleast_1d(np.asarray(node.stride)).tolist()
+        strides = tuple(int(s) for s in (stride * 2 if len(stride) == 1 else stride))
+        return nnx.Conv(
+            in_features=int(node.weight.shape[1]),  # OIHW
+            out_features=int(node.weight.shape[0]),
+            kernel_size=tuple(int(k) for k in node.weight.shape[-2:]),
+            strides=strides,
+            padding=padding,
+            use_bias=node.bias is not None,
+            rngs=rngs,
         )
 
     elif isinstance(node, nir.SumPool2d):
-        return SumPool(
-            node.kernel_size, node.stride.tolist(), "VALID", channel_axis=1
-        )  # hacky...
+        ksize = tuple(int(k) for k in np.atleast_1d(node.kernel_size))
+        stride = tuple(int(s) for s in np.atleast_1d(node.stride))
+        # spyx SumPool only models VALID / SAME; a non-zero NIR pad amount means
+        # SAME (export records zeros for VALID, non-zero for SAME).
+        pad = np.atleast_1d(np.asarray(node.padding))
+        padding = "SAME" if np.any(pad != 0) else "VALID"
+        # spyx runs channels-last, so pool the trailing spatial axes.
+        return SumPool(ksize, stride, padding, channel_axis=-1)
 
-    elif isinstance(node, nir.IF):  # getting shape is an issue...?
-        # NOTE: node.r, node.v_threshold
-        return IF(node.r.shape, threshold=node.v_threshold)
-
-    elif isinstance(node, nir.LIF):
-        # NOTE: node.r, node.v_threshold, node.tau, node.v_leak
-        return LIF(node.tau.shape, threshold=node.v_threshold)
-
-    elif isinstance(node, nir.CubaLIF):
-        # NOTE: node.r, node.v_threshold, node.v_leak
-        # node.tau_mem, node.tau_syn
-        # node.w_in
-        return CuBaLIF(node.tau_syn.shape, threshold=node.v_threshold)
-
-    elif isinstance(node, nir.Flatten):
-        # NOTE: node.start_dim, node.end_dim
-        return hk.Flatten()
-
-    elif isinstance(node, nir.I):  # not needed atm
-        pass
-
-    elif isinstance(node, nir.Sequence):  # not needed atm
-        pass
-
-    elif isinstance(node, nir.Scale):  # not needed atm
-        pass
-
-    elif isinstance(node, nir.Delay):  # not needed atm
-        pass
-
-    elif isinstance(node, nir.Threshold):  # not needed atm
-        pass
-
-    elif isinstance(node, nir.NIRGraph):
-        print('found subgraph, trying to parse as RNN')
-        lif_node, wrec_node, lif_size = _parse_rnn_subgraph(node)
-        # TODO: implement RIF, RLIF generation
-        
-        if isinstance(lif_node, nir.IF):
-            return RIF(lif_size, threshold=lif_node.v_leak)
-        elif isinstance(lif_node, nir.LIF):
-            return RLIF(lif_node.tau.shape, threshold=lif_node.v_threshold)
-        else:
-            return RCuBaLIF(lif_node.tau_syn.shape, threshold=lif_node.v_threshold)
-
-    else:
-        print("[Warning] Layer not recognized by NIR.")
-        print("Unsupported layer was not added to NIRGraph:", node.__class__)
-
-
-def _nir_node_to_spyx_params(node_pair: nir.NIRNode, dt: float):
-    """Converts a NIR node to a Spyx node."""
-    # NOTE: all nodes have node.input_type and node.output_type
-    # which specify the input and output shape of the node.
-
-    node, next_node = node_pair
-
-    if isinstance(node, (nir.Input, nir.Output)):
-        node.input_type
-        return None
-
-    elif isinstance(node, nir.Affine):
-        # NOTE: node.weight, node.bias are npy arrays
-        tau = 1
-        if isinstance(next_node, nir.LIF):
-            tau = next_node.tau
-        elif isinstance(next_node, nir.CubaLIF):
-            tau = next_node.tau_syn
-            w_in = next_node.w_in
-        elif isinstance(next_node, nir.NIRGraph):
-            next_lif, _, _ = _parse_rnn_subgraph(next_node)
-            if isinstance(next_lif, nir.LIF):
-                tau = next_lif.tau
-            elif isinstance(next_lif, nir.CubaLIF):
-                tau = next_lif.tau_syn
-                w_in = next_lif.w_in
-            else:
-                pass
-        else:
-            tau = 1
-        
-        w_scale = dt / tau
-        if w_in is not None: # need some treatment for arbitrary R in the future...
-            w_scale *= w_in
-        return {
-            "w": jnp.array(node.weight) * w_scale,
-            "b": jnp.array(node.bias) * w_scale,
-        }
-
-    elif isinstance(node, nir.Linear):
-        # NOTE: node.weight
-        if isinstance(next_node, nir.LIF):
-            tau = next_node.tau
-        elif isinstance(next_node, nir.LI):
-            tau = next_node.tau
-        elif isinstance(next_node, nir.CubaLIF):
-            tau = next_node.tau_syn
-            w_in = next_node.w_in
-        elif isinstance(next_node, nir.NIRGraph):
-            next_lif, _, _ = _parse_rnn_subgraph(next_node)
-            if isinstance(next_lif, nir.LIF):
-                tau = next_lif.tau
-            elif isinstance(next_lif, nir.CubaLIF):
-                tau = next_lif.tau_syn
-                w_in = next_lif.w_in
-            else:
-                pass
-        else:
-            tau = 1
-        w_scale = dt / tau
-        if w_in is not None: # need some treatment for arbitrary R in the future...
-            w_scale *= w_in
-        return {"w": jnp.array(node.weight) * w_scale}
-
-    elif isinstance(node, nir.Conv1d):  # not needed atm
-        # NOTE: node.bias, node.weight
-        # node.dilation, node.groups, node.padding, node.stride
-        pass
-
-    elif isinstance(node, nir.Conv2d):
-        # NOTE: node.bias, node.weight
-        # node.dilation, node.groups, node.padding, node.stride
-        if isinstance(next_node, nir.LIF):
-            tau = next_node.tau
-        elif isinstance(next_node, nir.CubaLIF):
-            tau = next_node.tau_syn
-            w_in = next_node.w_in
-        else:
-            tau = 1
-
-        w_scale = dt / tau # NOTE: cannot support direct pooling of conv layers.
-        if w_in is not None: # need some treatment for arbitrary R in the future...
-            w_scale *= w_in
-        # hk.conv2d expects weights in the format HWIO, NIR is OIHW
-        weight = node.weight.transpose((2, 3, 1, 0)) * w_scale
-        bias = node.bias.reshape(-1, 1, 1) * w_scale
-
-        return {"w": jnp.array(weight), "b": jnp.array(bias)}
-
-    elif isinstance(node, nir.IF):  # getting shape is an issue...?
-        # NOTE: node.r, node.v_threshold
-        return {}  # might need to return none/pass here, not sure yet.
+    elif isinstance(node, nir.IF):
+        return IF(
+            _nir_to_spyx_shape(node.r.shape),
+            threshold=_nir_to_spyx_param(node.v_threshold),
+        )
 
     elif isinstance(node, nir.LIF):
-        # NOTE: node.r, node.v_threshold, node.tau, node.v_leak
-        return {"beta": 1 - (dt / node.tau)}
+        return LIF(
+            _nir_to_spyx_shape(node.tau.shape),
+            threshold=_nir_to_spyx_param(node.v_threshold),
+            rngs=rngs,
+        )
 
     elif isinstance(node, nir.CubaLIF):
-        # NOTE: node.r, node.v_threshold, node.v_leak
-        # node.tau_mem, node.tau_syn
-        # node.w_in
-        return {"alpha": 1 - (dt / node.tau_syn), "beta": 1 - (dt / node.tau_mem)}
+        return CuBaLIF(
+            _nir_to_spyx_shape(node.tau_syn.shape),
+            threshold=_nir_to_spyx_param(node.v_threshold),
+            rngs=rngs,
+        )
 
     elif isinstance(node, nir.Flatten):
-        # NOTE: node.start_dim, node.end_dim
-        return {}
-
-    elif isinstance(node, nir.I):  # not needed atm
-        pass
-
-    elif isinstance(node, nir.Sequence):  # not needed atm
-        pass
-
-    elif isinstance(node, nir.Scale):  # not needed atm
-        pass
-
-    elif isinstance(node, nir.Delay):  # not needed atm
-        pass
-
-    elif isinstance(node, nir.Threshold):  # not needed atm
-        pass
+        return Flatten()
 
     elif isinstance(node, nir.NIRGraph):
-        print('found subgraph, trying to parse as RNN')
         lif_node, wrec_node, lif_size = _parse_rnn_subgraph(node)
-        # TODO: implement RNN subgraph parsing
-
-        if isinstance(wrec_node, nir.Linear):
-            bias = jnp.zeros(wrec_node.weight.shape[0])
-        else:
-            bias = wrec_node.bias
-
         if isinstance(lif_node, nir.IF):
-            w_scale = lif_node.r * dt
-            return {
-                "w": jnp.array(wrec_node.weight.T)*w_scale,
-                "b": jnp.array(bias)*w_scale
-            }
+            # RIF inherits its spike threshold from v_threshold, matching the
+            # non-recurrent IF path above (nir.IF has no v_leak attribute).
+            return RIF((lif_size,), threshold=lif_node.v_threshold, rngs=rngs)
         elif isinstance(lif_node, nir.LIF):
-            w_scale = lif_node.r * dt / lif_node.tau
-            return {
-                "w": jnp.array(wrec_node.weight.T)*w_scale,
-                "b": jnp.array(bias)*w_scale,
-                "beta":  1 - (dt / lif_node.tau)
-            }
-        else: # RCuBaLIF # need option to enable/disable weight scaling...
-            w_scale = lif_node.w_in * dt / lif_node.tau_syn
-            return {
-                "w": jnp.array(wrec_node.weight.T)*w_scale,
-                "b": jnp.array(bias)*w_scale,
-                "alpha": 1 - (dt / lif_node.tau_syn),
-                "beta":  1 - (dt / lif_node.tau_mem)
-            }
-
-        pass
-
-    else:
-        print('[Warning] node not recognized:', node.__class__)
-
-
-# not sure if dt can ever be anything but 1 for exporting from spyx...
-def to_nir(spyx_pytree, input_shape, output_shape, dt=1) -> nir.NIRGraph:
-    """Converts a Spyx network to a NIR graph. Under Construction. Currently only supports exporting networks without explicit recurrence/feedback."""
-    # construct the edge list for the NIRGraph
-    keys = list(spyx_pytree.keys())
-    edges = [
-        (keys[i], keys[i + 1]) for i in range(len(keys) - 1)
-    ]  # assume linear connectivity
-    edges.insert(0, ("input", edges[0][0]))
-    edges.append((edges[-1][1], "output"))
-
-    # begin constructing the node list:
-    nodes = {"input": nir.Input(input_shape), "output": nir.Output(output_shape)}
-
-    for layer, params in spyx_pytree.items():
-        layer_type = layer.split("_")[0]
-        if layer_type == "linear":
-            if "b" in params:
-                nodes[layer] = nir.Affine(np.array(params["w"]), np.array(params["b"]))
-            else:
-                nodes[layer] = nir.Linear(np.array(params["w"]))
-        elif layer_type == "conv2":
-            # this is hard coded... allow dicts for each layer for more flexible config?
-            #p0, p1 = node.padding[0], node.padding[1]  # TODO: figure out how to let the user specify this stuff...
-            nodes[layer] = nir.Conv2d(
-                weights=np.array(weight=params["w"]),
-                bias=np.array(params["b"]),
-                dilation=1,
-                stride=1,
-                padding="SAME",#[(p0, p0), (p1, p1)],
-                groups=1,
-            )
-        elif layer_type == "IF":
-            nodes[layer] = nir.IF(r=1, v_threshold=1)
-        elif layer_type == "LI":
-            nodes[layer] = nir.LI(
-                tau=dt / (1 - np.array(params["beta"])),
-                v_leak=np.zeros_like(params["beta"]),
-                r=np.array(params["beta"]),)
-        elif layer_type == "LIF":
-            nodes[layer] = nir.LIF(
-                tau=dt / (1 - np.array(params["beta"])),
-                v_threshold=np.ones_like(params["beta"]),
-                v_leak=np.zeros_like(params["beta"]),
-                r=np.array(params["beta"]),
-            )
-        elif layer_type == "CuBaLIF":
-            nodes[layer] = nir.CubaLIF(
-                tau_mem=dt / (1 - np.array(params["beta"])),
-                tau_syn=dt / (1 - np.array(params["alpha"])),
-                v_threshold=np.ones_like(params["beta"]),
-                v_leak=np.zeros_like(params["beta"]),
-                r=np.array(params["beta"]),
-            )
-        else: # TODO: implement explicit recurrent export via subgraphs...
-            print("[Warning] Layer not recognized by NIR or export not yet supported (explicit recurrent layers).")
-            print("Unsupported layer was not added to NIRGraph:", layer)
-
-    return nir.NIRGraph(nodes, edges)
-
-
-# spyx has built in RIF/RLIF/RCuBaLIF, so we need to fuse these nodes to work.
-def _remove_recurrent_links(nir_graph):
-    pass
-
-
-def _find_tuple_with_first_element(lst, value):
-    return next((tup for tup in lst if tup[0] == value), None)
-
-
-def _order_edge_list(edge_list):  # needs reviewed...
-    curr_node, next_node = "input", None
-    ordered_list = []
-    while next_node != "output":
-        tup = _find_tuple_with_first_element(edge_list, curr_node)
-        ordered_list.append(tup)
-        next_node = tup[1]
-        curr_node = next_node
-    return ordered_list
-
-
-# right now NIR is storing the affine weights in a transposed format, so we need to fix them first.
-def _transpose_affine_weights(nodes):
-    for k, n in nodes.items():
-        if isinstance(n, nir.Linear):
-            nodes[k].weight = nodes[k].weight.T
-        elif isinstance(n, nir.Affine):
-            nodes[k].weight = nodes[k].weight.T
-            nodes[k].bias = nodes[k].bias.T
+            return RLIF((lif_size,), threshold=lif_node.v_threshold, rngs=rngs)
         else:
+            return RCuBaLIF((lif_size,), threshold=lif_node.v_threshold, rngs=rngs)
+
+    return None
+
+
+def _build_model(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs) -> Sequential:
+    """Reconstruct the Spyx/NNX Sequential from a NIR graph (no execution)."""
+
+    nir_graph = _replace_rnn_subgraph_with_nirgraph(nir_graph)
+
+    # Simple linear ordering for now as per original.
+    # In a real graph, we'd need a more complex assembly.
+
+    modules = []
+    node_keys = []
+
+    # We'll use a simple sequential model based on the node order in nir_graph.edges
+    # This is a simplification. Original used ordered_edge_list.
+    # I'll keep the ordered_edge_list logic.
+
+    def _find_tuple_with_first_element(lst, value):
+        return next((tup for tup in lst if tup[0] == value), None)
+
+    def _order_edge_list(edge_list):
+        curr_node, next_node = "input", None
+        ordered_list = []
+        while next_node != "output":
+            tup = _find_tuple_with_first_element(edge_list, curr_node)
+            if tup is None:
+                break
+            ordered_list.append(tup)
+            next_node = tup[1]
+            curr_node = next_node
+        return ordered_list
+
+    sorted_edges = _order_edge_list(nir_graph.edges)
+
+    # Node keys already consumed by a preceding node (e.g. the nir.Threshold that
+    # follows a nir.LI is folded into a single PSU_LIF, so it is not rebuilt as a
+    # standalone module).
+    consumed: set[str] = set()
+
+    for _i, (src, _dst) in enumerate(sorted_edges):
+        if src == "input":
             continue
-    return nodes
+        if src in consumed:
+            continue
+        node = nir_graph.nodes[src]
+
+        # PSU_LIF exports to a reset-free leaky integrator (nir.LI) immediately
+        # followed by a nir.Threshold. Recombine that pair back into a single
+        # PSU_LIF here so the Spyx -> NIR -> Spyx roundtrip is symmetric.
+        if isinstance(node, nir.LI):
+            thr_node = nir_graph.nodes.get(_dst)
+            if not isinstance(thr_node, nir.Threshold):
+                raise ValueError(
+                    "nir.LI without a following nir.Threshold has no Spyx module "
+                    "(Spyx only emits LI as the membrane half of a PSU_LIF)."
+                )
+            consumed.add(_dst)
+            threshold = _nir_to_spyx_param(thr_node.threshold)
+            mod = PSU_LIF(
+                _nir_to_spyx_shape(node.tau.shape),
+                beta=None,
+                threshold=threshold,
+                rngs=rngs,
+            )
+            mod.beta[...] = jnp.array(_nir_to_spyx_param(1 - (dt / node.tau)))
+            modules.append(mod)
+            node_keys.append(src)
+            continue
+
+        mod = _nir_node_to_spyx_module(node, rngs)
+        if mod:
+            modules.append(mod)
+            node_keys.append(src)
+
+            # Parameter loading
+            if isinstance(node, nir.Affine):
+                mod.kernel[...] = jnp.array(node.weight.T)
+                mod.bias[...] = jnp.array(node.bias)
+            elif isinstance(node, nir.Linear):
+                mod.kernel[...] = jnp.array(node.weight.T)
+            elif isinstance(node, nir.Conv2d):
+                # NIR weight is OIHW; NNX Conv kernel is HWIO.
+                weight = node.weight.transpose((2, 3, 1, 0))
+                mod.kernel[...] = jnp.array(weight)
+                if node.bias is not None:
+                    mod.bias[...] = jnp.array(node.bias)
+            elif isinstance(node, nir.LIF):
+                mod.beta[...] = jnp.array(_nir_to_spyx_param(1 - (dt / node.tau)))
+            elif isinstance(node, nir.CubaLIF):
+                mod.alpha[...] = jnp.array(_nir_to_spyx_param(1 - (dt / node.tau_syn)))
+                mod.beta[...] = jnp.array(_nir_to_spyx_param(1 - (dt / node.tau_mem)))
+            elif isinstance(node, nir.NIRGraph):
+                lif_node, wrec_node, _ = _parse_rnn_subgraph(node)
+                # NIR weight is (out, in); spyx recurrent_w is (hidden, hidden).
+                # For recurrent layers in_features == out_features, but transpose
+                # anyway to honour the (in, out) convention shared with nnx.Linear.
+                mod.recurrent_w[...] = jnp.array(wrec_node.weight.T)
+                if isinstance(lif_node, nir.LIF):
+                    mod.beta[...] = jnp.array(1 - (dt / lif_node.tau))
+                elif isinstance(lif_node, nir.CubaLIF):
+                    mod.alpha[...] = jnp.array(1 - (dt / lif_node.tau_syn))
+                    mod.beta[...] = jnp.array(1 - (dt / lif_node.tau_mem))
+                # nir.IF carries no tau parameter; nothing to load for RIF.
+
+    return Sequential(*modules)
 
 
 def from_nir(
     nir_graph: nir.NIRGraph,
-    sample_batch: jnp.array,
-    dt: float,
-    time_major: bool = False,
+    input_data,
+    dt: float = 1,
+    *,
     return_all_states: bool = False,
+    rngs: nnx.Rngs | None = None,
 ):
-    """Converts a NIR graph to a Spyx network."""
-    # find valid RNN subgraphs, and replace them with a single NIRGraph node
-    nir_graph = _replace_rnn_subgraph_with_nirgraph(nir_graph)
+    """Reconstruct a Spyx/NNX model from a NIR graph and run it on ``input_data``.
 
-    # NOTE: iterate over nir_graph, convert each node to a Spyx module
-    # NOTE: Need to iterate over nirgraph edes and nodes,
-    # replacing seperate recurrent layers with merged versions that can then be
-    # loaded into spyx as either RIF, RLIF, or RCuBaLIF neurons.
-    # Also sort the list so that it flows from input to output, since sorting is not assured.
-    sorted_edges = _order_edge_list(nir_graph.edges)
-    nir_graph.nodes = _transpose_affine_weights(nir_graph.nodes)
+    :param nir_graph: the NIR graph to import.
+    :param input_data: time-major input, shape ``(T, B, ...)``; scanned over the
+        leading time axis.
+    :param dt: simulation timestep used to convert NIR time constants back to
+        Spyx decay factors (must match the ``dt`` used on export).
+    :param return_all_states: when True, also return the per-layer neuron states
+        at *every* timestep (e.g. membrane-potential traces), as a pytree of
+        ``(T, B, ...)`` arrays mirroring ``model.initial_state``.
+    :param rngs: optional ``nnx.Rngs`` for reconstructing the modules.
+    :return: ``(model, outputs)`` where ``outputs`` is ``(T, B, ...)``; or
+        ``(model, (outputs, states))`` when ``return_all_states`` is True.
+    """
+    if rngs is None:
+        rngs = nnx.Rngs(0)
 
-    def snn(x):
-        core = hk.DeepRNN(
-            [
-                _nir_node_to_spyx_node((nir_graph.nodes[n[0]], nir_graph.nodes[n[1]]))
-                for n in sorted_edges[1:]
-            ]
+    model = _build_model(nir_graph, dt, rngs)
+
+    if not return_all_states:
+        outputs, _ = run(model, input_data)
+        return model, outputs
+
+    # Capture the per-layer state at each timestep (membrane traces, etc.).
+    init_state = model.initial_state(input_data.shape[1])
+
+    def _step(state, x_t):
+        out, new_state = model(x_t, state)
+        return new_state, (out, new_state)
+
+    _, (outputs, states) = jax.lax.scan(_step, init_state, input_data)
+    return model, (outputs, states)
+
+
+def _spyx_recurrent_to_nirgraph(layer, node_key, dt) -> nir.NIRGraph:
+    """Build the inner NIRGraph subgraph for an RIF / RLIF / RCuBaLIF layer.
+
+    The subgraph mirrors the (input -> wrec, lif <-> wrec, lif -> output)
+    topology produced by ``_replace_rnn_subgraph_with_nirgraph`` so that a
+    Spyx -> NIR -> Spyx roundtrip is symmetric.
+    """
+    hidden_shape = layer.hidden_shape
+    threshold = np.full(hidden_shape, layer.threshold)
+    v_leak = np.zeros(hidden_shape)
+
+    if isinstance(layer, RIF):
+        lif = nir.IF(r=np.ones(hidden_shape), v_threshold=threshold)
+    elif isinstance(layer, RLIF):
+        beta = np.array(layer.beta[...])
+        if beta.ndim == 0:
+            beta = np.full(hidden_shape, beta)
+        lif = nir.LIF(
+            tau=dt / (1 - beta),
+            v_threshold=threshold,
+            v_leak=v_leak,
+            r=beta,
+        )
+    else:  # RCuBaLIF
+        alpha = np.array(layer.alpha[...])
+        beta = np.array(layer.beta[...])
+        if alpha.ndim == 0:
+            alpha = np.full(hidden_shape, alpha)
+        if beta.ndim == 0:
+            beta = np.full(hidden_shape, beta)
+        lif = nir.CubaLIF(
+            tau_mem=dt / (1 - beta),
+            tau_syn=dt / (1 - alpha),
+            v_threshold=threshold,
+            v_leak=v_leak,
+            r=beta,
         )
 
-        # This takes our SNN core and computes it across the input data.
-        spikes, V = hk.dynamic_unroll(
-            core,
-            x,
-            core.initial_state(x.shape[0]),
-            time_major=time_major,
-            return_all_states=return_all_states,
-        )
+    # NIR Linear weight is (out, in); spyx recurrent_w is (in, out).
+    wrec = nir.Linear(weight=np.array(layer.recurrent_w[...]).T)
 
-        return spikes, V
+    lif_nk = f"{node_key}.lif"
+    w_nk = f"{node_key}.w_rec"
+    sub_nodes = {
+        lif_nk: lif,
+        w_nk: wrec,
+        f"{node_key}.input": nir.Input(input_type={"input": np.array(hidden_shape)}),
+        f"{node_key}.output": nir.Output(
+            output_type={"output": np.array(hidden_shape)}
+        ),
+    }
+    sub_edges = [
+        (f"{node_key}.input", w_nk),
+        (w_nk, lif_nk),
+        (lif_nk, w_nk),
+        (lif_nk, f"{node_key}.output"),
+    ]
+    return nir.NIRGraph(nodes=sub_nodes, edges=sub_edges)
 
-    SNN = hk.without_apply_rng(hk.transform(snn))
 
-    param_names = SNN.init(jax.random.PRNGKey(0), sample_batch).keys()
+def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
+    """Converts a Spyx/NNX model to a NIR graph."""
 
-    parametrized_layers = []
-    for edge in sorted_edges[1:]:
-        if isinstance(nir_graph.nodes[edge[0]], (nir.Conv2d, nir.Affine, nir.Linear, nir.LIF, nir.CubaLIF, nir.NIRGraph)):
-            parametrized_layers.append(
-                (nir_graph.nodes[edge[0]], nir_graph.nodes[edge[1]])
+    nodes = {"input": nir.Input(input_shape), "output": nir.Output(output_shape)}
+    edges = []
+
+    prev_node = "input"
+
+    # We assume a sequential model for now
+    if not isinstance(model, nnx.Sequential):
+        layers = [model]
+    else:
+        layers = model.layers
+
+    # Track the per-sample tensor shape (NIR shapes exclude the batch axis) so
+    # nodes that need it — Conv2d (spatial dims) and Flatten (full shape) — can
+    # be constructed correctly. NIR uses channels-first (C, N_x, N_y).
+    _in = next(iter(input_shape.values()))
+    cur_shape = tuple(int(d) for d in np.ravel(np.asarray(_in)))
+
+    for i, layer in enumerate(layers):
+        node_key = f"layer_{i}"
+
+        if isinstance(layer, nnx.Linear):
+            if layer.bias is not None:
+                nodes[node_key] = nir.Affine(
+                    np.array(layer.kernel[...].T), np.array(layer.bias[...])
+                )
+            else:
+                nodes[node_key] = nir.Linear(np.array(layer.kernel[...].T))
+            cur_shape = cur_shape[:-1] + (int(layer.kernel.shape[-1]),)
+
+        elif isinstance(layer, nnx.Conv):
+            # NNX Conv is HWIO, NIR is OIHW
+            weight = np.array(layer.kernel[...].transpose((3, 2, 0, 1)))
+            spatial = tuple(cur_shape[-2:])  # (N_x, N_y)
+            conv_node = nir.Conv2d(
+                input_shape=spatial,  # required to disambiguate the shape
+                weight=weight,
+                bias=np.array(layer.bias[...]) if layer.bias is not None else None,
+                dilation=1,  # Default
+                stride=layer.strides,
+                # Honour the layer's actual padding (SAME / VALID / explicit)
+                # instead of assuming SAME, which mis-shapes VALID convs.
+                padding=_nnx_pad_to_nir(layer.padding),
+                groups=1,
+            )
+            nodes[node_key] = conv_node
+            # nir.Conv2d infers the exact output shape (C_out, N_x, N_y) from the
+            # padding/stride/dilation, so read it back rather than assuming SAME.
+            cur_shape = tuple(
+                int(d) for d in np.asarray(conv_node.output_type["output"])
             )
 
-    params = {
-        k: _nir_node_to_spyx_params(n, dt)
-        for k, n in zip(param_names, parametrized_layers)
-    }
+        elif isinstance(layer, SumPool):
+            ksize = np.atleast_1d(np.asarray(layer.window_shape)).astype(int)
+            stride = np.atleast_1d(np.asarray(layer.strides)).astype(int)
+            if ksize.size == 1:
+                ksize = np.array([int(ksize[0])] * 2)
+            if stride.size == 1:
+                stride = np.array([int(stride[0])] * 2)
+            ch, h, w = cur_shape
+            if str(layer.padding).upper() == "SAME":
+                # SAME: output = ceil(in / stride); record the explicit symmetric
+                # NIR pad amount that realises that output size.
+                out_h = -(-h // int(stride[0]))
+                out_w = -(-w // int(stride[1]))
+                # Total pad each spatial dim needs to reach the SAME output size;
+                # stored as-is so a non-zero value flags SAME on re-import (spyx
+                # SumPool models only VALID / SAME, not per-side pad amounts).
+                pad_h = max(0, (out_h - 1) * int(stride[0]) + int(ksize[0]) - h)
+                pad_w = max(0, (out_w - 1) * int(stride[1]) + int(ksize[1]) - w)
+                padding = np.array([pad_h, pad_w])
+                cur_shape = (ch, out_h, out_w)
+            else:  # VALID pooling shrinks the (channels-first) spatial dims.
+                padding = np.array([0, 0])
+                cur_shape = (
+                    ch,
+                    (h - int(ksize[0])) // int(stride[0]) + 1,
+                    (w - int(ksize[1])) // int(stride[1]) + 1,
+                )
+            nodes[node_key] = nir.SumPool2d(
+                kernel_size=ksize,
+                stride=stride,
+                padding=padding,
+            )
 
-    return SNN, params
+        elif isinstance(layer, IF):
+            # nir.IF requires array-valued r / v_threshold shaped to the layer.
+            # cur_shape carries spatial dims when the neuron follows a conv.
+            nodes[node_key] = nir.IF(
+                r=np.ones(cur_shape, dtype=np.float32),
+                v_threshold=_spyx_param_to_nir(layer.threshold, cur_shape),
+            )
+
+        elif isinstance(layer, LIF):
+            beta = _spyx_param_to_nir(layer.beta[...], cur_shape)
+            nodes[node_key] = nir.LIF(
+                tau=dt / (1 - beta),
+                v_threshold=_spyx_param_to_nir(layer.threshold, cur_shape),
+                v_leak=np.zeros(cur_shape, dtype=np.float32),
+                r=beta,
+            )
+
+        elif isinstance(layer, CuBaLIF):
+            alpha = _spyx_param_to_nir(layer.alpha[...], cur_shape)
+            beta = _spyx_param_to_nir(layer.beta[...], cur_shape)
+            nodes[node_key] = nir.CubaLIF(
+                tau_mem=dt / (1 - beta),
+                tau_syn=dt / (1 - alpha),
+                v_threshold=_spyx_param_to_nir(layer.threshold, cur_shape),
+                v_leak=np.zeros(cur_shape, dtype=np.float32),
+                r=beta,
+            )
+
+        elif isinstance(layer, (RIF, RLIF, RCuBaLIF)):
+            nodes[node_key] = _spyx_recurrent_to_nirgraph(layer, node_key, dt)
+
+        elif isinstance(layer, PSU_LIF):
+            # PSU_LIF is a *reset-free* leaky integrator followed by a threshold:
+            #   V_t = clip(beta) * V_{t-1} + x_t ,   s_t = (V_t > threshold).
+            # NIR has no single reset-free spiking primitive: nir.LIF (and IF)
+            # always subtract / clamp on spike, so mapping to LIF would inject a
+            # reset PSU_LIF does not have. Instead we export the exact two-part
+            # decomposition NIR *can* represent faithfully:
+            #   nir.LI       -- the reset-free linear membrane (tau=dt/(1-beta),
+            #                   v_leak=0, r=1), identical to PSU_LIF's recurrence;
+            #   nir.Threshold-- the pointwise spike rule s = (V > threshold),
+            #                   matching the heaviside forward of the surrogate.
+            # This pair round-trips back into a single PSU_LIF (see _build_model)
+            # and carries no reset-semantics gap.
+            beta = np.clip(_spyx_param_to_nir(layer.beta[...], cur_shape), 0.0, 1.0)
+            thr_key = f"{node_key}_threshold"
+            nodes[node_key] = nir.LI(
+                tau=dt / (1 - beta),
+                r=np.ones(cur_shape, dtype=np.float32),
+                v_leak=np.zeros(cur_shape, dtype=np.float32),
+            )
+            nodes[thr_key] = nir.Threshold(
+                threshold=_spyx_param_to_nir(layer.threshold, cur_shape),
+            )
+            edges.append((prev_node, node_key))
+            prev_node = thr_key
+            edges.append((node_key, thr_key))
+            # cur_shape unchanged: the threshold preserves the tensor shape.
+            continue
+
+        elif isinstance(layer, ResonateFire):
+            # ResonateFire is a complex resonate-and-fire oscillator whose pole is
+            #   a = exp(dt * (-lambda + i*omega)),  z_t = a * z_{t-1} + x_t.
+            # NIR has no complex / oscillatory / resonate-and-fire primitive; all
+            # of its neuron nodes carry real-valued state, so the imaginary
+            # rotation (the "resonate") cannot be represented without discarding
+            # the oscillation entirely -- which would be a faked mapping. We
+            # therefore refuse rather than silently degrade to a real leak.
+            raise NotImplementedError(
+                "ResonateFire has no faithful NIR representation: NIR defines no "
+                "complex / oscillatory / resonate-and-fire primitive, so the "
+                "complex pole a = exp(dt*(-lambda + i*omega)) cannot be exported "
+                "without discarding the oscillatory (imaginary) dynamics. Export "
+                "of ResonateFire to NIR is intentionally unsupported."
+            )
+
+        elif isinstance(layer, Flatten):
+            # spyx.nn.Flatten collapses every non-batch dim; NIR shapes have no
+            # batch axis, so flatten the whole per-sample shape (start_dim=0).
+            nodes[node_key] = nir.Flatten(input_type=cur_shape, start_dim=0, end_dim=-1)
+            cur_shape = (int(np.prod(cur_shape)),)
+
+        else:
+            print(
+                f"[Warning] Layer {type(layer)} not recognized/supported for NIR export."
+            )
+            continue
+
+        edges.append((prev_node, node_key))
+        prev_node = node_key
+
+    edges.append((prev_node, "output"))
+
+    return nir.NIRGraph(nodes, edges)

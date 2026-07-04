@@ -1,35 +1,54 @@
 [project]
 name = "spyx"
-version = "0.1.20"
+version = "1.0.0"
 description = "Spyx: SNNs in JAX"
 authors = [
     { name = "Kade Heckel", email = "kade.heckel@gmail.com" }
 ]
 dependencies = [
-    "dm-haiku",
     "optax",
     "jax_tqdm",
     "nir",
+    # flax 0.11 changed the nnx.Optimizer signature to require `wrt=` and made
+    # `optimizer.update(model, grads)` the canonical call. Spyx's tutorials and
+    # spyx.quant target the newer API; pin accordingly.
+    "flax>=0.11.0",
+    "grain",
 ]
 readme = "README.md"
-requires-python = ">=3.10, <3.14"
+requires-python = ">=3.11, <3.13"
 license = { text = "MIT" }
 
 [project.optional-dependencies]
 loaders = [
     "tonic",
-    "torchvision",
-    "scikit-learn",
+    "numba>=0.59.0",
+]
+evo = [
+    # Gradient-free training via evolution strategies (evosax 0.2 API). Used by
+    # the cartpole tutorial and the research/misc neuroevolution notebooks.
+    "evosax>=0.2.0",
+]
+quant = [
+    # Qwix is Google's JAX quantization library; published from GitHub today
+    # (no PyPI release yet). Install via `uv pip install "spyx[quant]"` together
+    # with `uv pip install "git+https://github.com/google/qwix"`, or pin the
+    # github URL in your downstream requirements.
+    "qwix",
 ]
 docs = [
     "mkdocs>=1.6.1",
     "mkdocs-jupyter>=0.25.1",
     "mkdocs-material>=9.7.1",
     "mkdocstrings[python]>=1.0.0",
+    # Tutorial notebooks plot with matplotlib; needed to execute/render them.
+    "matplotlib>=3.8",
 ]
 
 [tool.uv.sources]
 torchvision = { index = "pytorch-cpu" }
+# qwix has no PyPI release as of 2026-04; install from GitHub.
+qwix = { git = "https://github.com/google/qwix" }
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
@@ -46,7 +65,149 @@ dev = [
     "mkdocs-jupyter>=0.25.1",
     "mkdocs-material>=9.7.1",
     "mkdocstrings[python]>=1.0.0",
+    "pytest>=9.0.2",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.14.10",
+    "ty>=0.0.1a10",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/spyx"]
+
+# The default sdist would ship the whole example/research corpus (~7 MB of .npy /
+# .pt fixtures and rendered notebooks). Keep it to what's needed to build and
+# test the package from source.
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/spyx",
+    "tests",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `-ra` prints a short reason for every skip/xfail so gated tests stay visible.
+addopts = "-ra"
+markers = [
+    "network: test downloads a dataset or otherwise needs network access; excluded from CI via `-m 'not network'`.",
+]
+
+[tool.ty.environment]
+# Match the lower bound of requires-python; ty type-checks against this.
+python-version = "3.11"
+
+[tool.ty.src]
+# Only type-check the library; tests and notebooks aren't gated.
+include = ["src/spyx"]
+
+[tool.ty.rules]
+# These fire only where Spyx interfaces third-party libraries that ship no type
+# information — not on real defects. Everything else (unresolved-attribute,
+# not-subscriptable, missing-argument, ...) stays at error and is suppressed
+# inline where a runtime guard makes it a false positive, so genuine bugs still
+# surface — e.g. `missing-argument` caught a real nir.Conv2d export defect.
+#   grain / tonic base classes we subclass and call are untyped:
+invalid-method-override = "ignore"
+#   values passed into untyped tonic / nir constructors:
+invalid-argument-type = "ignore"
+
+[tool.coverage.run]
+source = ["spyx"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+
+[tool.ruff]
+# Exclude a variety of commonly ignored directories.
+# Only apply linting to src and tests directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    # Project-specific directories to exclude
+    "research",
+    "docs",
+    "scripts",
+    "data",
+    "specs",
+    "site",
+]
+
+# Same as Black.
+line-length = 88
+indent-width = 4
+
+# Lower Python bound is 3.11 (matches flax >= 0.11).
+target-version = "py311"
+
+[tool.ruff.lint]
+# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
+# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
+# Error (`E`) codes by default.
+select = ["E4", "E7", "E9", "F", "B", "I"]
+ignore = []
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+# Enable auto-formatting of code examples in docstrings. Markdown,
+# ReStructuredText code blocks are supported.
+#
+# This is currently alphabetical by default, but will be changed to
+# match the order of the configuration in the future.
+docstring-code-format = true
+
+# Set the line length limit used when formatting code snippets in
+# docstrings.
+#
+# This defaults to the main `line-length` setting.
+docstring-code-line-length = "dynamic"

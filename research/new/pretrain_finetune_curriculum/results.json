@@ -1,0 +1,37 @@
+{
+  "config": {
+    "smoke": false,
+    "epochs": 40
+  },
+  "rows": [
+    {
+      "method": "baseline",
+      "K": null,
+      "epochs": 40,
+      "pretrain_s": 0.0,
+      "finetune_s": 9.35865653801011,
+      "total_s": 9.35865653801011,
+      "test_acc": 0.34130859375
+    },
+    {
+      "method": "curriculum",
+      "K": 5,
+      "epochs": 40,
+      "pretrain_s": 2.1324311350181233,
+      "finetune_s": 7.286070339003345,
+      "total_s": 9.418501474021468,
+      "test_acc": 0.29736328125,
+      "psu_pretrain_acc": 0.072265625
+    },
+    {
+      "method": "curriculum",
+      "K": 10,
+      "epochs": 40,
+      "pretrain_s": 2.2268821139878128,
+      "finetune_s": 6.236350088001927,
+      "total_s": 8.46323220198974,
+      "test_acc": 0.2841796875,
+      "psu_pretrain_acc": 0.10986328125
+    }
+  ]
+}

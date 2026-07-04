@@ -1,0 +1,112 @@
+# Continuous integration for Spyx.
+#
+# Splits into focused jobs so a failure points at the right thing:
+#   lint   - ruff (fast, fails first)
+#   test   - pytest matrix over the supported Python range
+#   docs   - mkdocs --strict, catches broken links / dead references
+#   smoke  - notebook-API drift check without dataset downloads
+#
+# The project uses uv for dependency management; every job is a thin wrapper
+# around `uv sync` + `uv run` (see pyproject.toml / AGENTS.md).
+
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref (e.g. rapid pushes to a PR).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync (dev tooling only)
+        run: uv sync
+      - name: ruff check
+        run: uv run ruff check
+      - name: ruff format --check
+        run: uv run ruff format --check
+
+  types:
+    name: ty (type check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync with all extras
+        # Type-check against the full dependency surface so optional imports
+        # (tonic, qwix) resolve instead of tripping unresolved-import.
+        run: uv sync --all-extras
+      - name: ty check
+        # Config in pyproject [tool.ty]; scoped to src/spyx.
+        run: uv run ty check
+
+  test:
+    name: Pytest (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # pyproject pins requires-python = ">=3.11, <3.13" (flax 0.11 dropped
+        # 3.10). Keep this aligned with that range.
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Sync with quant extra
+        # Pulls qwix (from GitHub via tool.uv.sources) so the quant + SSM
+        # quantization tests actually run instead of skipping.
+        run: uv sync --extra quant --python ${{ matrix.python-version }}
+      - name: Pytest
+        # `-m "not network"` excludes the tonic-gated loader tests, which hit
+        # an external dataset endpoint and are flaky on CI. Run them locally
+        # with `uv sync --all-extras && uv run pytest -m network`.
+        run: uv run pytest -v -m "not network" --cov=spyx --cov-report=term-missing
+
+  docs:
+    name: Docs build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync with docs extra
+        run: uv sync --extra docs
+      - name: mkdocs build --strict
+        run: uv run mkdocs build --strict
+
+  smoke:
+    name: Notebook API smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync
+        run: uv sync
+      - name: Notebook API drift check
+        run: uv run python scripts/smoke_notebook_apis.py

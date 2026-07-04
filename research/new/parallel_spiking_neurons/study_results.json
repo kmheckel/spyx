@@ -1,0 +1,94 @@
+{
+  "accuracy": [
+    {
+      "kind": "LIF",
+      "test_acc": 0.3173828125,
+      "train_s": 13.900549073994625,
+      "epochs": 40
+    },
+    {
+      "kind": "PSU_LIF",
+      "test_acc": 0.08251953125,
+      "train_s": 13.792679424979724,
+      "epochs": 40
+    },
+    {
+      "kind": "ResonateFire",
+      "test_acc": 0.384765625,
+      "train_s": 14.803225334006129,
+      "epochs": 40
+    }
+  ],
+  "neuron_bench": [
+    {
+      "name": "LIF (seq)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 256,
+      "batch": 64,
+      "param_count": 256,
+      "fwd_latency_ms": 1.854741494753398,
+      "fwd_bwd_latency_ms": 6.314589496469125,
+      "throughput_elem_ts_per_s": 8833576.024662336,
+      "spike_rate": 0.1234290599822998,
+      "peak_mem_mb": 422.18994140625,
+      "flops": 180482.0,
+      "mfu": 9.730843921405687e-06
+    },
+    {
+      "name": "PSU_LIF (seq)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 256,
+      "batch": 64,
+      "param_count": 256,
+      "fwd_latency_ms": 1.8615349981701002,
+      "fwd_bwd_latency_ms": 6.315410995739512,
+      "throughput_elem_ts_per_s": 8801338.688826999,
+      "spike_rate": 0.20911502838134766,
+      "peak_mem_mb": 422.18994140625,
+      "flops": 98562.0,
+      "mfu": 5.294662743213908e-06
+    },
+    {
+      "name": "PSU_LIF (parallel)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 256,
+      "batch": 64,
+      "param_count": 256,
+      "fwd_latency_ms": 0.22512399300467223,
+      "fwd_bwd_latency_ms": 0.8424510015174747,
+      "throughput_elem_ts_per_s": 72777671.45707995,
+      "spike_rate": 0.20911502838134766,
+      "peak_mem_mb": 422.18994140625,
+      "flops": 50701056.0,
+      "mfu": 0.022521391577728346
+    },
+    {
+      "name": "ResonateFire (seq)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 256,
+      "batch": 64,
+      "param_count": 512,
+      "fwd_latency_ms": 1.9384894985705614,
+      "fwd_bwd_latency_ms": 6.622925007832237,
+      "throughput_elem_ts_per_s": 8451941.582392648,
+      "spike_rate": 0.16678810119628906,
+      "peak_mem_mb": 422.18994140625,
+      "flops": 137730.0,
+      "mfu": 7.105016565813838e-06
+    },
+    {
+      "name": "ResonateFire (parallel)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 256,
+      "batch": 64,
+      "param_count": 512,
+      "fwd_latency_ms": 0.33688900293782353,
+      "fwd_bwd_latency_ms": 1.2894029932795092,
+      "throughput_elem_ts_per_s": 48633228.91849884,
+      "spike_rate": 0.16678810119628906,
+      "peak_mem_mb": 422.18994140625,
+      "flops": 82459648.0,
+      "mfu": 0.024476800156999726
+    }
+  ]
+}
