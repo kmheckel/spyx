@@ -42,6 +42,15 @@ modules. This is a **breaking release** — see the
 - **`spyx.phasor`** — complex-valued phasor networks: `PhasorLinear`,
   `PhasorActivation`, `PhasorReadout`, `PhasorMLP`, and `SpikingPhasor` with
   phase↔spike conversion helpers.
+- **`spyx.nn.PSU_LIF`** — reset-free parallel spiking neuron whose linear
+  membrane `V_t = clip(beta)·V_{t-1} + x_t` is scored either stepwise or, via
+  `parallel(x)`, with a `jax.lax.associative_scan` in `O(log T)` depth.
+- **`spyx.phasor.ResonateFire`** — reset-free complex resonate-and-fire neuron
+  (a damped oscillator); the complex sibling of `PSU_LIF` with the same stepwise
+  and `parallel(x)` associative-scan paths.
+- **`spyx.bench`** — benchmarking harness: `benchmark`, `compare`, and
+  `format_table` report median latency, throughput, peak memory, XLA-cost-model
+  FLOPs/MFU, and a `spike_rate` energy proxy.
 - **`spyx.quant`** — int8/int4 and BitNet-ternary quantization via a
   [qwix](https://github.com/google/qwix) wrapper (`spyx[quant]` extra).
 - **`spyx.optimize`** — high-level training loop: `fit`, `make_train_step`,

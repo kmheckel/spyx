@@ -56,6 +56,7 @@ nav:
       - Quantize a model: how-to/quantize.md
       - Export & import via NIR: how-to/nir.md
       - Use SSM & phasor layers: how-to/recurrent-layers.md
+      - Benchmark neurons & models: how-to/benchmarking.md
       - Load event data: how-to/load-data.md
   - Reference:
       - spyx.nn: reference/nn.md
@@ -67,10 +68,13 @@ nav:
       - spyx.quant: reference/quant.md
       - spyx.ssm: reference/ssm.md
       - spyx.phasor: reference/phasor.md
+      - spyx.bench: reference/bench.md
       - spyx.experimental: reference/experimental.md
   - Explanation:
       - Design & architecture: explanation/design.md
       - SNN primer: explanation/snn-primer.md
+      - Parallel spiking neurons: explanation/parallel-spiking-neurons.md
+      - Research with Spyx: explanation/research.md
 
 markdown_extensions:
   - pymdownx.highlight:

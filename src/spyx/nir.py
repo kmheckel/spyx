@@ -7,6 +7,7 @@ from flax import nnx
 from .nn import (
     IF,
     LIF,
+    PSU_LIF,
     RIF,
     RLIF,
     CuBaLIF,
@@ -16,6 +17,7 @@ from .nn import (
     SumPool,
     run,
 )
+from .phasor import ResonateFire
 
 
 def reorder_layers(init_params, trained_params):
@@ -249,10 +251,41 @@ def _build_model(nir_graph: nir.NIRGraph, dt: float, rngs: nnx.Rngs) -> Sequenti
 
     sorted_edges = _order_edge_list(nir_graph.edges)
 
+    # Node keys already consumed by a preceding node (e.g. the nir.Threshold that
+    # follows a nir.LI is folded into a single PSU_LIF, so it is not rebuilt as a
+    # standalone module).
+    consumed: set[str] = set()
+
     for _i, (src, _dst) in enumerate(sorted_edges):
         if src == "input":
             continue
+        if src in consumed:
+            continue
         node = nir_graph.nodes[src]
+
+        # PSU_LIF exports to a reset-free leaky integrator (nir.LI) immediately
+        # followed by a nir.Threshold. Recombine that pair back into a single
+        # PSU_LIF here so the Spyx -> NIR -> Spyx roundtrip is symmetric.
+        if isinstance(node, nir.LI):
+            thr_node = nir_graph.nodes.get(_dst)
+            if not isinstance(thr_node, nir.Threshold):
+                raise ValueError(
+                    "nir.LI without a following nir.Threshold has no Spyx module "
+                    "(Spyx only emits LI as the membrane half of a PSU_LIF)."
+                )
+            consumed.add(_dst)
+            threshold = _nir_to_spyx_param(thr_node.threshold)
+            mod = PSU_LIF(
+                _nir_to_spyx_shape(node.tau.shape),
+                beta=None,
+                threshold=threshold,
+                rngs=rngs,
+            )
+            mod.beta[...] = jnp.array(_nir_to_spyx_param(1 - (dt / node.tau)))
+            modules.append(mod)
+            node_keys.append(src)
+            continue
+
         mod = _nir_node_to_spyx_module(node, rngs)
         if mod:
             modules.append(mod)
@@ -491,6 +524,51 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
 
         elif isinstance(layer, (RIF, RLIF, RCuBaLIF)):
             nodes[node_key] = _spyx_recurrent_to_nirgraph(layer, node_key, dt)
+
+        elif isinstance(layer, PSU_LIF):
+            # PSU_LIF is a *reset-free* leaky integrator followed by a threshold:
+            #   V_t = clip(beta) * V_{t-1} + x_t ,   s_t = (V_t > threshold).
+            # NIR has no single reset-free spiking primitive: nir.LIF (and IF)
+            # always subtract / clamp on spike, so mapping to LIF would inject a
+            # reset PSU_LIF does not have. Instead we export the exact two-part
+            # decomposition NIR *can* represent faithfully:
+            #   nir.LI       -- the reset-free linear membrane (tau=dt/(1-beta),
+            #                   v_leak=0, r=1), identical to PSU_LIF's recurrence;
+            #   nir.Threshold-- the pointwise spike rule s = (V > threshold),
+            #                   matching the heaviside forward of the surrogate.
+            # This pair round-trips back into a single PSU_LIF (see _build_model)
+            # and carries no reset-semantics gap.
+            beta = np.clip(_spyx_param_to_nir(layer.beta[...], cur_shape), 0.0, 1.0)
+            thr_key = f"{node_key}_threshold"
+            nodes[node_key] = nir.LI(
+                tau=dt / (1 - beta),
+                r=np.ones(cur_shape, dtype=np.float32),
+                v_leak=np.zeros(cur_shape, dtype=np.float32),
+            )
+            nodes[thr_key] = nir.Threshold(
+                threshold=_spyx_param_to_nir(layer.threshold, cur_shape),
+            )
+            edges.append((prev_node, node_key))
+            prev_node = thr_key
+            edges.append((node_key, thr_key))
+            # cur_shape unchanged: the threshold preserves the tensor shape.
+            continue
+
+        elif isinstance(layer, ResonateFire):
+            # ResonateFire is a complex resonate-and-fire oscillator whose pole is
+            #   a = exp(dt * (-lambda + i*omega)),  z_t = a * z_{t-1} + x_t.
+            # NIR has no complex / oscillatory / resonate-and-fire primitive; all
+            # of its neuron nodes carry real-valued state, so the imaginary
+            # rotation (the "resonate") cannot be represented without discarding
+            # the oscillation entirely -- which would be a faked mapping. We
+            # therefore refuse rather than silently degrade to a real leak.
+            raise NotImplementedError(
+                "ResonateFire has no faithful NIR representation: NIR defines no "
+                "complex / oscillatory / resonate-and-fire primitive, so the "
+                "complex pole a = exp(dt*(-lambda + i*omega)) cannot be exported "
+                "without discarding the oscillatory (imaginary) dynamics. Export "
+                "of ResonateFire to NIR is intentionally unsupported."
+            )
 
         elif isinstance(layer, Flatten):
             # spyx.nn.Flatten collapses every non-batch dim; NIR shapes have no

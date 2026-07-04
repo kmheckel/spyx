@@ -1,9 +1,11 @@
 import jax
 import jax.numpy as jnp
+import nir
+import pytest
 from flax import nnx
 
 from spyx import nir as spyx_nir
-from spyx import nn
+from spyx import nn, phasor
 
 
 def _roundtrip(original, input_shape, output_shape, x):
@@ -149,6 +151,60 @@ def test_nir_export_import_conv_sumpool_scnn():
     _roundtrip(original, (2, 8, 8), (10,), x)
 
 
+def test_nir_export_import_psu_lif():
+    """PSU_LIF is reset-free, so it exports to nir.LI (the reset-free leaky
+    membrane) + nir.Threshold (the spike rule) -- a faithful, gap-free mapping
+    that re-imports to a single PSU_LIF and reproduces the original output.
+    """
+    rngs = nnx.Rngs(0)
+    original = nn.Sequential(
+        nnx.Linear(10, 20, rngs=rngs),
+        nn.PSU_LIF((20,), beta=0.8, threshold=1.0, rngs=rngs),
+    )
+    x = jax.random.normal(jax.random.PRNGKey(42), (7, 5, 10))  # (T, B, in)
+    imported, graph = _roundtrip(original, (10,), (20,), x)
+
+    # Structural check: PSU_LIF becomes an LI membrane + a Threshold, NOT an
+    # nir.LIF (which would inject a reset PSU_LIF does not have).
+    assert isinstance(graph.nodes["layer_1"], nir.LI)
+    assert isinstance(graph.nodes["layer_1_threshold"], nir.Threshold)
+    assert not any(isinstance(n, nir.LIF) for n in graph.nodes.values())
+
+    # The re-imported layer is a single PSU_LIF with matching decay/threshold.
+    assert isinstance(imported.layers[1], nn.PSU_LIF)
+    assert jnp.allclose(original.layers[1].beta[...], imported.layers[1].beta[...])
+    assert jnp.allclose(
+        original.layers[1].threshold, imported.layers[1].threshold, atol=1e-6
+    )
+
+
+def test_nir_psu_lif_li_tau_matches_beta():
+    """The exported nir.LI carries tau = dt / (1 - beta) for beta = 0.8, dt = 1."""
+    rngs = nnx.Rngs(0)
+    original = nn.Sequential(
+        nnx.Linear(4, 6, rngs=rngs),
+        nn.PSU_LIF((6,), beta=0.8, rngs=rngs),
+    )
+    graph = spyx_nir.to_nir(original, {"input": (4,)}, {"output": (6,)}, dt=1)
+    li = graph.nodes["layer_1"]
+    assert jnp.allclose(jnp.asarray(li.tau), 1.0 / (1.0 - 0.8), atol=1e-5)
+    assert jnp.allclose(jnp.asarray(li.v_leak), 0.0)
+
+
+def test_nir_export_resonatefire_not_implemented():
+    """ResonateFire has no faithful NIR primitive (no complex / oscillatory
+    node), so exporting it raises NotImplementedError rather than faking a
+    real-valued mapping that would discard the oscillatory dynamics.
+    """
+    rngs = nnx.Rngs(0)
+    model = nn.Sequential(
+        nnx.Linear(8, 6, use_bias=False, rngs=rngs),
+        phasor.ResonateFire((6,), lambda_init=0.1, omega_init=1.0, rngs=rngs),
+    )
+    with pytest.raises(NotImplementedError, match="ResonateFire"):
+        spyx_nir.to_nir(model, {"input": (8,)}, {"output": (6,)})
+
+
 def test_from_nir_return_all_states():
     """return_all_states yields (outputs, per-layer states)."""
     rngs = nnx.Rngs(0)
@@ -178,5 +234,7 @@ if __name__ == "__main__":
     test_nir_export_import_flatten()
     test_nir_export_import_conv_flatten_dense()
     test_nir_export_import_spiking_conv()
+    test_nir_export_import_psu_lif()
+    test_nir_psu_lif_li_tau_matches_beta()
     test_from_nir_return_all_states()
     print("NIR tests passed!")
