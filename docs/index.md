@@ -4,6 +4,41 @@ Spyx (pronounced "spikes") is a compact spiking neural network (SNN) library bui
 
 Be sure to give it a star on GitHub: [kmheckel/spyx](https://github.com/kmheckel/spyx)
 
+## The module map
+
+Spyx is a **stable core** plus a clearly-fenced **experimental** staging area.
+Build on the core; reach into `spyx.experimental` deliberately, knowing its API
+can move without a deprecation cycle.
+
+**Stable core** — public API, kept backwards-compatible:
+
+| Module | One-liner |
+|---|---|
+| [`spyx.nn`](reference/nn.md) | Spiking neurons (LIF, ALIF, CuBaLIF, LI, IF + recurrent variants), `Sequential`, `Flatten`, and the time-major `run` helper. |
+| [`spyx.axn`](reference/axn.md) | Surrogate-gradient factories (SuperSpike, Arctan, Tanh, Boxcar, Triangular, straight-through). |
+| [`spyx.fn`](reference/fn.md) | Losses & metrics — `integral_crossentropy`, `integral_accuracy`, `silence_reg`, `sparsity_reg`, `mse_spikerate`. |
+| [`spyx.ssm`](reference/ssm.md) | State-space layers — LRU, S5Diag, Mamba, ChunkedSSM. |
+| [`spyx.phasor`](reference/phasor.md) | Phasor networks — `PhasorLinear/Activation/Readout/MLP`, `SpikingPhasor`. |
+| [`spyx.data`](reference/data.md) | Grain event-data loaders with rate / angle / latency encoding (`SHD_loader`, `NMNIST_loader`). |
+| [`spyx.optimize`](reference/optimize.md) | Quick-training helpers — `fit`, `make_train_step`, `make_eval_step`. |
+| [`spyx.nir`](reference/nir.md) | NIR import/export for neuromorphic-hardware interop. |
+| [`spyx.quant`](reference/quant.md) | `qwix`-backed int8 / int4 / ternary quantization-aware training. |
+| [`spyx.bench`](reference/bench.md) | Measurement — latency, throughput, peak memory, FLOP/MFU, spike-rate energy proxy. |
+
+**Experimental** — unstable API under [`spyx.experimental`](reference/experimental.md), the staging area for in-progress research:
+
+| Module | One-liner |
+|---|---|
+| `spyx.experimental.PSU_LIF` :material-flask: | Reset-free parallel LIF (associative-scan). |
+| `spyx.experimental.ResonateFire` :material-flask: | Complex resonate-and-fire oscillatory neuron. |
+| [`spyx.experimental.raven`](reference/experimental.md) :material-flask: | Routing-slot memory (`RavenRSM`) + spiking sibling for high-recall sequence modeling. |
+| [`spyx.experimental.compress`](reference/experimental.md) :material-flask: | Bit-packed activation storage for memory-efficient BPTT. |
+| [`spyx.experimental.stochastic`](reference/experimental.md) :material-flask: | Stochastic (Bernoulli-spiking) & parallelizable prototypes (`SPSN`, ...). |
+
+Import experimental pieces from `spyx.experimental` so the dependency is explicit.
+See [Research with Spyx](explanation/research.md) for how work graduates from
+here into the core.
+
 ## How the documentation is organised
 
 These docs follow the [Diátaxis](https://diataxis.fr) framework: four sections, each answering a different kind of question.
@@ -24,7 +59,7 @@ These docs follow the [Diátaxis](https://diataxis.fr) framework: four sections,
 
 ### :material-book-open-variant: Reference — *information-oriented*
 
-**Looking up a signature?** Exhaustive, auto-generated API documentation for every public module: [`spyx.nn`](reference/nn.md), [`spyx.axn`](reference/axn.md), [`spyx.fn`](reference/fn.md), [`spyx.data`](reference/data.md), [`spyx.optimize`](reference/optimize.md), [`spyx.nir`](reference/nir.md), [`spyx.quant`](reference/quant.md), [`spyx.ssm`](reference/ssm.md), [`spyx.phasor`](reference/phasor.md), [`spyx.experimental`](reference/experimental.md).
+**Looking up a signature?** Exhaustive, auto-generated API documentation for every public module: [`spyx.nn`](reference/nn.md), [`spyx.axn`](reference/axn.md), [`spyx.fn`](reference/fn.md), [`spyx.data`](reference/data.md), [`spyx.optimize`](reference/optimize.md), [`spyx.nir`](reference/nir.md), [`spyx.quant`](reference/quant.md), [`spyx.ssm`](reference/ssm.md), [`spyx.phasor`](reference/phasor.md), [`spyx.bench`](reference/bench.md), [`spyx.experimental`](reference/experimental.md).
 
 ### :material-lightbulb-on: Explanation — *understanding-oriented*
 
@@ -32,6 +67,8 @@ These docs follow the [Diátaxis](https://diataxis.fr) framework: four sections,
 
 - [Design and architecture](explanation/design.md) — why Spyx is built the way it is, the module map, and how it compares to PyTorch SNN libraries.
 - [A primer on spiking neural networks](explanation/snn-primer.md) — spikes, LIF dynamics, surrogate gradients, and rate vs. latency coding.
+- [Parallel spiking neurons](explanation/parallel-spiking-neurons.md) — reset-free, associative-scan neurons that train in `O(log T)` depth.
+- [Research with Spyx](explanation/research.md) — how the `research/` corpus is organised and how to add a study.
 
 ## For developers
 

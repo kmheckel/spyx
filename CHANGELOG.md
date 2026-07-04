@@ -42,17 +42,29 @@ modules. This is a **breaking release** — see the
 - **`spyx.phasor`** — complex-valued phasor networks: `PhasorLinear`,
   `PhasorActivation`, `PhasorReadout`, `PhasorMLP`, and `SpikingPhasor` with
   phase↔spike conversion helpers.
-- **`spyx.nn.PSU_LIF`** — reset-free parallel spiking neuron whose linear
-  membrane `V_t = clip(beta)·V_{t-1} + x_t` is scored either stepwise or, via
-  `parallel(x)`, with a `jax.lax.associative_scan` in `O(log T)` depth.
-- **`spyx.phasor.ResonateFire`** — reset-free complex resonate-and-fire neuron
-  (a damped oscillator); the complex sibling of `PSU_LIF` with the same stepwise
-  and `parallel(x)` associative-scan paths.
 - **`spyx.bench`** — benchmarking harness: `benchmark`, `compare`, and
   `format_table` report median latency, throughput, peak memory, XLA-cost-model
   FLOPs/MFU, and a `spike_rate` energy proxy.
 - **`spyx.quant`** — int8/int4 and BitNet-ternary quantization via a
-  [qwix](https://github.com/google/qwix) wrapper (`spyx[quant]` extra).
+  [qwix](https://github.com/google/qwix) wrapper (`spyx[quant]` extra). Adds
+  `spiking_feedforward_rules` (weight-only int8 that is **lossless on binary
+  activations** — spikes are already on the integer grid) and
+  `binary_activation_error` (a qwix-free proof/check of that property).
+- **`spyx.experimental`** — a research-stage namespace with an **unstable API**
+  (may change without a deprecation cycle). Import these from `spyx.experimental`:
+  - `PSU_LIF` — reset-free parallel spiking neuron (`V_t = clip(beta)·V_{t-1} +
+    x_t`), scored either stepwise or, via `parallel(x)`, with a
+    `jax.lax.associative_scan` in `O(log T)` depth.
+  - `ResonateFire` — reset-free complex resonate-and-fire neuron (a damped
+    oscillator); the complex sibling of `PSU_LIF`.
+  - `raven` — `RavenRSM` (Routing Slot Memories: sparse-routed slot memory) and
+    the spiking sibling `SpikingSlotMemory`, after Raven (Afzal, Bick, Xing,
+    Cevher, Gu 2026).
+  - `compress` — `packed_spike_dense`, a `custom_vjp` matmul that stores its
+    backward residual bit-packed for memory-efficient BPTT, plus pack/unpack
+    helpers.
+  - `stochastic` — `SPSN`, stochastic-associative neurons, and Bernoulli-spiking
+    activations (formerly the top-level `spyx.experimental` module).
 - **`spyx.optimize`** — high-level training loop: `fit`, `make_train_step`,
   `make_eval_step`.
 - **`spyx.data`** — latency (time-to-first-spike) encoding; on-device SHD
