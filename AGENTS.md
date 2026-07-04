@@ -4,7 +4,25 @@ This document provides a concise overview of the Spyx project structure for AI c
 
 ## Project Overview
 
-Spyx is a spiking neural network (SNN) library built on JAX and Flax NNX. It provides a compact, high-performance framework for training SNNs via surrogate gradient descent and neuroevolution.
+Spyx is a spiking neural network (SNN) library built on JAX and Flax NNX. It provides a compact, high-performance framework for training SNNs via surrogate gradient descent and neuroevolution, and — increasingly — a research vehicle for efficient sequence modeling (SNNs, state-space models, phasor/complex networks, and quantization under one roof).
+
+## Stable core vs. `spyx.experimental`
+
+Spyx has two tiers, and agents should respect the boundary when advising users:
+
+- **Stable core** — the supported, API-stable surface: `nn`, `ssm`, `phasor`,
+  `nir`, `bench`, `quant`, `data`, `optimize`, `fn`, `axn`. Rely on these for
+  anything a user will depend on.
+- **`spyx.experimental`** — research-stage building blocks whose **API may change
+  without a deprecation cycle**: `PSU_LIF`, `ResonateFire`, `raven` (RavenRSM +
+  SpikingSlotMemory), `compress` (packed-bit activations), `stochastic` (SPSN,
+  stochastic-associative neurons). Always import these from `spyx.experimental`
+  (e.g. `from spyx.experimental import PSU_LIF, RavenRSM`), never from a top-level
+  module, so usage signals the stability contract. `PSU_LIF`/`ResonateFire` are
+  physically defined in `nn`/`phasor` for code locality but are *surfaced* here.
+
+When something in `experimental` matures (stable API, tests, docs, a real use
+case), it graduates into the core namespace in a minor release.
 
 ## Technology Stack
 
@@ -24,8 +42,8 @@ spyx/
 ├── src/spyx/           # Main library code
 │   ├── __init__.py     # Package initialization, public API exports
 │   ├── axn.py          # Surrogate gradient functions (activation/axon)
+│   ├── bench.py        # Benchmark harness (latency, throughput, MFU, spike-rate)
 │   ├── data.py         # Data loading utilities and Grain transforms
-│   ├── experimental.py # Research-grade neurons (SPSN, stochastic LIF, PSU_LIF)
 │   ├── fn.py           # Functional utilities (losses, metrics, regularizers)
 │   ├── nir.py          # NIR (Neuromorphic Intermediate Representation) support
 │   ├── nn.py           # Neuron models (LIF, ALIF, CuBaLIF, etc.)
@@ -33,6 +51,11 @@ spyx/
 │   ├── phasor.py       # Complex-valued phasor & spiking-phasor networks
 │   ├── quant.py        # int8/int4/BitNet quantization (qwix wrapper, optional)
 │   ├── ssm.py          # State-space layers (LRU, S5Diag, Mamba, ChunkedSSM)
+│   ├── experimental/   # Research-stage, UNSTABLE API (see below)
+│   │   ├── __init__.py #   PSU_LIF, ResonateFire (re-exported), + the modules:
+│   │   ├── raven.py    #   RavenRSM routing-slot memory + SpikingSlotMemory
+│   │   ├── compress.py #   bit-packed activation storage for BPTT memory
+│   │   └── stochastic.py #  SPSN, StochasticAssociative*, sigmoid_bernoulli
 │   └── _version.py     # Version information
 ├── tests/              # Test suite (conftest.py pins JAX to CPU + seeds fixtures)
 ├── docs/               # MkDocs docs, organized by Diátaxis
@@ -108,11 +131,36 @@ Import/export to NIR format for interoperability:
 - Support for standard NIR nodes (LIF, Conv2d, Linear, etc.)
 - RNN subgraph handling for recurrent models
 
-### `experimental.py`
-Experimental features under development:
-- Phasor network implementations
-- Novel neuron dynamics
-- Training algorithms (e.g., DECOLLE)
+### `bench.py` - Benchmark harness
+Measure any spyx module/neuron with correct methodology (JIT once, warmup, median,
+`block_until_ready` before timing):
+- `benchmark(module, input_shape, *, seq_len, batch, run_fn=None, ...)` → `BenchResult`
+  (fwd / fwd+bwd latency, throughput, best-effort peak memory, XLA-cost-model
+  FLOPs/MFU, and **spike-rate as an SNN energy proxy**).
+- `compare({name: module}, ...)` sweeps models × configs; `format_table(results)`
+  pretty-prints. Pass `run_fn=` to drive a module a specific way (e.g. `spyx.nn.run`
+  vs a neuron's own `.parallel` path).
+
+### `ssm.py` / `phasor.py` - Sequence & complex layers
+- `ssm.py`: diagonal complex state-space layers — `LRU`, `S5Diag` (HiPPO-init),
+  `Mamba`/`MambaBlock` (selective), `ChunkedSSM` — all parallelized with
+  `jax.lax.associative_scan`.
+- `phasor.py`: complex-valued `PhasorLinear`/`PhasorActivation`/`PhasorReadout`/
+  `PhasorMLP`, `SpikingPhasor`, and phase↔spike helpers.
+
+### `experimental/` - Research-stage (UNSTABLE API)
+Import from `spyx.experimental` (see the "Stable core vs. `spyx.experimental`"
+section above for the contract):
+- `PSU_LIF` — reset-free parallel LIF: a `(x, V) -> (spikes, V)` step **and** a
+  `.parallel(x)` associative-scan path (O(log T) depth). Physically in `nn`.
+- `ResonateFire` — complex resonate-and-fire oscillator; sequential + `.parallel`.
+  Physically in `phasor`.
+- `raven` — `RavenRSM` (Routing Slot Memories: sparse-routed slot memory with a
+  `SlotRouter`), `SpikingSlotMemory` (spiking sibling), `make_recall_batch` (MQAR
+  task). After Raven (Afzal, Bick, Xing, Cevher, Gu 2026).
+- `compress` — `packed_spike_dense` (a `custom_vjp` matmul that stores its backward
+  residual bit-packed for memory-efficient BPTT) + `pack_spikes`/`unpack_spikes`.
+- `stochastic` — `SPSN`, `StochasticAssociativeLIF`/`CuBaLIF`, `sigmoid_bernoulli`.
 
 ### `quant.py` - Quantization (optional)
 Thin SNN-aware wrapper around Google's `qwix` library:
@@ -120,6 +168,8 @@ Thin SNN-aware wrapper around Google's `qwix` library:
 - `linear_only_rules(weight_qtype, act_qtype)`: shorthand qwix rules that match only dense layers (spiking dynamics stay fp32).
 - `weights_only_rules(weight_qtype)`: weight-only quantization for memory-bound deployment.
 - `bitnet_ternary_rules(act_qtype="int8")`: BitNet b1.58-style ternary weights (via `int2`) + int8 activations for dense / conv layers.
+- `spiking_feedforward_rules(weight_qtype="int8")`: weight-only recipe for the spike→Linear path that is **lossless on binary activations** — because a spike is exactly `{0,1}` it already lies on the integer grid, so quantizing only the weights adds zero activation-side error (recurrent/einsum stays fp32, per Q-S5).
+- `binary_activation_error(spikes, *, weight_qtype="int8")`: qwix-free check that returns `0.0` iff the activations are truly binary (proves the losslessness argument / catches graded surrogate activations).
 - `available()`: returns True iff qwix is importable (the dependency lives behind the `[quant]` extra).
 
 ## Development Workflow
@@ -209,7 +259,7 @@ uv run mkdocs build        # Build static site
 ## Configuration
 
 ### Ruff (`pyproject.toml`)
-- Target: Python 3.10+
+- Target: Python 3.11–3.12 (`requires-python = ">=3.11, <3.13"`)
 - Line length: 88 (Black-compatible)
 - Enabled rules: Pyflakes (F), pycodestyle errors (E), flake8-bugbear (B), import sorting (I)
 - Excluded: research/, docs/, scripts/, data/
@@ -241,8 +291,27 @@ uv run ruff check --fix    # Auto-fix most issues
 uv run ruff check          # Verify all issues resolved
 ```
 
-### Running experiments
-Research notebooks are in `research/` but excluded from linting. Use these for exploratory work without strict code quality requirements.
+### Using Spyx for research (helping a user spin up a study)
+Spyx is designed to be a research vehicle, and the `research/` tree is organized
+for it (excluded from linting so exploration is friction-free):
+
+- **`research/README.md`** — the taxonomy: `reproductions/` (faithful paper
+  repros), `extensions/` (extend a paper), `new/` (novel work), plus a shared
+  `_template/` study template. Point users here first.
+- **To add a study**: copy `research/_template/`, pick the bucket, and write a
+  `run.py` + `README.md`. Model it on an existing study such as
+  `research/new/parallel_spiking_neurons/run_study.py` (SHD via a cached `.npz`,
+  `spyx.optimize`/manual loop, `spyx.fn` losses/metrics). A `SMOKE=1` synthetic
+  mode that runs on CPU in seconds makes studies self-checking.
+- **What makes spyx good for this**: the *same* `associative_scan` machinery
+  parallelizes SNNs (`experimental.PSU_LIF`, `experimental.ResonateFire`), SSMs
+  (`ssm.S5Diag`/`Mamba`), and phasors — so you can swap dynamics behind one
+  interface. Use **`spyx.bench`** to measure (latency / MFU / spike-rate), stage
+  new ideas under **`spyx.experimental`**, and reach for **`spyx.quant`** +
+  `experimental.compress` for efficiency. Report honest results — several existing
+  studies are negative/boundary results, and that is the point.
+- **Promotion path**: when an experimental module earns a stable API + tests +
+  docs + a real use case, graduate it into the core namespace.
 
 ## Claude Code workflows
 
@@ -275,8 +344,10 @@ read-only commands. A `.github/PULL_REQUEST_TEMPLATE.md` structures new PRs.
 The package exports the following in `src/spyx/__init__.py`:
 - `jax`, `jnp` - JAX and JAX NumPy
 - `axn` - Surrogate gradients
+- `bench` - Benchmark harness (latency, throughput, MFU, spike-rate)
 - `data` - Data loading
-- `experimental` - Experimental features
+- `experimental` - Research-stage, **unstable-API** namespace (PSU_LIF,
+  ResonateFire, raven, compress, stochastic)
 - `fn` - Functional utilities
 - `nir` - NIR conversion
 - `nn` - Neuron models

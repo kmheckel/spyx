@@ -40,10 +40,20 @@ and `smoke` on every PR. Match it locally before pushing.
 - **Ruff** is the linter/formatter (line length 88). `src/` and `tests/` are
   linted; `research/`, `docs/`, `scripts/` are excluded.
 
+## Stable core vs. experimental
+
+Two tiers — keep the boundary when advising users. **Stable core** (supported
+API): `nn`, `ssm`, `phasor`, `nir`, `bench`, `quant`, `data`, `optimize`, `fn`,
+`axn`. **`spyx.experimental`** (unstable API, may change without deprecation):
+`PSU_LIF`, `ResonateFire`, `raven` (RavenRSM + SpikingSlotMemory), `compress`,
+`stochastic`. Import experimental things from `spyx.experimental`. New research
+goes in `research/` (see `research/README.md`) and stages under `spyx.experimental`
+before graduating to core. See [AGENTS.md](AGENTS.md) for the full map.
+
 ## Repository layout
 
-- `src/spyx/` — library (`nn`, `axn`, `fn`, `data`, `optimize`, `nir`, `quant`,
-  `ssm`, `phasor`, `experimental`).
+- `src/spyx/` — library (`nn`, `axn`, `bench`, `fn`, `data`, `optimize`, `nir`,
+  `quant`, `ssm`, `phasor`, and the `experimental/` package).
 - `tests/` — pytest suite (`conftest.py` pins JAX to CPU + seeds fixtures).
 - `docs/` — MkDocs, organized by the [Diátaxis](https://diataxis.fr) framework
   (tutorials / how-to / reference / explanation).

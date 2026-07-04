@@ -5,7 +5,9 @@ description: Scaffold a new Spyx training experiment. Use when the user asks to 
 
 # Scaffold a new Spyx experiment
 
-Create a single Python script under `research/<short-name>/train.py` (or a new notebook under `docs/examples/`, if the user wants interactive). The scaffold should cover five sections. Adapt each to the user's data and architecture.
+For a quick training script, create `research/<short-name>/train.py` (or a notebook under `docs/examples/` if the user wants interactive). For a **research study** (reproducing/extending a paper or novel work), use the repo's research structure instead: read `research/README.md` for the taxonomy (`reproductions/` · `extensions/` · `new/`), copy `research/_template/` into the right bucket, and write `run.py` + `README.md` — model it on `research/new/parallel_spiking_neurons/run_study.py`. Add a `SMOKE=1` synthetic-data mode so the study self-checks on CPU in seconds.
+
+The scaffold below covers five sections. Adapt each to the user's data and architecture.
 
 ## 1. Imports + config
 
@@ -98,8 +100,10 @@ history = opt.fit(
 
 1. **Activity regularization**: wrap hidden layers in `spyx.nn.ActivityRegularization` or tap intermediate spike trains and add `spyx.fn.silence_reg` / `sparsity_reg` to the loss. See `shd_sg_template.ipynb`.
 2. **Data augmentation**: `spyx.data.shift_augment` randomly rolls the channel axis per batch — cheap and effective on SHD.
-3. **Quantization**: once fp32 works, drop in `spyx.quant.quantize(model, sample_x, sample_state)` for int8 QAT. Requires `[quant]` extra.
+3. **Quantization**: once fp32 works, drop in `spyx.quant.quantize(model, sample_x, sample_state)` for int8 QAT. Requires `[quant]` extra. For a spiking net, `spyx.quant.spiking_feedforward_rules()` gives weight-only int8 that's *lossless* on binary activations.
 4. **NIR export**: after training, call `spyx.nir.to_nir(model, ...)` for neuromorphic deployment.
+5. **Measure it**: use `spyx.bench.benchmark(...)` / `compare(...)` for latency / throughput / MFU / spike-rate (energy proxy) — the right way to compare architectures or execution paths.
+6. **Research building blocks** (unstable, `from spyx.experimental import ...`): swap the hidden neuron for `PSU_LIF` / `ResonateFire` (parallel associative-scan neurons), mix in `spyx.ssm` (`S5Diag`/`Mamba`) or `raven` (routing-slot memory) for sequence modeling, or use `compress.packed_spike_dense` to cut BPTT memory. The same `associative_scan` interface spans SNNs / SSMs / phasors, so dynamics are swappable behind one API.
 
 ## Don'ts (common newcomer mistakes)
 
