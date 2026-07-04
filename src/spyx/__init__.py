@@ -3,13 +3,26 @@
 import jax
 import jax.numpy as jnp
 
-from . import axn, data, experimental, fn, nir, nn, optimize, phasor, quant, ssm
+from . import (
+    axn,
+    bench,
+    data,
+    experimental,
+    fn,
+    nir,
+    nn,
+    optimize,
+    phasor,
+    quant,
+    ssm,
+)
 from ._version import __version__
 
 __all__ = [
     "jax",
     "jnp",
     "axn",
+    "bench",
     "data",
     "experimental",
     "fn",

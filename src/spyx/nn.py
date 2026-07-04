@@ -190,6 +190,119 @@ class LIF(nnx.Module):
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
 
+def _leaky_associative_op(element_i, element_j):
+    """Associative combine for a first-order linear leaky recurrence.
+
+    Each element is a pair ``(A, b)`` standing for the affine map
+    ``V -> A * V + b``. Composing two such maps (apply ``i`` then ``j``)
+    is itself affine, ``V -> (A_j A_i) V + (A_j b_i + b_j)``, so this
+    operator is associative and usable with ``jax.lax.associative_scan``.
+    Adapted from the parallel-scan formulation in the S5 SSM paper.
+    """
+    A_i, b_i = element_i
+    A_j, b_j = element_j
+    return A_j * A_i, A_j * b_i + b_j
+
+
+class PSU_LIF(nnx.Module):
+    r"""Parallel Spiking Unit LIF: a reset-free leaky integrate-and-fire neuron.
+
+    A standard :class:`LIF` subtracts a reset ``spikes * threshold`` from the
+    membrane every step, which couples each timestep to the (nonlinear) spike
+    of the previous step and forces a strictly sequential ``O(T)`` scan.
+    Dropping the reset turns the membrane into a pure linear leaky integrator,
+
+    .. math::
+        V_t = \beta \, V_{t-1} + x_t ,
+
+    which is a first-order *associative* recurrence and can therefore be
+    evaluated with :func:`jax.lax.associative_scan` in ``O(\log T)`` parallel
+    depth on an accelerator. Spikes are a pointwise surrogate threshold applied
+    to the whole membrane trace, :math:`s_t = \sigma(V_t - \text{threshold})`.
+
+    Removing the reset is a deliberate accuracy/parallelism trade-off: the
+    neuron never depresses after firing, so it can fire on consecutive steps
+    while a well-tuned integration window keeps activity bounded. In exchange
+    the sequence can be scored in logarithmic instead of linear depth.
+
+    Two execution modes are provided and are numerically identical:
+
+    * :meth:`__call__` -- one reset-free timestep ``(x, V) -> (spikes, V)``
+      with ``V = beta * V + x``; a drop-in for :func:`spyx.nn.run`,
+      :class:`Sequential`, and NIR, exactly like :class:`LIF`.
+    * :meth:`parallel` -- the whole time-major sequence at once via an
+      associative scan over the leak, ``O(\log T)`` depth.
+
+    Because both modes use the *same* clipped ``beta`` and the *same* surrogate,
+    and :meth:`__call__` integrates the input *before* spiking, scanning
+    :meth:`__call__` over ``x`` reproduces :meth:`parallel` exactly.
+    """
+
+    def __init__(
+        self,
+        hidden_shape: tuple,
+        beta=None,
+        threshold=1.0,
+        activation=None,
+        *,
+        rngs: nnx.Rngs,
+    ):
+        """
+        :hidden_shape: Shape of the layer.
+        :beta: decay rate. Scalar if provided, else learnable per-unit init.
+        :threshold: firing threshold. Defaults to 1.
+        :activation: spyx.axn.Axon object determining the surrogate spike.
+        """
+        self.hidden_shape = hidden_shape
+        self.threshold = threshold
+        self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
+
+        if beta is None:
+            self.beta = nnx.Param(
+                nnx.initializers.truncated_normal(stddev=0.5)(
+                    rngs.params(), self.hidden_shape
+                )
+                + 0.25
+            )
+        else:
+            self.beta = nnx.Param(jnp.full((), beta))
+
+    def __call__(self, x, V):
+        """One reset-free timestep.
+
+        :x: input vector coming from previous layer.
+        :V: neuron state tensor.
+
+        Integrates the input into the membrane (``V = beta * V + x``, no
+        reset), then emits a surrogate spike on the updated membrane so that
+        scanning this method matches :meth:`parallel` exactly.
+        """
+        beta = jnp.clip(self.beta[...], 0, 1)
+        V = beta * V + x
+        spikes = self.spike(V - self.threshold)
+        return spikes, V
+
+    def parallel(self, x):
+        r"""Score a whole time-major sequence with an associative scan.
+
+        :x: input with shape ``[Time, Batch, ...]``.
+        :return: spikes with shape ``[Time, Batch, ...]``.
+
+        Computes the full membrane trace ``V_t = beta * V_{t-1} + x_t`` (with
+        ``V_{-1} = 0``) via :func:`jax.lax.associative_scan` over the time axis
+        in ``O(\log T)`` depth, then applies the surrogate spike pointwise.
+        """
+        beta = jnp.clip(self.beta[...], 0, 1)
+        # Broadcast the (scalar or per-unit) leak to every (Time, Batch, ...)
+        # element so the linear-recurrence coefficient A_t == beta everywhere.
+        A = jnp.broadcast_to(beta, x.shape)
+        _, V = jax.lax.associative_scan(_leaky_associative_op, (A, x), axis=0)
+        return self.spike(V - self.threshold)
+
+    def initial_state(self, batch_size):
+        return jnp.zeros((batch_size,) + self.hidden_shape)
+
+
 class CuBaLIF(nnx.Module):
     def __init__(
         self,
