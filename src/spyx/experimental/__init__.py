@@ -23,6 +23,10 @@ Contents:
 - :mod:`spyx.experimental.stochastic` — stochastic (Bernoulli-spiking) and
   parallelizable prototypes: ``SPSN``, ``StochasticAssociativeLIF``,
   ``StochasticAssociativeCuBaLIF`` and the ``sigmoid_bernoulli`` activations.
+- :mod:`spyx.experimental.litert` — export a spiking model's single-timestep
+  step ``(x_t, state) -> (out, new_state)`` to a LiteRT/TFLite flatbuffer
+  (``to_litert``, ``step_signature``) so a phone app can run the temporal loop
+  on-device. Conversion needs TensorFlow (``spyx[litert]``), imported lazily.
 
 Related research studies live under ``research/new/`` in the repository.
 """
@@ -31,8 +35,9 @@ Related research studies live under ``research/new/`` in the repository.
 # here so the experimental surface is discoverable in one place.
 from ..nn import PSU_LIF
 from ..phasor import ResonateFire
-from . import compress, raven, stochastic
+from . import compress, litert, raven, stochastic
 from .compress import pack_spikes, packed_spike_dense, unpack_spikes
+from .litert import LiteRTStepSignature, step_signature, to_litert
 from .raven import RavenRSM, SlotRouter, SpikingSlotMemory, make_recall_batch
 from .stochastic import (
     SPSN,
@@ -44,8 +49,12 @@ from .stochastic import (
 
 __all__ = [
     "compress",
+    "litert",
     "raven",
     "stochastic",
+    "to_litert",
+    "step_signature",
+    "LiteRTStepSignature",
     "PSU_LIF",
     "ResonateFire",
     "RavenRSM",
