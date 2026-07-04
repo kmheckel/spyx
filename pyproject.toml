@@ -12,11 +12,12 @@ dependencies = [
     # flax 0.11 changed the nnx.Optimizer signature to require `wrt=` and made
     # `optimizer.update(model, grads)` the canonical call. Spyx's tutorials and
     # spyx.quant target the newer API; pin accordingly.
-    "flax>=0.11.0",
+    # flax >=0.12.7 fixes a Python 3.14 __annotations__ crash in flax.linen.
+    "flax>=0.12.7",
     "grain",
 ]
 readme = "README.md"
-requires-python = ">=3.11, <3.14"
+requires-python = ">=3.11, <3.15"
 license = { text = "MIT" }
 
 [project.optional-dependencies]
