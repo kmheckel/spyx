@@ -15,6 +15,7 @@ from . import (
     optimize,
     phasor,
     quant,
+    raven,
     ssm,
 )
 from ._version import __version__
@@ -33,6 +34,7 @@ __all__ = [
     "optimize",
     "phasor",
     "quant",
+    "raven",
     "ssm",
     "__version__",
 ]
