@@ -113,7 +113,10 @@ method below exists to correct it.
   comparisons as follow-ups.
 
 See the [SNN primer](snn-primer.md) for the mechanics of the surrogate and why the
-hard spike has no usable gradient.
+hard spike has no usable gradient, and
+[Surrogate gradients & Gaussian smoothing](surrogate-gradients-and-gaussian-smoothing.md)
+for why a surrogate derivative is a smoothing kernel — and how that makes it the
+activation-space twin of evolution strategies.
 
 ## Transfer — conversion & quantization-aware training
 
