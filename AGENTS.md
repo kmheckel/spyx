@@ -16,7 +16,10 @@ Spyx has two tiers, and agents should respect the boundary when advising users:
 - **`spyx.experimental`** — research-stage building blocks whose **API may change
   without a deprecation cycle**: `PSU_LIF`, `ResonateFire`, `raven` (RavenRSM +
   SpikingSlotMemory), `compress` (packed-bit activations), `stochastic` (SPSN,
-  stochastic-associative neurons). Always import these from `spyx.experimental`
+  stochastic-associative neurons), `hybrid` (surrogate + orthogonal-ES error
+  correction), `zoo` (runnable recipes by application × method × architecture),
+  `onnx` (ONNX export of the spiking step or the whole `nn.run` loop).
+  Always import these from `spyx.experimental`
   (e.g. `from spyx.experimental import PSU_LIF, RavenRSM`), never from a top-level
   module, so usage signals the stability contract. `PSU_LIF`/`ResonateFire` are
   physically defined in `nn`/`phasor` for code locality but are *surfaced* here.
@@ -55,7 +58,10 @@ spyx/
 │   │   ├── __init__.py #   PSU_LIF, ResonateFire (re-exported), + the modules:
 │   │   ├── raven.py    #   RavenRSM routing-slot memory + SpikingSlotMemory
 │   │   ├── compress.py #   bit-packed activation storage for BPTT memory
-│   │   └── stochastic.py #  SPSN, StochasticAssociative*, sigmoid_bernoulli
+│   │   ├── stochastic.py #  SPSN, StochasticAssociative*, sigmoid_bernoulli
+│   │   ├── hybrid.py   #   0+1 trainer: surrogate grad + orthogonal-ES correction
+│   │   ├── zoo/        #   reference recipes (control/classification/language)
+│   │   └── onnx.py     #   ONNX export (per-step or full nn.run loop)
 │   └── _version.py     # Version information
 ├── tests/              # Test suite (conftest.py pins JAX to CPU + seeds fixtures)
 ├── docs/               # MkDocs docs, organized by Diátaxis
@@ -161,6 +167,24 @@ section above for the contract):
 - `compress` — `packed_spike_dense` (a `custom_vjp` matmul that stores its backward
   residual bit-packed for memory-efficient BPTT) + `pack_spikes`/`unpack_spikes`.
 - `stochastic` — `SPSN`, `StochasticAssociativeLIF`/`CuBaLIF`, `sigmoid_bernoulli`.
+- `hybrid` — the 0+1 trainer. `hybrid_gradient(model, loss_surrogate, loss_true,
+  key, ...)` returns a corrected gradient: the surrogate gradient plus an
+  antithetic-NES estimate of the true (hard-spike) loss gradient, projected
+  orthogonal to the surrogate (the complement of Guided-ES). Also
+  `make_hybrid_train_step`, `es_gradient`, `hybrid_diagnostics`. A `normalize=True`
+  mode makes λ a fraction of the surrogate step (`λ·‖g_s‖/‖g_orth‖`). See
+  `research/new/hybrid_evo_surrogate/` for the study (honest result: self-norm λ
+  removes the raw failure mode and reaches parity, but does not beat the surrogate
+  on easy tasks — a large-surrogate-bias regime is needed for a real win).
+- `zoo` — runnable reference recipes keyed by application and tagged by training
+  method × architecture. `REGISTRY`/`list_recipes`/`get`; each recipe exposes
+  `build`, `synthetic_batch`, `demo` on synthetic data: `control-lif-es`
+  (evolutionary / LIF-MLP), `classification-rsnn` (surrogate / RSNN),
+  `language-s5` (gradient / S5).
+- `onnx` — `to_onnx(model, input_shape, *, sequence_length=None, ...)`: export a
+  spiking model to ONNX bytes — the per-timestep step, or (with `sequence_length`)
+  the whole `spyx.nn.run` temporal loop as a native ONNX `Scan`/`Loop`. Conversion
+  deps are imported lazily (not a hard dependency).
 
 ### `quant.py` - Quantization (optional)
 Thin SNN-aware wrapper around Google's `qwix` library:

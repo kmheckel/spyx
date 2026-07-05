@@ -27,6 +27,9 @@ of the library.
 | [`spyx.experimental.raven`](#spyxexperimentalraven) | Module | Routing-slot memory (`RavenRSM`), spiking sibling (`SpikingSlotMemory`), `SlotRouter`, and the `make_recall_batch` MQAR generator. |
 | [`spyx.experimental.compress`](#spyxexperimentalcompress) | Module | Bit-packed activation storage for memory-efficient BPTT. |
 | [`spyx.experimental.stochastic`](#spyxexperimentalstochastic) | Module | Stochastic (Bernoulli-spiking) and parallelizable prototypes: `SPSN`, `StochasticAssociative{LIF,CuBaLIF}`, and the `sigmoid_bernoulli` activations. |
+| [`spyx.experimental.hybrid`](#spyxexperimentalhybrid) | Module | The 0+1 hybrid trainer: surrogate gradient + antithetic-NES correction projected orthogonal to the surrogate (`hybrid_gradient`, `make_hybrid_train_step`, `es_gradient`, `hybrid_diagnostics`). |
+| [`spyx.experimental.zoo`](#spyxexperimentalzoo) | Package | Runnable reference recipes keyed by application (control / classification / language) and tagged by training method × architecture (`REGISTRY`, `list_recipes`, `get`). |
+| [`spyx.experimental.onnx`](#spyxexperimentalonnx) | Module | Export a spiking model to ONNX — per-timestep step, or the whole `spyx.nn.run` loop as a native ONNX `Scan`/`Loop`. Conversion deps imported lazily. |
 
 Related research studies live under
 [`research/new/`](https://github.com/kmheckel/spyx/tree/main/research/new) in the
@@ -54,3 +57,24 @@ experimental surface is discoverable in one place.
 ::: spyx.experimental.stochastic
     options:
       show_if_no_docstring: true
+
+## spyx.experimental.hybrid
+
+Surrogate-gradient descent corrected by an orthogonalised evolutionary term. See
+[Surrogate gradients & Gaussian smoothing](../explanation/surrogate-gradients-and-gaussian-smoothing.md)
+for the theory and [Training methods](../explanation/training-methods.md) for
+where it fits.
+
+::: spyx.experimental.hybrid
+
+## spyx.experimental.zoo
+
+Runnable recipes tagged by application × training method × architecture. Each
+`Recipe` exposes `build` / `synthetic_batch` / `demo` on synthetic data; browse
+with `list_recipes(application=..., method=...)`.
+
+::: spyx.experimental.zoo
+
+## spyx.experimental.onnx
+
+::: spyx.experimental.onnx

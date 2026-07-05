@@ -71,6 +71,9 @@ nav:
       - spyx.bench: reference/bench.md
       - spyx.experimental: reference/experimental.md
   - Explanation:
+      - Training methods: explanation/training-methods.md
+      - Choosing an approach: explanation/choosing-an-approach.md
+      - Surrogate gradients & Gaussian smoothing: explanation/surrogate-gradients-and-gaussian-smoothing.md
       - Design & architecture: explanation/design.md
       - SNN primer: explanation/snn-primer.md
       - Parallel spiking neurons: explanation/parallel-spiking-neurons.md
