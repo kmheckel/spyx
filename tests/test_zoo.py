@@ -62,9 +62,17 @@ def test_build_and_loss_finite(name):
     assert _finite(value)
 
 
+def _skip_if_optional_dep_missing(recipe: Recipe) -> None:
+    # Evolutionary recipes drive their demo with evosax, an optional [evo] extra
+    # that CI does not install; skip rather than fail when it is absent.
+    if recipe.method == "evolutionary":
+        pytest.importorskip("evosax")
+
+
 @pytest.mark.parametrize("name", sorted(REGISTRY))
 def test_demo_runs_and_history_finite(name):
     recipe = get(name)
+    _skip_if_optional_dep_missing(recipe)
     history = recipe.demo(steps=6)
     assert len(history) == 6
     assert _finite(history)
