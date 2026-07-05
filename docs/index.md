@@ -65,6 +65,15 @@ These docs follow the [Diátaxis](https://diataxis.fr) framework: four sections,
 
 **Want to understand why?** Background and design discussion, read away from the keyboard.
 
+!!! tip "Not sure how to train your model? Start here."
+    [**Choosing an approach**](explanation/choosing-an-approach.md) turns the
+    [training-methods spine](explanation/training-methods.md) into a decision:
+    pick a training method by the *kind of information* it uses (evolutionary,
+    surrogate-gradient, conversion/QAT, local, or the 0+1 hybrid), then see which
+    applications and architectures it fits, and where the Spyx entry points are.
+
+- [Training methods](explanation/training-methods.md) — the method spine: evolutionary, surrogate-gradient, conversion/QAT, local/bio-inspired, and the 0+1 hybrid, each with when-to-use, the trade-off, and the Spyx entry point.
+- [Choosing an approach](explanation/choosing-an-approach.md) — decision matrices (method × application, method × architecture) plus a task → application → architecture → method flow.
 - [Design and architecture](explanation/design.md) — why Spyx is built the way it is, the module map, and how it compares to PyTorch SNN libraries.
 - [A primer on spiking neural networks](explanation/snn-primer.md) — spikes, LIF dynamics, surrogate gradients, and rate vs. latency coding.
 - [Parallel spiking neurons](explanation/parallel-spiking-neurons.md) — reset-free, associative-scan neurons that train in `O(log T)` depth.
