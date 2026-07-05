@@ -20,6 +20,11 @@ Contents:
 - :mod:`spyx.experimental.compress` — bit-packed activation storage for
   memory-efficient BPTT (``packed_spike_dense``, ``pack_spikes``,
   ``unpack_spikes``).
+- :mod:`spyx.experimental.onnx` — export a spiking model to ONNX: the
+  per-timestep step ``(x_t, state) -> (out, new_state)`` (flat tensor I/O), or,
+  when a sequence length is given, the whole ``spyx.nn.run`` temporal loop as a
+  native ONNX ``Scan``/``Loop``. Conversion deps (tensorflow/tf2onnx/onnx) are
+  imported lazily.
 - :mod:`spyx.experimental.stochastic` — stochastic (Bernoulli-spiking) and
   parallelizable prototypes: ``SPSN``, ``StochasticAssociativeLIF``,
   ``StochasticAssociativeCuBaLIF`` and the ``sigmoid_bernoulli`` activations.
@@ -31,7 +36,7 @@ Related research studies live under ``research/new/`` in the repository.
 # here so the experimental surface is discoverable in one place.
 from ..nn import PSU_LIF
 from ..phasor import ResonateFire
-from . import compress, raven, stochastic
+from . import compress, onnx, raven, stochastic
 from .compress import pack_spikes, packed_spike_dense, unpack_spikes
 from .raven import RavenRSM, SlotRouter, SpikingSlotMemory, make_recall_batch
 from .stochastic import (
@@ -44,6 +49,7 @@ from .stochastic import (
 
 __all__ = [
     "compress",
+    "onnx",
     "raven",
     "stochastic",
     "PSU_LIF",
