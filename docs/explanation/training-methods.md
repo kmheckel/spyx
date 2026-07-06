@@ -165,6 +165,15 @@ hyperparameters (which layers, which qtype).
     `spyx.quant.spiking_feedforward_rules` builds exactly this, and it is a genuine
     free efficiency gain rather than an accuracy trade.
 
+**Build multiplication-light, don't just convert.** Post-training quantization
+(above) *converts* a trained dense model; the complementary path is to **train the
+low-precision architecture from scratch**. [`spyx.experimental.matfree`](../reference/experimental.md)
+supplies the native primitives — ternary (BitNet) `TernaryLinear` whose forward
+pass is signed accumulations, and shift-add (DeepShift) `ShiftAddLinear` whose
+weights are powers of two, plus `MatMulFreeBlock` / `MLGRU` — all trained through
+straight-through estimators. Use `spyx.quant` to make an existing model cheaper;
+use `matfree` to design a matmul-free one.
+
 ## Local / bio-inspired — mostly roadmap
 
 **Idea.** Global BPTT is biologically implausible and memory-hungry (it stores the
@@ -233,11 +242,23 @@ antithetic ES batch of hard-spike forward passes — more compute per update tha
 pure 1st-order, far less than pure 0th-order — in exchange for a descent direction
 that is unbiased in the subspace the surrogate misses.
 
-**Spyx entry point.** The concrete implementation is being staged at
-**`spyx.experimental.hybrid`** (import as `from spyx.experimental.hybrid import
-...`). Until it lands you can assemble the pieces by hand:
-[`spyx.axn`](../reference/axn.md) for \(g_s\), `evosax`'s antithetic sampling for
-\(g_h\), and a projection you drop into your `nnx.value_and_grad` step.
+**Spyx entry point.** [`spyx.experimental.hybrid`](../reference/experimental.md)
+(`from spyx.experimental.hybrid import hybrid_gradient, make_hybrid_train_step, ...`)
+is the drop-in implementation: `hybrid_gradient` returns the corrected gradient
+pytree, `make_hybrid_train_step` wraps it into an `nnx` step, and
+`hybrid_diagnostics` exposes `cosine(g_h, g_s)` / `‖g_orth‖` so you can see the
+correction magnitude. A `normalize=True` mode makes the correction weight a
+*fraction of the surrogate step* (`λ·‖g_s‖/‖g_orth‖`), which stops a high-variance
+ES term from swamping the bulk direction.
+
+**Surrogate-steered variant (SGES).** `sges_gradient` / `make_sges_hybrid_train_step`
+use the surrogate direction as a **guiding subspace**: the along-guide derivative
+is measured exactly and ES samples are spent only on the orthogonal complement,
+cutting estimate variance several-fold vs isotropic ES (verified ~7× on the study
+task). Honest status: the ES variants remove the raw failure mode and SGES reduces
+variance, but on easy, well-matched tasks the surrogate still wins — the hybrid's
+edge needs a genuinely large-surrogate-bias regime. See the study and numbers under
+[`research/new/hybrid_evo_surrogate/`](https://github.com/kmheckel/spyx/tree/main/research/new/hybrid_evo_surrogate).
 
 ## Summary
 
@@ -245,8 +266,8 @@ that is unbiased in the subspace the surrogate misses.
 |---|---|---|---|---|
 | **Evolutionary** | loss values | control/RL, non-differentiable or hard-spike objectives | many forward evals | `evosax` + `spyx.experimental.zoo` |
 | **Surrogate gradient** | surrogate loss gradient | classification, sequence modelling — the default | 1 fwd+bwd / step | [`spyx.axn`](../reference/axn.md) + [`spyx.optimize.fit`](../reference/optimize.md) |
-| **Conversion & QAT** | a pretrained model | deploying an existing model spiking / low-precision | fine-tune, longer `T` | [`spyx.quant`](../reference/quant.md) |
+| **Conversion & QAT** | a pretrained model | deploying an existing model spiking / low-precision | fine-tune, longer `T` | [`spyx.quant`](../reference/quant.md) (convert) · [`spyx.experimental.matfree`](../reference/experimental.md) (build matmul-free from scratch) |
 | **Local / bio-inspired** | local signals | online / on-chip learning | — (roadmap) | issues [#27](https://github.com/kmheckel/spyx/issues/27), [#28](https://github.com/kmheckel/spyx/issues/28) |
-| **0+1 hybrid** | surrogate grad + hard-spike ES | fixing surrogate bias on the hard objective | fwd+bwd **+** small ES batch | `spyx.experimental.hybrid` |
+| **0+1 hybrid** | surrogate grad + hard-spike ES | fixing surrogate bias on the hard objective | fwd+bwd **+** small ES batch | [`spyx.experimental.hybrid`](../reference/experimental.md) (incl. SGES) |
 
 Now pick one for *your* task and architecture: [Choosing an approach](choosing-an-approach.md).

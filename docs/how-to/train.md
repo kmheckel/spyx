@@ -89,6 +89,24 @@ Notes:
 - `@nnx.jit` compiles the whole step, including the time scan inside `snn.run`; the model and optimizer are updated in place.
 - To compose Optax transforms, just chain them: `optax.chain(optax.centralize(), optax.lion(3e-4))`.
 
+## Option 3: `spyx.optimize.compile_fit` — whole-loop JIT
+
+When you want maximum throughput and the dataset fits on the accelerator, `compile_fit` stages the data on-device and `jax.lax.scan`s the entire epochs × batches loop under a **single** `jax.jit` — no per-step Python, no re-tracing. A whole run becomes one compiled kernel.
+
+```python
+model, history = opt.compile_fit(
+    model,
+    optax.lion(3e-4),          # an Optax tx is auto-wrapped in the backprop Solver
+    loss_fn,
+    train_data=(events, targets),   # arrays/pytrees, staged on-device
+    epochs=30,
+    eval_data=(test_events, test_targets),
+    metric_fn=spyx.fn.integral_accuracy(),
+)
+```
+
+`compile_fit` is optimiser-agnostic via the `Solver` protocol: pass an Optax transform for the surrogate-gradient path, or a custom `Solver` (`init` / `step`) to run an evolutionary strategy through the same machinery — see [`spyx.experimental.hybrid`](../reference/experimental.md) for the ES / SGES solvers. Use `fit` (Option 1) instead when the data is streamed or too large to stage.
+
 ## Add activity regularisation
 
 To discourage silent or over-active neurons, tap the intermediate spike trains in a custom module and add `spyx.fn.silence_reg` / `spyx.fn.sparsity_reg` penalties:
