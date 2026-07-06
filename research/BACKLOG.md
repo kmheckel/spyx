@@ -1,12 +1,18 @@
 # Research backlog
 
-The queue the **scheduled agentic runner** pulls from (see the
+The queue the **agentic runner** pulls from (see the
 [research-study skill](../.claude/skills/research-study.md)). Each run picks the
 **top unblocked, unclaimed** item, does one study, opens a PR, and stops for review.
 
 **State:** `ready` (pick me) · `claimed: <branch>` (a run is on it) · `in-review: #<pr>`
 (PR open, awaiting you) · `done` (merged) · `blocked: <why>`. Ordered by priority;
 the runner takes the highest `ready` item. Add items freely — one claim per item.
+
+**Bucket** (the taxonomy in [README.md](README.md)): `replication` (reproduce a
+paper's claim in Spyx) · `extension` (push a method somewhere new) · `novelty` (a gap
+Spyx is suited to fill). [`/research-scout`](../.claude/skills/research-scout.md)
+proposes buckets from the literature into **Candidates** below; you triage them to
+`ready`.
 
 ## Active track: quantization & efficient architectures
 
@@ -36,6 +42,12 @@ the runner takes the highest `ready` item. Add items freely — one claim per it
    kernel." Survey which neuron types (CuBaLIF, ALIF) can be linearized into an
    associative-scan `.parallel` method, and prototype one. Claim: N more neurons get
    the 2–21× GPU speedup with no accuracy loss.
+
+## Candidates (from scouting — triage before promoting to `ready`)
+
+Proposed by [`/research-scout`](../.claude/skills/research-scout.md) from the
+literature; each carries a paper link + bucket. **Not picked up by the runner until
+you move one to a numbered `ready` item above.** (None yet — run the scout to fill.)
 
 ## Conventions for items
 
