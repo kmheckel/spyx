@@ -125,6 +125,35 @@ spyx already holds the storage half of this — bit-packed spikes in
 [`spyx.experimental.compress`](../reference/experimental.md) — the missing half is a
 block-sparse consumer kernel.
 
+## Does matmul-free lose to NVFP4?
+
+Levers 1 and 2 are in tension, and it is worth being honest about it: if the
+hardware makes a 4-bit *multiply* native and free, does the whole matmul-free
+premise (avoid the multiply) evaporate? **On Blackwell, for dense models, largely
+yes** — but that is close to a category error, because Blackwell is exactly the
+substrate you would pick NVFP4 *for*.
+
+- **On a B200, matfree loses its performance rationale.** Ternary / shift-add does
+  not map onto the dense systolic MAC array; realising "accumulate not multiply"
+  needs a custom skip-zeros kernel that fights the tensor core and rarely beats its
+  throughput. Run ternary as a dense low-precision matmul instead and you gain
+  nothing over NVFP4 while *losing accuracy* — FP4's E2M1 + block scaling represents
+  dynamic range far better than 3-level ternary. This is why BitNet-style **realised**
+  wins ship on CPU (`bitnet.cpp`), not on tensor-core GPUs.
+- **But matfree is not dominated across the board.** (i) *Footprint / bandwidth* —
+  ternary is ~1.58 bit vs NVFP4's ~4+, so for memory-bound decode / edge the smaller
+  weights can still win. (ii) *Substrate* — matfree's real home is hardware **without**
+  FP4 tensor cores (CPU, mobile, FPGA, custom ASIC, neuromorphic), where adders beat
+  multipliers in area and energy. (iii) *Spiking* — with **binary** activations, a
+  1-bit × 4-bit product is not a native tensor-core op, so NVFP4's edge is half-wasted
+  and an accumulate-style path stays competitive precisely in the spiking case.
+
+**Honest positioning for [`spyx.experimental.matfree`](../reference/experimental.md):**
+it is *not* "beats NVFP4 on Blackwell." It is the efficiency lever for the substrates
+that **don't have** NVFP4, plus the binary-spike accumulate case — a bet *against*
+needing a B200, not a challenge to one. NVFP4 wins the datacenter-GPU lottery; matfree
+wins the edge / ASIC / neuromorphic one.
+
 ## Synthesis
 
 - **Targeting event-driven silicon / sub-mW sensing?** Hard-reset spiking on the
