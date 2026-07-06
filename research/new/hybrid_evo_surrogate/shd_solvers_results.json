@@ -1,0 +1,27 @@
+{
+  "config": {
+    "T": 128,
+    "emb": 128,
+    "pop": 128,
+    "K": 256,
+    "latent_dim": 512
+  },
+  "arms": {
+    "surrogate": {
+      "test_acc": 0.32421875,
+      "gens_or_epochs": 30
+    },
+    "es(K=256)": {
+      "test_acc": 0.328125,
+      "gens_or_epochs": 30
+    },
+    "cmaes": {
+      "test_acc": 0.07080078125,
+      "gens_or_epochs": 6
+    },
+    "primed_cmaes": {
+      "test_acc": 0.1123046875,
+      "gens_or_epochs": 6
+    }
+  }
+}

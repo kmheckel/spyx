@@ -57,6 +57,20 @@ regardless of the ES scale. ``λ = 0.2`` then means "nudge the surrogate step by
 most 20 % in the direction it is blind to," which transfers across regimes and
 keeps the ES term from ever dominating.
 
+Surrogate-steered Self-Guided ES (variance reduction)
+-----------------------------------------------------
+The orthogonal correction above lives in the high-dimensional complement, so it is
+*high variance* — the reason the raw ``λ`` blows up. :func:`sges_gradient` takes
+the dual view of **Self-Guided ES** (Liu et al., IJCAI 2020): instead of adding ES
+only in the complement, it uses the surrogate direction as SGES's *guiding
+subspace* and **stratifies** the sampling — the along-guide directional derivative
+is measured *exactly* (one antithetic pair, no Monte-Carlo variance) and the ES
+budget is spent on the orthogonal complement. The result is an unbiased estimate of
+the true gradient with several-fold lower variance than isotropic ES at the same
+budget. Where Guided ES concentrates ES *inside* the surrogate subspace, and the
+orthogonal hybrid puts it *entirely outside*, SGES does both — cheap-and-exact
+in-subspace, sampled in the complement.
+
 All the linear algebra happens on the flat parameter vector via
 :func:`jax.flatten_util.ravel_pytree`, and perturbations are applied by
 ``nnx.split`` → perturb-flat → ``nnx.merge``, so the machinery is agnostic to
@@ -144,6 +158,161 @@ def es_gradient(
 
     g_es = _es_flat(theta, true_loss_flat, key, num_samples=num_samples, sigma=sigma)
     return unravel(g_es)
+
+
+def _sges_flat(
+    theta: jax.Array,
+    true_loss_flat: Callable[[jax.Array], jax.Array],
+    guide: jax.Array,
+    key: jax.Array,
+    *,
+    num_samples: int,
+    sigma: float,
+    eps: float,
+):
+    r"""Surrogate-steered Self-Guided-ES estimate of ∇ true-loss (variance-reduced).
+
+    ``guide`` (typically the surrogate gradient) defines a 1-D guiding direction
+    ``u = guide/‖guide‖``. Following Self-Guided ES (Liu et al., IJCAI 2020) — but
+    with the guiding subspace supplied by an *external surrogate* rather than
+    historical ES estimates — the antithetic sampling is STRATIFIED:
+
+    * the along-guide directional derivative ``a = ⟨∇f, u⟩`` is captured *exactly*
+      by a single antithetic pair (the loss is deterministic along a fixed
+      direction, so this costs one pair and carries no Monte-Carlo variance);
+    * the remaining ``K-1`` antithetic pairs are drawn from the ORTHOGONAL
+      COMPLEMENT of ``u`` and estimate ``P_⊥ ∇f`` — the part of the gradient the
+      guide is blind to.
+
+    ``g = a·u + g_⊥`` is unbiased for ∇f (up to the usual O(σ²) smoothing). Because
+    the surrogate is a biased estimate of the true gradient, the true gradient has
+    most of its support along ``u``; spending zero sampling variance there and all
+    ``K-1`` samples on the complement yields a lower-variance estimate than
+    isotropic ES (:func:`_es_flat`) at the same budget.
+    """
+    u = guide / (jnp.linalg.norm(guide) + eps)  # unit guiding direction (D,)
+    # Along-guide component: one exact antithetic pair (deterministic → zero var).
+    a = (true_loss_flat(theta + sigma * u) - true_loss_flat(theta - sigma * u)) / (
+        2.0 * sigma
+    )
+    # Orthogonal component: K-1 antithetic pairs sampled in the complement of u.
+    k_orth = max(num_samples - 1, 1)
+    xi = jax.random.normal(key, (k_orth,) + theta.shape, dtype=theta.dtype)
+    eps_perp = xi - (xi @ u)[:, None] * u[None, :]  # project out the guide direction
+    l_plus = jax.vmap(true_loss_flat)(theta[None] + sigma * eps_perp)
+    l_minus = jax.vmap(true_loss_flat)(theta[None] - sigma * eps_perp)
+    coeff = (l_plus - l_minus) / (2.0 * sigma * k_orth)
+    g_orth = coeff @ eps_perp  # (D,) estimate of P_⊥ ∇f
+    g_es = a * u + g_orth
+    return g_es, a, u, g_orth
+
+
+def sges_gradient(
+    model: nnx.Module,
+    loss_surrogate: LossFn,
+    loss_true: LossFn,
+    key: jax.Array,
+    *,
+    batch: tuple[Any, ...] = (),
+    num_samples: int = 8,
+    sigma: float = 0.01,
+    lam: float = 1.0,
+    eps: float = 1e-8,
+    return_diagnostics: bool = False,
+):
+    r"""Surrogate-steered Self-Guided ES — a variance-reduced 0+1 gradient.
+
+    The surrogate gradient ``g_s`` *steers* a Self-Guided-ES estimate ``g_es`` of
+    the true (hard-spike) loss gradient: ``g_s`` picks the guiding direction, its
+    along-guide component is measured exactly, and ES spends its whole budget on
+    the orthogonal complement (see :func:`_sges_flat`). Returns
+    ``g = (1-λ)·g_s + λ·g_es`` — ``λ=1`` descends on the variance-reduced true-
+    gradient estimate (the surrogate only steers sampling), ``λ=0`` recovers pure
+    surrogate descent.
+
+    This is the "0+1" method in its variance-reduced form: the 1st-order surrogate
+    steers where the 0th-order ES samples land, buying Self-Guided ES's variance
+    reduction (Liu et al., IJCAI 2020) with a surrogate-defined guiding subspace.
+    Unlike :func:`hybrid_gradient` (which adds ES *only* in the orthogonal
+    complement), ES here also corrects the surrogate's magnitude/sign *along* its
+    own direction, via the exact directional derivative ``a``.
+
+    :param model: the Spyx / Flax NNX module to differentiate.
+    :param loss_surrogate: differentiable ``(model, *batch) -> scalar`` (the guide).
+    :param loss_true: ``(model, *batch) -> scalar`` true objective (forward-only).
+    :param key: ``jax.random.PRNGKey`` for the orthogonal ES perturbations.
+    :param batch: extra positional args forwarded to both losses.
+    :param num_samples: total antithetic pairs ``K`` (1 along-guide, ``K-1`` orth).
+    :param sigma: ES perturbation scale ``σ``.
+    :param lam: blend ``g = (1-λ)g_s + λ g_es``; ``λ=1`` = pure SGES estimate.
+    :param eps: numerical floor for normalisation.
+    :param return_diagnostics: also return the diagnostics dict.
+    :return: an ``nnx.State`` of grads, or ``(grads, diagnostics)``.
+    """
+    graphdef, theta, unravel, rest = _split_and_ravel(model)
+
+    def surrogate_loss_flat(flat):
+        return loss_surrogate(nnx.merge(graphdef, unravel(flat), rest), *batch)
+
+    def true_loss_flat(flat):
+        return loss_true(nnx.merge(graphdef, unravel(flat), rest), *batch)
+
+    g_s = jax.grad(surrogate_loss_flat)(theta)
+    g_es, a, u, g_orth = _sges_flat(
+        theta, true_loss_flat, g_s, key, num_samples=num_samples, sigma=sigma, eps=eps
+    )
+    g = (1.0 - lam) * g_s + lam * g_es
+    grads = unravel(g)
+    if return_diagnostics:
+        g_s_norm = jnp.linalg.norm(g_s)
+        g_es_norm = jnp.linalg.norm(g_es)
+        diagnostics = {
+            "along_guide_deriv": a,  # exact ⟨∇f_true, û_s⟩ (0th-order, 1 pair)
+            "surrogate_along_guide": jnp.dot(g_s, u),  # the surrogate's own magnitude
+            "g_orth_norm": jnp.linalg.norm(g_orth),
+            "g_s_norm": g_s_norm,
+            "g_es_norm": g_es_norm,
+            # cosine of the SGES true-gradient estimate with the surrogate.
+            "cosine": jnp.dot(g_es, g_s) / (g_es_norm * g_s_norm + eps),
+            "g_s": g_s,
+            "g_es": g_es,
+            "g_orth": g_orth,
+        }
+        return grads, diagnostics
+    return grads
+
+
+def make_sges_hybrid_train_step(
+    loss_surrogate: LossFn,
+    loss_true: LossFn,
+    *,
+    num_samples: int = 8,
+    sigma: float = 0.01,
+    lam: float = 1.0,
+) -> Callable[..., jax.Array]:
+    r"""Single-step updater using :func:`sges_gradient` (surrogate-steered SGES).
+
+    ``step(model, optimizer, key, *batch) -> true_loss`` — mirrors
+    :func:`make_hybrid_train_step` but builds the update with the variance-reduced
+    Self-Guided-ES gradient. Returns ``loss_true`` at the pre-update parameters.
+    """
+
+    def step(model, optimizer, key, *batch):
+        grads = sges_gradient(
+            model,
+            loss_surrogate,
+            loss_true,
+            key,
+            batch=tuple(batch),
+            num_samples=num_samples,
+            sigma=sigma,
+            lam=lam,
+        )
+        loss = loss_true(model, *batch)
+        optimizer.update(model, grads)
+        return loss
+
+    return step
 
 
 def _hybrid_flat(
@@ -376,5 +545,7 @@ __all__ = [
     "hybrid_gradient",
     "hybrid_diagnostics",
     "es_gradient",
+    "sges_gradient",
     "make_hybrid_train_step",
+    "make_sges_hybrid_train_step",
 ]

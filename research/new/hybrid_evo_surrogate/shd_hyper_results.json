@@ -1,0 +1,43 @@
+{
+  "config": {
+    "channels": 128,
+    "sample_T": 48,
+    "hidden": 64,
+    "n_classes": 20,
+    "batch": 128,
+    "train_batches": 2,
+    "epochs": 1,
+    "K": 32,
+    "emb": 64,
+    "seeds": [
+      0
+    ],
+    "full_dim": 9556
+  },
+  "arms": {
+    "full  surrogate": {
+      "test_acc": 0.0859375,
+      "search_dim": 9556
+    },
+    "full  es": {
+      "test_acc": 0.08203125,
+      "search_dim": 9556
+    },
+    "full  sges": {
+      "test_acc": 0.1015625,
+      "search_dim": 9556
+    },
+    "hyper surrogate": {
+      "test_acc": 0.07421875,
+      "search_dim": 256
+    },
+    "hyper es": {
+      "test_acc": 0.07421875,
+      "search_dim": 256
+    },
+    "hyper sges": {
+      "test_acc": 0.07421875,
+      "search_dim": 256
+    }
+  }
+}

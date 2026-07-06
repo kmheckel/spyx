@@ -1,0 +1,44 @@
+{
+  "config": {
+    "dataset": "SHD",
+    "channels": 128,
+    "sample_T": 64,
+    "hidden": 64,
+    "n_classes": 20,
+    "batch": 128,
+    "train_batches": 12,
+    "test_batches": 8,
+    "epochs": 15,
+    "K": 24,
+    "sigma": 0.02,
+    "lr": 0.003,
+    "seeds": [
+      0,
+      1
+    ],
+    "n_params": 9556
+  },
+  "arms": {
+    "1st  surrogate": {
+      "test_loss": 2.545498490333557,
+      "test_acc": 0.29150390625,
+      "test_acc_std": 0.02294921875
+    },
+    "0th  ES": {
+      "test_loss": 4.85934853553772,
+      "test_acc": 0.0537109375,
+      "test_acc_std": 0.00390625
+    },
+    "0+1  SGES(\u03bb=1)": {
+      "test_loss": 3.5401111841201782,
+      "test_acc": 0.0556640625,
+      "test_acc_std": 0.0009765625
+    },
+    "0+1  SGES(\u03bb=.5)": {
+      "test_loss": 3.5218546390533447,
+      "test_acc": 0.07373046875,
+      "test_acc_std": 0.00244140625
+    }
+  },
+  "wall_s": 481.89607040199917
+}

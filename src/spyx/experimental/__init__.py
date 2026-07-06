@@ -50,6 +50,8 @@ from .hybrid import (
     hybrid_diagnostics,
     hybrid_gradient,
     make_hybrid_train_step,
+    make_sges_hybrid_train_step,
+    sges_gradient,
 )
 from .raven import RavenRSM, SlotRouter, SpikingSlotMemory, make_recall_batch
 from .stochastic import (
@@ -85,5 +87,7 @@ __all__ = [
     "hybrid_gradient",
     "make_hybrid_train_step",
     "es_gradient",
+    "sges_gradient",
+    "make_sges_hybrid_train_step",
     "hybrid_diagnostics",
 ]
