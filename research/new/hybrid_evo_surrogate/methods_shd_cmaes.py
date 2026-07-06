@@ -111,9 +111,13 @@ def main():
     prime_lr = float(os.environ.get("PRIME_LR", "0.1"))
     tx, ty = test
 
+    std_init = float(os.environ.get("STD_INIT", "0.1"))  # MUST match param scale (~0.02)
+
     def run_cma(prime: bool):
         strategy = CMA_ES(population_size=POP, solution=jnp.zeros(d))
-        es_params = strategy.default_params
+        # default std_init=1.0 is ~50x the hypernetwork param scale (0.02) -> the
+        # initial population is all-garbage and CMA never gets a ranking signal.
+        es_params = strategy.default_params.replace(std_init=std_init)
         key = jax.random.PRNGKey(SEED)
         state = strategy.init(key, mean=theta0, params=es_params)
 
