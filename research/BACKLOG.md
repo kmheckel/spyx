@@ -45,9 +45,31 @@ proposes buckets from the literature into **Candidates** below; you triage them 
 
 ## Candidates (from scouting — triage before promoting to `ready`)
 
-Proposed by [`/research-scout`](../.claude/skills/research-scout.md) from the
-literature; each carries a paper link + bucket. **Not picked up by the runner until
-you move one to a numbered `ready` item above.** (None yet — run the scout to fill.)
+Proposed from the 2024–2026 field survey behind [PROGRAM.md](PROGRAM.md); each carries
+a paper link + bucket. **Not picked up by the runner until you move one to a numbered
+`ready` item above.** These are the program's flagship studies (F1–F5).
+
+- **[novelty · Pillar 1] Parallel LIF with EXACT reset in JAX (F1).** Implement an
+  associative-scan LIF that preserves the reset nonlinearity via a fixed-point / parallel
+  solver, extending `PSU_LIF`; benchmark throughput×accuracy vs sequential LIF and PSN at
+  long T. The field's central reset↔parallel-scan tension, with no clean public JAX impl.
+  Refs: FPT (arXiv:2506.12087), SPikE-SSM/PMBC (arXiv:2410.17268), Revisiting Reset
+  (arXiv:2504.17751), PSN (arXiv:2304.12760). Verify FPT's unpublished wall-clock numbers.
+- **[novelty · Pillar 2] Honest spiking-SSM vs dense-SSM on SHD/SSC/LRA (F2).** Implement
+  SpikingSSM's surrogate-dynamic-network (arXiv:2408.14909) or SPikE-SSM PMBC in Spyx's
+  `ssm`; run the unreported head-to-head vs dense S5 and Event-SSM/S7 (arXiv:2404.18508,
+  2410.03464). The decisive comparison the literature is missing.
+- **[novelty · Pillar 3] Sub-4-bit spiking: NVFP4/MXFP4 QAT + membrane-state quant (F3).**
+  First application of FP4 microscaling to SNNs (unclaimed). Weight- and membrane-state
+  quantization (SQUAT gap, arXiv:2404.19668) on SSC, always with a quantized-ANN baseline.
+  Spyx already has the formats via `spyx.quant`.
+- **[extension · Pillar 4] NeuroBench-style honest energy accounting in `spyx.bench` (F4).**
+  Add hardware-agnostic SOP + hardware-aware memory-inclusive + quantized-ANN-equivalent
+  energy reporting. Refs: NeuroBench (Nat Commun 2025, s41467-025-56739-4), Reconsidering
+  SNN Energy (arXiv:2409.08290). Credibility infrastructure for every other study.
+- **[replication · Pillar 2/4] Reproduce a headline in Spyx (F5).** e.g. SpikingSSM LRA
+  (arXiv:2408.14909) or QKFormer sparsity (arXiv:2403.16552) — validates the stack and
+  seeds the comparisons in F2/F4.
 
 ## Conventions for items
 

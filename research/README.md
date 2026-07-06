@@ -31,7 +31,8 @@ Method, Spyx modules used, How to run, Results table, Findings, Reproducibility.
 
 ## Process (agentic research + promotion gate)
 
-Research here runs on a loop with a human gate:
+Research here runs on a loop with a human gate. The standing agenda — pillars,
+flagship studies, and honest field constraints — lives in **[PROGRAM.md](PROGRAM.md)**.
 
 - **[`/research-scout`](../.claude/skills/research-scout.md)** — surveys current
   papers and proposes backlog **candidates**, each classified `replication` /
