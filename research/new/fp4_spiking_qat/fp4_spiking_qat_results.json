@@ -1,0 +1,94 @@
+{
+  "config": {
+    "smoke": false,
+    "channels": 64,
+    "hidden": 128,
+    "n_classes": 8,
+    "sample_T": 16,
+    "epochs": 25,
+    "lr": 0.005,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "ann_bits": 5,
+    "weight_schemes": [
+      "int8",
+      "nvfp4",
+      "mxfp4",
+      "ternary"
+    ],
+    "state_schemes": [
+      "nvfp4",
+      "int8"
+    ],
+    "n_weight_params": 9216
+  },
+  "arms": {
+    "fp32": {
+      "acc": 0.9967447916666666,
+      "acc_std": 0.0024359748611809512,
+      "wall_s": 3.293247974332189,
+      "weight_bits": 32.0,
+      "weight_KiB": 36.0,
+      "state_bits": null
+    },
+    "int8": {
+      "acc": 1.0,
+      "acc_std": 0.0,
+      "wall_s": 1.6682989799883217,
+      "weight_bits": 8.0,
+      "weight_KiB": 9.0,
+      "state_bits": null
+    },
+    "nvfp4": {
+      "acc": 0.9973958333333334,
+      "acc_std": 0.0024359748611809512,
+      "wall_s": 1.7802201810021263,
+      "weight_bits": 4.5,
+      "weight_KiB": 5.0625,
+      "state_bits": null
+    },
+    "mxfp4": {
+      "acc": 0.9967447916666666,
+      "acc_std": 0.0018414239093399675,
+      "wall_s": 1.7662357119940377,
+      "weight_bits": 4.25,
+      "weight_KiB": 4.78125,
+      "state_bits": null
+    },
+    "ternary": {
+      "acc": 1.0,
+      "acc_std": 0.0,
+      "wall_s": 1.5526116233280238,
+      "weight_bits": 1.584962500721156,
+      "weight_KiB": 1.7830828133113006,
+      "state_bits": null
+    },
+    "nvfp4+Vstate": {
+      "acc": 0.9993489583333334,
+      "acc_std": 0.0009207119546699837,
+      "wall_s": 2.063410829665372,
+      "weight_bits": 4.5,
+      "weight_KiB": 5.0625,
+      "state_bits": 4.5
+    },
+    "int8+Vstate": {
+      "acc": 0.998046875,
+      "acc_std": 0.001594719884624465,
+      "wall_s": 1.8592915500048548,
+      "weight_bits": 8.0,
+      "weight_KiB": 9.0,
+      "state_bits": 8.0
+    },
+    "QANN(int5)": {
+      "acc": 1.0,
+      "acc_std": 0.0,
+      "wall_s": 2.95939433699823,
+      "weight_bits": 5.0,
+      "weight_KiB": 5.625,
+      "state_bits": null
+    }
+  }
+}
