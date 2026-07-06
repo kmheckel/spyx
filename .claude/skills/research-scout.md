@@ -29,10 +29,17 @@ first so you don't re-propose done or in-flight work.
    - **Novelty** — a gap the paper exposes but does not fill, that Spyx's primitives
      are unusually suited to (e.g. binary-spike × low-precision weights; gradient-free
      ES on a non-differentiable objective the paper trains with STE).
-4. **Assess fit and cost honestly:** does Spyx already have the pieces? Can it be a
+4. **Verify the gap is real (do NOT skip).** A "gap" is not a gap until it survives an
+   adversarial literature check. For each candidate, actively try to *refute* its
+   novelty: search for a paper that already did it (recent arXiv, the exact method on
+   the exact benchmark). If one exists, either drop the candidate or **narrow it to the
+   residual gap** (e.g. "not reported" → "no *controlled* apples-to-apples comparison")
+   and cite the prior work as baseline. Two of the program's first flagships were killed
+   this way; only survivors earn a candidate slot. Note the nearest prior/boundary work.
+5. **Assess fit and cost honestly:** does Spyx already have the pieces? Can it be a
    self-contained synthetic-smoke study, or does it need a dataset / GPU / full budget
    (which is human-gated for the unattended runner)? Prefer small, decisive claims.
-5. **Propose candidates.** Append to the **Candidates** section of
+6. **Propose candidates.** Append to the **Candidates** section of
    `research/BACKLOG.md`, one item each: a one-line falsifiable claim, the paper
    (title + link + year), the bucket (replication/extension/novelty), the Spyx
    modules involved, and the rough cost / whether a GPU run is needed. Do **not**
