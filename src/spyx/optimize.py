@@ -17,7 +17,7 @@ Pass your own via ``spyx.fn.integral_crossentropy`` / ``optax.lion`` etc.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -139,4 +139,137 @@ def fit(
     return history
 
 
-__all__ = ["fit", "make_train_step", "make_eval_step"]
+class SolverImpl(NamedTuple):
+    """The three pure functions a solver hands to :func:`compile_fit`.
+
+    - ``init(key) -> state`` — build the optimiser state from the initial params.
+    - ``step(state, batch, key) -> (state, metric)`` — one update; ``metric`` is a
+      scalar summarised into ``history`` (the loss / best-fitness).
+    - ``get_params(state) -> params`` — the current point estimate (the ``mean``
+      for ask/tell strategies).
+    """
+
+    init: Callable[[jax.Array], Any]
+    step: Callable[[Any, tuple, jax.Array], tuple[Any, jax.Array]]
+    get_params: Callable[[Any], Any]
+
+
+# A Solver is a *builder* ``(loss_flat, params0) -> SolverImpl``, where
+# ``loss_flat(params, batch) -> scalar`` is supplied by :func:`compile_fit` (it
+# closes over the model's graph). Building at bind time lets ES/CMA solvers set up
+# ``ravel_pytree`` / strategy state against the concrete parameter structure.
+Solver = Callable[[Callable[[Any, tuple], jax.Array], Any], SolverImpl]
+
+
+def backprop(tx: optax.GradientTransformation) -> Solver:
+    """A plain gradient-descent :data:`Solver` — ``value_and_grad`` + an Optax update.
+
+    This is the surrogate-gradient path; passing an Optax ``GradientTransformation``
+    straight to :func:`compile_fit` wraps it in this automatically.
+    """
+
+    def build(loss_flat, params0):
+        def init(key):
+            return (params0, tx.init(params0))
+
+        def step(state, batch, key):
+            params, opt_state = state
+            loss, grads = jax.value_and_grad(lambda p: loss_flat(p, batch))(params)
+            updates, opt_state = tx.update(grads, opt_state, params)
+            return (optax.apply_updates(params, updates), opt_state), loss
+
+        return SolverImpl(init, step, lambda s: s[0])
+
+    return build
+
+
+def compile_fit(
+    model: nnx.Module,
+    solver: "Solver | optax.GradientTransformation",
+    loss_fn: Callable[..., jax.Array],
+    train_data: tuple[Any, ...],
+    *,
+    epochs: int,
+    eval_data: tuple[Any, ...] | None = None,
+    metric_fn: Callable[..., jax.Array] | None = None,
+    key: jax.Array | None = None,
+) -> tuple[nnx.Module, dict[str, jax.Array]]:
+    r"""Compile the *entire* training loop to a single XLA dispatch.
+
+    Where :func:`fit` is a Python epoch loop driving a per-step JIT, this stages the
+    whole dataset on-device and ``jax.lax.scan``\ s the loop over epochs × batches
+    under one ``jax.jit`` — a full run becomes a single compiled kernel with no
+    per-step Python or re-tracing (the throughput pattern the Spyx paper relies on).
+
+    The optimiser is a :data:`Solver`, so gradient descent and gradient-free
+    ask/tell (CMA-ES etc.) share the same compiled loop: pass an Optax
+    ``GradientTransformation`` (wrapped in :func:`backprop`), or a solver from
+    :mod:`spyx.experimental.evolve`.
+
+    :param model: the SNN to train (any Flax NNX module).
+    :param solver: a :data:`Solver` builder, or an Optax ``GradientTransformation``
+        (e.g. ``optax.adam(3e-3)``) which is treated as ``backprop(tx)``.
+    :param loss_fn: ``(model, *batch) -> scalar``.
+    :param train_data: ``(X, Y, …)`` staged with a leading batch axis to scan over —
+        each leaf shaped ``[n_batches, batch, ...]``, already on device (``jnp.stack``
+        your loader's batches once).
+    :param epochs: number of passes over the staged batches.
+    :param eval_data: optional held-out data staged the same way; scored with
+        ``metric_fn`` once per epoch *inside* the compiled loop.
+    :param metric_fn: ``(model, *batch) -> scalar`` (e.g. accuracy); required with
+        ``eval_data``.
+    :param key: PRNG key threaded through ``init`` / ``step`` (ES, dropout, …).
+    :return: ``(trained_model, history)`` where ``history`` holds stacked per-epoch
+        arrays: ``train_loss`` (the mean per-step metric) and ``eval_metric``.
+    """
+    if eval_data is not None and metric_fn is None:
+        raise ValueError("metric_fn is required when eval_data is given")
+
+    graphdef, params0, rest = nnx.split(model, nnx.Param, ...)
+
+    def loss_flat(params, batch):
+        return loss_fn(nnx.merge(graphdef, params, rest), *batch)
+
+    if isinstance(solver, optax.GradientTransformation):
+        solver = backprop(solver)
+    impl = solver(loss_flat, params0)
+
+    @jax.jit
+    def _run(key):
+        k_init, k_run = jax.random.split(key)
+        state0 = impl.init(k_init)
+
+        def step(carry, batch):
+            state, key = carry
+            key, sub = jax.random.split(key)
+            state, metric = impl.step(state, batch, sub)
+            return (state, key), metric
+
+        def epoch(carry, _):
+            carry, metrics = jax.lax.scan(step, carry, train_data)
+            rec = {"train_loss": jnp.mean(metrics)}
+            if eval_data is not None:
+                assert metric_fn is not None  # guaranteed by the guard above
+                mfn = metric_fn
+                m = nnx.merge(graphdef, impl.get_params(carry[0]), rest)
+                rec["eval_metric"] = jnp.mean(
+                    jax.vmap(lambda *b: mfn(m, *b))(*eval_data)
+                )
+            return carry, rec
+
+        (final, _k), history = jax.lax.scan(epoch, (state0, k_run), None, length=epochs)
+        return impl.get_params(final), history
+
+    final_params, history = _run(jax.random.PRNGKey(0) if key is None else key)
+    return nnx.merge(graphdef, final_params, rest), history
+
+
+__all__ = [
+    "fit",
+    "compile_fit",
+    "backprop",
+    "SolverImpl",
+    "Solver",
+    "make_train_step",
+    "make_eval_step",
+]
