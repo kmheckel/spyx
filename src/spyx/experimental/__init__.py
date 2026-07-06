@@ -47,7 +47,18 @@ Related research studies live under ``research/new/`` in the repository.
 # here so the experimental surface is discoverable in one place.
 from ..nn import PSU_LIF, AssociativeLIF
 from ..phasor import ResonateFire
-from . import compress, evolve, hybrid, matfree, onnx, raven, stochastic, zoo
+from . import (
+    compress,
+    evolve,
+    hybrid,
+    matfree,
+    onnx,
+    parallel_reset,
+    raven,
+    rf_ssm,
+    stochastic,
+    zoo,
+)
 from .compress import pack_spikes, packed_spike_dense, unpack_spikes
 from .hybrid import (
     es_gradient,
@@ -57,7 +68,9 @@ from .hybrid import (
     make_sges_hybrid_train_step,
     sges_gradient,
 )
+from .parallel_reset import ParallelResetLIF
 from .raven import RavenRSM, SlotRouter, SpikingSlotMemory, make_recall_batch
+from .rf_ssm import RFSSM, ResonateFireSSM
 from .stochastic import (
     SPSN,
     StochasticAssociativeCuBaLIF,
@@ -72,9 +85,14 @@ __all__ = [
     "hybrid",
     "matfree",
     "onnx",
+    "parallel_reset",
     "raven",
+    "rf_ssm",
     "stochastic",
     "zoo",
+    "ParallelResetLIF",
+    "RFSSM",
+    "ResonateFireSSM",
     "PSU_LIF",
     "AssociativeLIF",
     "ResonateFire",
