@@ -29,6 +29,26 @@ Every study is a self-contained folder that copies [`_template/README.md`](_temp
 and fills it in. That template is the contract: Title, Paper, Claim under test,
 Method, Spyx modules used, How to run, Results table, Findings, Reproducibility.
 
+## Process (agentic research + promotion gate)
+
+Research here runs on a loop with a human gate:
+
+- **[BACKLOG.md](BACKLOG.md)** — the queue of falsifiable claims to study. Current
+  focus track: **quantization & efficient architectures.**
+- **[FINDINGS.md](FINDINGS.md)** — the ledger: every study's honest verdict and its
+  promotion status. Your review surface.
+- **[PROMOTION.md](PROMOTION.md)** — the gate: criteria for `research →
+  spyx.experimental → core`. Every rung up is a human decision.
+- **[`/research-study`](../.claude/skills/research-study.md)** — the unattended runner
+  (a scheduled Claude Code web task): pulls the top backlog item, builds and
+  adversarially verifies one study, opens a PR + ledger row, and **stops at the gate**
+  — never edits core, never runs GPU/full budgets, never promotes.
+- **[`/promote-finding`](../.claude/skills/promote-finding.md)** — you invoke this when
+  you decide to graduate a finding; it runs the checklist and stages the promotion PR.
+
+Honest negatives and nulls are first-class: they stay in `research/`, indexed in the
+ledger, and are never deleted or reshaped.
+
 ## Index of existing work
 
 The material already in this directory maps onto the taxonomy as follows. Nothing
