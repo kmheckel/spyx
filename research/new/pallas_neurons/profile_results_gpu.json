@@ -1,0 +1,264 @@
+{
+  "config": {
+    "backend": "gpu",
+    "device": "rocm:0",
+    "hiddens": [
+      64,
+      256,
+      1024
+    ],
+    "seqlens": [
+      64,
+      256,
+      1024
+    ],
+    "batch": 64,
+    "n_iters": 20,
+    "wall_s": 76.69413069600705
+  },
+  "rows": [
+    {
+      "H": 64,
+      "T": 64,
+      "batch": 64,
+      "fwd_ms": {
+        "linear": 0.9858220000751317,
+        "lif_scan": 0.4322595050325617,
+        "psu_parallel": 0.04831598198506981,
+        "linear_lif": 1.4180870057316497
+      },
+      "fwd_bwd_ms": {
+        "linear": 2.349115995457396,
+        "lif_scan": 1.4498919917969033,
+        "psu_parallel": 0.2010589960264042,
+        "linear_lif": 3.2402655051555485
+      },
+      "peak_mem_mb": {
+        "lif_scan": 33.1123046875,
+        "psu_parallel": 33.1123046875,
+        "linear_lif": 49.111328125
+      },
+      "neuron_vs_matmul_fwd": 0.43847622085895654,
+      "neuron_vs_matmul_fwd_bwd": 0.6172074919248911,
+      "neuron_share_of_combined_fwd": 0.30481874757010496,
+      "parallel_speedup_scan_over_assoc": 8.946511842937081,
+      "verdict_fwd": "MATMUL-BOUND \u2014 neuron kernel won't move wall-clock"
+    },
+    {
+      "H": 64,
+      "T": 256,
+      "batch": 64,
+      "fwd_ms": {
+        "linear": 3.685824485728517,
+        "lif_scan": 1.6396544961025938,
+        "psu_parallel": 0.07835250289645046,
+        "linear_lif": 5.359051996492781
+      },
+      "fwd_bwd_ms": {
+        "linear": 9.072880493476987,
+        "lif_scan": 5.592057001194917,
+        "psu_parallel": 0.3775764926103875,
+        "linear_lif": 12.345086011919193
+      },
+      "peak_mem_mb": {
+        "lif_scan": 49.111328125,
+        "psu_parallel": 49.111328125,
+        "linear_lif": 49.111328125
+      },
+      "neuron_vs_matmul_fwd": 0.4448541981451702,
+      "neuron_vs_matmul_fwd_bwd": 0.6163485791767418,
+      "neuron_share_of_combined_fwd": 0.30595980355773034,
+      "parallel_speedup_scan_over_assoc": 20.92663840323694,
+      "verdict_fwd": "MATMUL-BOUND \u2014 neuron kernel won't move wall-clock"
+    },
+    {
+      "H": 64,
+      "T": 1024,
+      "batch": 64,
+      "fwd_ms": {
+        "linear": 15.071317000547424,
+        "lif_scan": 6.753855501301587,
+        "psu_parallel": 0.3207690024282783,
+        "linear_lif": 20.916601497447118
+      },
+      "fwd_bwd_ms": {
+        "linear": 35.529293498257175,
+        "lif_scan": 22.67013498931192,
+        "psu_parallel": 1.0673014912754297,
+        "linear_lif": 48.87791549845133
+      },
+      "peak_mem_mb": {
+        "lif_scan": 81.0986328125,
+        "psu_parallel": 81.0986328125,
+        "linear_lif": 81.193603515625
+      },
+      "neuron_vs_matmul_fwd": 0.44812643122404444,
+      "neuron_vs_matmul_fwd_bwd": 0.6380688372096102,
+      "neuron_share_of_combined_fwd": 0.322894496131501,
+      "parallel_speedup_scan_over_assoc": 21.055200004282522,
+      "verdict_fwd": "MATMUL-BOUND \u2014 neuron kernel won't move wall-clock"
+    },
+    {
+      "H": 256,
+      "T": 64,
+      "batch": 64,
+      "fwd_ms": {
+        "linear": 1.5392549976240844,
+        "lif_scan": 0.46132950228638947,
+        "psu_parallel": 0.07158999505918473,
+        "linear_lif": 1.9138554926030338
+      },
+      "fwd_bwd_ms": {
+        "linear": 2.251622499898076,
+        "lif_scan": 1.522158010629937,
+        "psu_parallel": 0.3912974934792146,
+        "linear_lif": 3.8968525041127577
+      },
+      "peak_mem_mb": {
+        "lif_scan": 81.193603515625,
+        "psu_parallel": 81.193603515625,
+        "linear_lif": 81.193603515625
+      },
+      "neuron_vs_matmul_fwd": 0.2997096017219201,
+      "neuron_vs_matmul_fwd_bwd": 0.6760271807102836,
+      "neuron_share_of_combined_fwd": 0.2410471971731447,
+      "parallel_speedup_scan_over_assoc": 6.44404992492317,
+      "verdict_fwd": "MATMUL-BOUND \u2014 neuron kernel won't move wall-clock"
+    },
+    {
+      "H": 256,
+      "T": 256,
+      "batch": 64,
+      "fwd_ms": {
+        "linear": 6.140424506156705,
+        "lif_scan": 1.8700034997891635,
+        "psu_parallel": 0.27416099328547716,
+        "linear_lif": 7.420837500831112
+      },
+      "fwd_bwd_ms": {
+        "linear": 8.816892514005303,
+        "lif_scan": 6.380101491231471,
+        "psu_parallel": 0.8769319974817336,
+        "linear_lif": 15.563925495371222
+      },
+      "peak_mem_mb": {
+        "lif_scan": 81.193603515625,
+        "psu_parallel": 81.193603515625,
+        "linear_lif": 81.589599609375
+      },
+      "neuron_vs_matmul_fwd": 0.3045397753712633,
+      "neuron_vs_matmul_fwd_bwd": 0.72362246461516,
+      "neuron_share_of_combined_fwd": 0.2519935923108043,
+      "parallel_speedup_scan_over_assoc": 6.820822602732455,
+      "verdict_fwd": "MATMUL-BOUND \u2014 neuron kernel won't move wall-clock"
+    },
+    {
+      "H": 256,
+      "T": 1024,
+      "batch": 64,
+      "fwd_ms": {
+        "linear": 24.65363200462889,
+        "lif_scan": 7.7289680048124865,
+        "psu_parallel": 1.6237244999501854,
+        "linear_lif": 29.310347003047355
+      },
+      "fwd_bwd_ms": {
+        "linear": 35.7606095058145,
+        "lif_scan": 25.73525048501324,
+        "psu_parallel": 4.016397491795942,
+        "linear_lif": 61.68547250854317
+      },
+      "peak_mem_mb": {
+        "lif_scan": 320.260498046875,
+        "psu_parallel": 320.260498046875,
+        "linear_lif": 321.135498046875
+      },
+      "neuron_vs_matmul_fwd": 0.31350220540978785,
+      "neuron_vs_matmul_fwd_bwd": 0.719653575278934,
+      "neuron_share_of_combined_fwd": 0.2636941829453236,
+      "parallel_speedup_scan_over_assoc": 4.7600242559926915,
+      "verdict_fwd": "MATMUL-BOUND \u2014 neuron kernel won't move wall-clock"
+    },
+    {
+      "H": 1024,
+      "T": 64,
+      "batch": 64,
+      "fwd_ms": {
+        "linear": 3.256390496972017,
+        "lif_scan": 0.6752975023118779,
+        "psu_parallel": 0.24314300389960408,
+        "linear_lif": 3.7432329991133884
+      },
+      "fwd_bwd_ms": {
+        "linear": 5.6759500002954155,
+        "lif_scan": 2.2676825028611347,
+        "psu_parallel": 0.8614679973106831,
+        "linear_lif": 8.240777504397556
+      },
+      "peak_mem_mb": {
+        "lif_scan": 321.135498046875,
+        "psu_parallel": 321.135498046875,
+        "linear_lif": 321.135498046875
+      },
+      "neuron_vs_matmul_fwd": 0.2073760818734145,
+      "neuron_vs_matmul_fwd_bwd": 0.3995247496442197,
+      "neuron_share_of_combined_fwd": 0.18040488061304946,
+      "parallel_speedup_scan_over_assoc": 2.7773676045834916,
+      "verdict_fwd": "MATMUL-BOUND \u2014 neuron kernel won't move wall-clock"
+    },
+    {
+      "H": 1024,
+      "T": 256,
+      "batch": 64,
+      "fwd_ms": {
+        "linear": 13.056280498858541,
+        "lif_scan": 2.75786648853682,
+        "psu_parallel": 1.6048644902184606,
+        "linear_lif": 14.380340493516997
+      },
+      "fwd_bwd_ms": {
+        "linear": 23.365089495200664,
+        "lif_scan": 8.96403549995739,
+        "psu_parallel": 3.5935664927819744,
+        "linear_lif": 32.77931749471463
+      },
+      "peak_mem_mb": {
+        "lif_scan": 321.135498046875,
+        "psu_parallel": 321.135498046875,
+        "linear_lif": 336.5283203125
+      },
+      "neuron_vs_matmul_fwd": 0.2112291083802871,
+      "neuron_vs_matmul_fwd_bwd": 0.38365080954638153,
+      "neuron_share_of_combined_fwd": 0.1917803330025553,
+      "parallel_speedup_scan_over_assoc": 1.7184419652536571,
+      "verdict_fwd": "MATMUL-BOUND \u2014 neuron kernel won't move wall-clock"
+    },
+    {
+      "H": 1024,
+      "T": 1024,
+      "batch": 64,
+      "fwd_ms": {
+        "linear": 51.963238991447724,
+        "lif_scan": 10.757479001767933,
+        "psu_parallel": 6.199431009008549,
+        "linear_lif": 57.07573698600754
+      },
+      "fwd_bwd_ms": {
+        "linear": 94.31907050020527,
+        "lif_scan": 34.71174898731988,
+        "psu_parallel": 17.032066491083242,
+        "linear_lif": 131.94511600886472
+      },
+      "peak_mem_mb": {
+        "lif_scan": 1281.028564453125,
+        "psu_parallel": 1281.028564453125,
+        "linear_lif": 1296.5283203125
+      },
+      "neuron_vs_matmul_fwd": 0.2070209480886754,
+      "neuron_vs_matmul_fwd_bwd": 0.36802471444249796,
+      "neuron_share_of_combined_fwd": 0.18847726844780285,
+      "parallel_speedup_scan_over_assoc": 1.735236505759314,
+      "verdict_fwd": "MATMUL-BOUND \u2014 neuron kernel won't move wall-clock"
+    }
+  ]
+}

@@ -26,7 +26,7 @@ Read-out per regime:
 
 Device caveat: the crossover shifts with hardware — a GPU's higher matmul
 throughput pushes the neuron-dominated regime to larger H than CPU. Run this on the
-target device; the JSON records `backend`. Writes `profile_results.json`.
+target device; the JSON records `backend`. Writes `profile_results_<backend>.json`.
 """
 
 from __future__ import annotations
@@ -146,7 +146,8 @@ def main():
     dt = time.perf_counter() - t0
 
     here = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(here, "profile_results.json"), "w") as f:
+    out_name = f"profile_results_{backend}.json"
+    with open(os.path.join(here, out_name), "w") as f:
         json.dump(
             {
                 "config": {
@@ -163,7 +164,7 @@ def main():
             f,
             indent=2,
         )
-    print(f"\nwrote profile_results.json  ({dt:.0f}s)", flush=True)
+    print(f"\nwrote {out_name}  ({dt:.0f}s)", flush=True)
 
     # one-line takeaway: the largest-H, longest-T regime and the smallest one
     neuron_bound = [r for r in rows if r["neuron_vs_matmul_fwd"] >= 1.0]

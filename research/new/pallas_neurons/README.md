@@ -35,54 +35,76 @@ uv run python research/new/pallas_neurons/profile_neurons.py            # defaul
 HIDDENS=128,512 SEQLENS=256,1024 BATCH=128 uv run python research/new/pallas_neurons/profile_neurons.py
 ```
 
-Writes `profile_results.json` (records `backend`/`device`). **Run it on the target
-device** — the crossover shifts with hardware: a GPU's higher matmul throughput
-pushes the neuron-bound regime to *larger* `H` than CPU does.
+Writes `profile_results_<backend>.json` (e.g. `_gpu` / `_cpu`, recording
+`backend`/`device`). **Run it on the target device** — the crossover shifts with
+hardware, and (per the findings) the associative-scan win only materialises where
+there is GPU parallel slack.
 
 ## Findings
 
-Sweep on **CPU** (`backend=cpu`, B=64, 20 iters, 83 s; `profile_results.json`).
-`neuron/matmul` = `lif_scan` latency ÷ `linear` latency — **< 1 means the matmul
-dominates.**
+Two sweeps, B=64, 20 iters: **GPU** (`profile_results_gpu.json`, Radeon 8060S /
+gfx1151, ROCm, 77 s) — the decision-relevant one — and **CPU**
+(`profile_results_cpu.json`, 83 s) for contrast. `neuron/matmul` = `lif_scan` ÷
+`linear` latency; **< 1 means the matmul dominates.** `assoc ×` = sequential-scan ÷
+associative-scan (`PSU_LIF`) latency; **> 1 means the parallel scan is faster.**
 
-| H | T | neuron/matmul (fwd) | neuron/matmul (fwd+bwd) | assoc-scan ×vs-scan |
+### GPU — 8060S (the one that decides #24)
+
+| H | T | neuron/matmul (fwd) | neuron/matmul (fwd+bwd) | assoc × (fwd) |
 |---|---|---|---|---|
-| 64 | 64 | 0.35 | 0.67 | 0.62 |
-| 64 | 256 | 0.29 | **1.06** | 2.12 |
-| 64 | 1024 | 0.38 | 0.97 | 1.25 |
-| 256 | 64 | 0.20 | 0.27 | 1.23 |
-| 256 | 256 | 0.21 | 0.46 | 1.13 |
-| 256 | 1024 | 0.24 | 0.53 | 0.48 |
-| 1024 | 64 | 0.20 | 0.44 | 0.89 |
-| 1024 | 256 | 0.32 | 0.32 | 0.52 |
-| 1024 | 1024 | 0.22 | 0.35 | 0.40 |
+| 64 | 64 | 0.44 | 0.62 | **8.9×** |
+| 64 | 256 | 0.44 | 0.62 | **20.9×** |
+| 64 | 1024 | 0.45 | 0.64 | **21.1×** |
+| 256 | 64 | 0.30 | 0.68 | 6.4× |
+| 256 | 256 | 0.30 | 0.72 | 6.8× |
+| 256 | 1024 | 0.31 | 0.72 | 4.8× |
+| 1024 | 64 | 0.21 | 0.40 | 2.8× |
+| 1024 | 256 | 0.21 | 0.38 | 1.7× |
+| 1024 | 1024 | 0.21 | 0.37 | 1.7× |
 
-**1. Matmul-bound in every forward regime on CPU.** The neuron scan is only
-**20–38 %** of the `Linear` it follows, and **16–33 %** of a full `Linear+LIF`
-layer. A fused Pallas neuron kernel cannot move forward wall-clock here — the
-`Linear` (O(H²)) is the time, the neuron (O(H)) is glue.
+**1. Matmul-bound on GPU too — in every forward regime.** The sequential neuron
+scan is **21–45 %** of the `Linear` it follows (forward). A Pallas kernel that only
+speeds up the neuron *forward* cannot move end-to-end wall-clock — the O(H²) matmul
+is the time.
 
-**2. The one place the neuron approaches parity is *small-width training.*** In the
-backward pass (BPTT — what actually costs during training) the ratio climbs, and
-at **H=64 it reaches ~0.7–1.06×** the matmul: the surrogate-gradient scan backward
-is comparatively expensive when the matmul is small. So the neuron kernel's payoff,
-if any, lives in **narrow networks during training** — which, notably, is also the
-regime where evolution is competitive (the thesis result). At H≥256 it stays
-matmul-bound (0.27–0.53×) even in the backward.
+**2. In training the neuron grows to a real minority — but stays below the matmul.**
+`fwd+bwd` (BPTT, what actually costs) climbs to **0.62–0.72× at H≤256** and
+0.37–0.40× at H=1024. So the surrogate-scan backward is a meaningful ~40–70 % of
+the matmul for narrow/mid nets, but never the majority. Still matmul-bound.
 
-**3. Associative-scan is *not* a free win — and not even always a win.** The
-portable `PSU_LIF` parallel path beats the sequential scan only at **small H /
-moderate T** (up to 2.1×) and **loses up to 2.5×** at large H·T (0.40× at
-H=1024,T=1024), with **no memory saving** (both store the full trajectory:
-identical peak MB). On CPU there is no parallel slack to amortise its extra work.
-This matches the `PSU_LIF` note that its wins come "by device slack" — the parallel
-route is itself device-gated, so it must be validated on the target GPU too.
+**3. The decisive result: the neuron speedup you'd reach for is *already here*,
+portable, no Pallas.** On GPU the associative-scan `PSU_LIF` beats the sequential
+scan by **1.7–21×** (biggest at small H, still 1.7× at H=1024,T=1024), forward and
+backward, with **no memory penalty**. This is the "device slack" the CPU sweep
+lacked — on CPU the same parallel path was a wash-to-loss (0.4–2.1×); the GPU's
+parallelism is exactly what makes it pay. For *linearizable* neurons you get the
+2–21× today, without writing a kernel.
 
-**4. Everything above is CPU; the decision needs GPU numbers.** A GPU's far higher
-matmul throughput *raises the neuron's relative share*, so the crossover into
-neuron-bound territory can appear at H/T sizes people actually train — exactly
-where CPU says "matmul-bound." Re-run `profile_neurons.py` on the 8060S / gfx1151
-ROCm venv before deciding; that JSON, not this one, is the evidence for #24.
+### CPU — for contrast
+
+Same shape on the forward (matmul-bound, neuron 20–38 % of the `Linear`), but
+associative-scan is a **wash-to-loss** (0.4–2.1×, no parallel slack to amortise its
+extra work) — confirming the parallel route is itself device-gated.
+
+## Decision (issue #24)
+
+**Do not prioritise a fused Pallas neuron kernel.** The data closes the question:
+
+- SNN forward is **matmul-bound on both devices** — accelerating the neuron barely
+  moves wall-clock; the `Linear` is the cost.
+- The neuron speedup that *would* matter on GPU is **already delivered portably** by
+  `associative_scan` (`PSU_LIF`): **2–21×**, forward and backward, no memory cost,
+  runs on the deployment device.
+- A Pallas kernel's only remaining niche is the neurons `associative_scan`
+  **can't** linearize — hard-reset LIF, ALIF adaptive-threshold — *and* only if a
+  specific model profiles as neuron-bound in training. Given even H=1024,T=1024
+  sits at 0.37× in `fwd+bwd`, that bar is high.
+
+**Higher-ROI directions than part (b):** (i) widen the portable win — give more
+neuron types a `.parallel` associative-scan path; (ii) attack the actual
+bottleneck, the `Linear` — precision ([`spyx.experimental.matfree`](../../../src/spyx/experimental/matfree.py))
+or shape. Reserve a Pallas kernel for a *proven* neuron-bound hard-reset/ALIF model,
+NVIDIA-first, behind a `lax.scan` fallback (Pallas ROCm support is experimental).
 
 ## Decision rule
 
