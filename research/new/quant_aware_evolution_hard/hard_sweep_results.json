@@ -1,0 +1,115 @@
+{
+  "config": {
+    "smoke": false,
+    "device": "rocm:0",
+    "points": [
+      {
+        "label": "H64",
+        "channels": 64,
+        "hidden": 64,
+        "n_classes": 8
+      },
+      {
+        "label": "H32",
+        "channels": 64,
+        "hidden": 32,
+        "n_classes": 8
+      },
+      {
+        "label": "H16",
+        "channels": 64,
+        "hidden": 16,
+        "n_classes": 8
+      }
+    ],
+    "seeds": [
+      0,
+      1
+    ],
+    "pop": 64,
+    "generations": 150,
+    "epochs": 15,
+    "precisions": [
+      "nvfp4",
+      "ternary"
+    ],
+    "wall_s": 64.7435318689968
+  },
+  "rows": [
+    {
+      "channels": 64,
+      "hidden": 64,
+      "n_classes": 8,
+      "fp32_acc": 0.98046875,
+      "precisions": {
+        "nvfp4": {
+          "ste_loss": 0.9990630149841309,
+          "ste_acc": 0.96484375,
+          "es_loss": 1.0252766609191895,
+          "es_acc": 0.9765625,
+          "quant_acc_drop": 0.015625,
+          "ste_bias_gap": -0.026213645935058594
+        },
+        "ternary": {
+          "ste_loss": 0.9376285076141357,
+          "ste_acc": 0.99609375,
+          "es_loss": 1.4943560361862183,
+          "es_acc": 0.671875,
+          "quant_acc_drop": -0.015625,
+          "ste_bias_gap": -0.5567275285720825
+        }
+      },
+      "label": "H64"
+    },
+    {
+      "channels": 64,
+      "hidden": 32,
+      "n_classes": 8,
+      "fp32_acc": 0.94921875,
+      "precisions": {
+        "nvfp4": {
+          "ste_loss": 1.0157085061073303,
+          "ste_acc": 0.9375,
+          "es_loss": 0.9904494285583496,
+          "es_acc": 0.9765625,
+          "quant_acc_drop": 0.01171875,
+          "ste_bias_gap": 0.025259077548980713
+        },
+        "ternary": {
+          "ste_loss": 1.0037972927093506,
+          "ste_acc": 0.97265625,
+          "es_loss": 1.3923182487487793,
+          "es_acc": 0.67578125,
+          "quant_acc_drop": -0.0234375,
+          "ste_bias_gap": -0.3885209560394287
+        }
+      },
+      "label": "H32"
+    },
+    {
+      "channels": 64,
+      "hidden": 16,
+      "n_classes": 8,
+      "fp32_acc": 0.92578125,
+      "precisions": {
+        "nvfp4": {
+          "ste_loss": 1.0609052181243896,
+          "ste_acc": 0.94140625,
+          "es_loss": 1.1297406554222107,
+          "es_acc": 0.88671875,
+          "quant_acc_drop": -0.015625,
+          "ste_bias_gap": -0.06883543729782104
+        },
+        "ternary": {
+          "ste_loss": 1.0417948365211487,
+          "ste_acc": 0.96484375,
+          "es_loss": 1.551964282989502,
+          "es_acc": 0.62890625,
+          "quant_acc_drop": -0.0390625,
+          "ste_bias_gap": -0.5101694464683533
+        }
+      },
+      "label": "H16"
+    }
+  ]
+}
