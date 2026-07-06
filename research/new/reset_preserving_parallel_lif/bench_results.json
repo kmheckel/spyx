@@ -1,0 +1,105 @@
+{
+  "smoke": true,
+  "config": {
+    "T": 32,
+    "batch": 8,
+    "hidden": 32,
+    "beta": 0.5,
+    "K": 3
+  },
+  "equivalence": {
+    "T": 32,
+    "K_exact": 32,
+    "K_approx": 3,
+    "max_mismatch_K_eq_T": 0.0,
+    "mean_mismatch_K_eq_T": 0.0,
+    "max_mismatch_K3": 1.0,
+    "mean_mismatch_K3": 0.000244140625
+  },
+  "throughput": [
+    {
+      "name": "ParallelResetLIF/seq[T=16]",
+      "device": "cpu:cpu",
+      "seq_len": 16,
+      "batch": 8,
+      "param_count": 1,
+      "fwd_latency_ms": 0.035486998967826366,
+      "fwd_bwd_latency_ms": 0.03659899812191725,
+      "throughput_elem_ts_per_s": 3606954.764364517,
+      "spike_rate": 0.117919921875,
+      "peak_mem_mb": 0.031269073486328125,
+      "flops": 2820.0,
+      "mfu": null
+    },
+    {
+      "name": "ParallelResetLIF/seq[T=32]",
+      "device": "cpu:cpu",
+      "seq_len": 32,
+      "batch": 8,
+      "param_count": 1,
+      "fwd_latency_ms": 0.036959012504667044,
+      "fwd_bwd_latency_ms": 0.07413901039399207,
+      "throughput_elem_ts_per_s": 6926591.9907268435,
+      "spike_rate": 0.124755859375,
+      "peak_mem_mb": 0.06251907348632812,
+      "flops": 2820.0,
+      "mfu": null
+    },
+    {
+      "name": "ParallelResetLIF/fpt[T=16]",
+      "device": "cpu:cpu",
+      "seq_len": 16,
+      "batch": 8,
+      "param_count": 1,
+      "fwd_latency_ms": 0.03761099651455879,
+      "fwd_bwd_latency_ms": 0.09340600809082389,
+      "throughput_elem_ts_per_s": 3403260.000049524,
+      "spike_rate": 0.11572265625,
+      "peak_mem_mb": 0.031269073486328125,
+      "flops": 467016.0,
+      "mfu": null
+    },
+    {
+      "name": "ParallelResetLIF/fpt[T=32]",
+      "device": "cpu:cpu",
+      "seq_len": 32,
+      "batch": 8,
+      "param_count": 1,
+      "fwd_latency_ms": 0.06694599869661033,
+      "fwd_bwd_latency_ms": 0.19605999113991857,
+      "throughput_elem_ts_per_s": 3823977.6085820347,
+      "spike_rate": 0.12060546875,
+      "peak_mem_mb": 0.06251907348632812,
+      "flops": 1009772.0,
+      "mfu": null
+    },
+    {
+      "name": "PSU_LIF/parallel[T=16]",
+      "device": "cpu:cpu",
+      "seq_len": 16,
+      "batch": 8,
+      "param_count": 1,
+      "fwd_latency_ms": 0.01317501300945878,
+      "fwd_bwd_latency_ms": 0.02221099566668272,
+      "throughput_elem_ts_per_s": 9715360.425686453,
+      "spike_rate": 0.185302734375,
+      "peak_mem_mb": 0.031269073486328125,
+      "flops": 56338.0,
+      "mfu": null
+    },
+    {
+      "name": "PSU_LIF/parallel[T=32]",
+      "device": "cpu:cpu",
+      "seq_len": 32,
+      "batch": 8,
+      "param_count": 1,
+      "fwd_latency_ms": 0.03454499528743327,
+      "fwd_bwd_latency_ms": 0.05996300023980439,
+      "throughput_elem_ts_per_s": 7410624.834941789,
+      "spike_rate": 0.19580078125,
+      "peak_mem_mb": 0.06251907348632812,
+      "flops": 131611.0,
+      "mfu": null
+    }
+  ]
+}
