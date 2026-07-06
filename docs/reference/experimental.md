@@ -27,7 +27,8 @@ of the library.
 | [`spyx.experimental.raven`](#spyxexperimentalraven) | Module | Routing-slot memory (`RavenRSM`), spiking sibling (`SpikingSlotMemory`), `SlotRouter`, and the `make_recall_batch` MQAR generator. |
 | [`spyx.experimental.compress`](#spyxexperimentalcompress) | Module | Bit-packed activation storage for memory-efficient BPTT. |
 | [`spyx.experimental.stochastic`](#spyxexperimentalstochastic) | Module | Stochastic (Bernoulli-spiking) and parallelizable prototypes: `SPSN`, `StochasticAssociative{LIF,CuBaLIF}`, and the `sigmoid_bernoulli` activations. |
-| [`spyx.experimental.hybrid`](#spyxexperimentalhybrid) | Module | The 0+1 hybrid trainer: surrogate gradient + antithetic-NES correction projected orthogonal to the surrogate (`hybrid_gradient`, `make_hybrid_train_step`, `es_gradient`, `hybrid_diagnostics`). |
+| [`spyx.experimental.hybrid`](#spyxexperimentalhybrid) | Module | The 0+1 hybrid trainer: surrogate gradient + antithetic-NES correction projected orthogonal to the surrogate (`hybrid_gradient`, `make_hybrid_train_step`, `es_gradient`, `hybrid_diagnostics`), plus the surrogate-steered **Self-Guided ES** variant (`sges_gradient`, `make_sges_hybrid_train_step`) — the surrogate direction is SGES's guiding subspace, so ES is spent on the orthogonal complement at several-fold lower variance. |
+| [`spyx.experimental.matfree`](#spyxexperimentalmatfree) | Module | Matmul-free linear primitives — ternary (BitNet: `TernaryLinear`, `TernaryMLP`) and shift-add (DeepShift: `ShiftAddLinear`) layers that replace dense multiplies with accumulations / bit-shifts, plus `MatMulFreeBlock`, `MLGRU`, `RMSNorm`, and the `ternary_weights` / `power_of_two_weights` / `activation_quant` STE helpers. The native train-from-scratch counterpart to the post-training [`spyx.quant.bitnet_ternary_rules`](quant.md) path. |
 | [`spyx.experimental.zoo`](#spyxexperimentalzoo) | Package | Runnable reference recipes keyed by application (control / classification / language) and tagged by training method × architecture (`REGISTRY`, `list_recipes`, `get`). |
 | [`spyx.experimental.onnx`](#spyxexperimentalonnx) | Module | Export a spiking model to ONNX — per-timestep step, or the whole `spyx.nn.run` loop as a native ONNX `Scan`/`Loop`. Conversion deps imported lazily. |
 
@@ -74,6 +75,16 @@ Runnable recipes tagged by application × training method × architecture. Each
 with `list_recipes(application=..., method=...)`.
 
 ::: spyx.experimental.zoo
+
+## spyx.experimental.matfree
+
+Multiplication-light layers you **build with**, rather than convert to: ternary
+(BitNet) weights collapse the matmul to signed accumulations, power-of-two
+(DeepShift) weights to bit-shifts. Trained from scratch / QAT via straight-through
+estimators. See [Training methods](../explanation/training-methods.md) for where
+this sits relative to post-training quantization ([`spyx.quant`](quant.md)).
+
+::: spyx.experimental.matfree
 
 ## spyx.experimental.onnx
 
