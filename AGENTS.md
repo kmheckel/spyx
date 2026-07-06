@@ -18,7 +18,8 @@ Spyx has two tiers, and agents should respect the boundary when advising users:
   SpikingSlotMemory), `compress` (packed-bit activations), `stochastic` (SPSN,
   stochastic-associative neurons), `hybrid` (surrogate + orthogonal-ES error
   correction), `zoo` (runnable recipes by application × method × architecture),
-  `onnx` (ONNX export of the spiking step or the whole `nn.run` loop).
+  `onnx` (ONNX export of the spiking step or the whole `nn.run` loop),
+  `matfree` (matmul-free layers: ternary/BitNet + shift-add, and a MatMulFreeBlock).
   Always import these from `spyx.experimental`
   (e.g. `from spyx.experimental import PSU_LIF, RavenRSM`), never from a top-level
   module, so usage signals the stability contract. `PSU_LIF`/`ResonateFire` are
