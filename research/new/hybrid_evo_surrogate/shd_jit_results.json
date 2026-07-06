@@ -1,0 +1,23 @@
+{
+  "config": {
+    "T": 128,
+    "batch": 256,
+    "epochs": 30,
+    "emb": 128,
+    "KS": [
+      512
+    ],
+    "seeds": [
+      0
+    ],
+    "train_batches": 31
+  },
+  "arms": {
+    "full surrogate": 0.54736328125,
+    "hyper surrogate": 0.3427734375,
+    "full es K=512": 0.07666015625,
+    "hyper es K=512": 0.326171875,
+    "full sges K=512": 0.09814453125,
+    "hyper sges K=512": 0.43212890625
+  }
+}

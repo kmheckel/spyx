@@ -1,0 +1,29 @@
+{
+  "config": {
+    "epochs": 1,
+    "emb": 64,
+    "KS": [
+      16,
+      64
+    ],
+    "seeds": [
+      0
+    ],
+    "full_dim": 9556,
+    "hyper_dim": 256,
+    "T": 64,
+    "train_batches": 2
+  },
+  "arms": {
+    "full surrogate": 0.06640625,
+    "hyper surrogate": 0.07421875,
+    "full es K=16": 0.0859375,
+    "full es K=64": 0.0859375,
+    "hyper es K=16": 0.07421875,
+    "hyper es K=64": 0.07421875,
+    "full sges K=16": 0.09765625,
+    "full sges K=64": 0.09375,
+    "hyper sges K=16": 0.07421875,
+    "hyper sges K=64": 0.07421875
+  }
+}

@@ -21,10 +21,14 @@ import spyx.axn as axn
 import spyx.fn as fn
 import spyx.nn as snn
 from spyx.experimental.hybrid import (
+    _es_flat,
+    _sges_flat,
     es_gradient,
     hybrid_diagnostics,
     hybrid_gradient,
     make_hybrid_train_step,
+    make_sges_hybrid_train_step,
+    sges_gradient,
 )
 
 
@@ -293,4 +297,105 @@ def test_end_to_end_hybrid_step_keeps_true_loss_finite(rngs):
     for value in losses:
         assert jnp.isfinite(value)
     # Should not blow up: final within a small tolerance of (or below) the start.
+    assert losses[-1] <= losses[0] + 0.5
+
+
+def test_sges_unbiased_and_lower_variance_than_isotropic_es():
+    """Surrogate-steered SGES: unbiased for the true grad, lower variance than ES.
+
+    On a quadratic (grad known), the SGES estimate steered by a biased guide must
+    (a) be unbiased (its mean aligns with the analytic gradient), and (b) have
+    strictly lower total variance than isotropic ES at the same sample budget —
+    the whole point of the Self-Guided-ES stratification.
+    """
+    key = jax.random.PRNGKey(0)
+    kc, kt, kg = jax.random.split(key, 3)
+    d = 40
+    center = jax.random.normal(kc, (d,))
+    theta = jax.random.normal(kt, (d,)) * 0.5
+
+    def f(x):
+        return 0.5 * jnp.sum((x - center) ** 2)
+
+    grad_true = theta - center
+    guide = grad_true + 0.6 * jax.random.normal(kg, (d,))  # biased surrogate-like
+
+    K, sigma = 12, 1e-3
+    seeds = jax.random.split(jax.random.PRNGKey(99), 150)
+    es = jax.vmap(lambda k: _es_flat(theta, f, k, num_samples=K, sigma=sigma))(seeds)
+    sg = jax.vmap(
+        lambda k: _sges_flat(theta, f, guide, k, num_samples=K, sigma=sigma, eps=1e-8)[
+            0
+        ]
+    )(seeds)
+
+    def cos(a, b):
+        return float(a @ b / (jnp.linalg.norm(a) * jnp.linalg.norm(b)))
+
+    # (a) unbiased: mean estimate aligns with the analytic gradient.
+    assert cos(sg.mean(0), grad_true) > 0.95
+    # (b) strictly lower total variance than isotropic ES at the same budget.
+    assert float(sg.var(0).sum()) < float(es.var(0).sum())
+    # and by a clear margin (>2x here) since the guide direction is exact.
+    assert float(es.var(0).sum()) > 2.0 * float(sg.var(0).sum())
+
+
+def test_sges_lambda_zero_recovers_surrogate_and_finite(rngs):
+    """sges_gradient at lam=0 is exactly the surrogate gradient; grads are finite."""
+    model = TinyClassifier(4, 8, 3, axn.superspike(), rngs=rngs)
+    T, B, C = 5, 2, 4
+    x = (jax.random.uniform(jax.random.PRNGKey(1), (T, B, C)) < 0.3).astype(jnp.float32)
+    y = jnp.array([0, 2])
+    loss = fn.integral_crossentropy()
+
+    def loss_fn(m, xb, yb):
+        return loss(m(xb), yb)
+
+    g0 = sges_gradient(
+        model, loss_fn, loss_fn, jax.random.PRNGKey(2), batch=(x, y), lam=0.0
+    )
+    g_s = nnx.grad(lambda m: loss_fn(m, x, y))(model)
+    for a, b in zip(
+        jax.tree_util.tree_leaves(g0), jax.tree_util.tree_leaves(g_s), strict=True
+    ):
+        assert jnp.allclose(a, b, atol=1e-5)
+
+    grads, diag = sges_gradient(
+        model,
+        loss_fn,
+        loss_fn,
+        jax.random.PRNGKey(3),
+        batch=(x, y),
+        num_samples=6,
+        lam=1.0,
+        return_diagnostics=True,
+    )
+    params = nnx.state(model, nnx.Param)
+    assert jax.tree_util.tree_structure(grads) == jax.tree_util.tree_structure(params)
+    for leaf in jax.tree_util.tree_leaves(grads):
+        assert bool(jnp.all(jnp.isfinite(leaf)))
+    for k in ("along_guide_deriv", "g_orth_norm", "g_s_norm", "cosine"):
+        assert bool(jnp.isfinite(diag[k]))
+
+
+def test_sges_hybrid_step_keeps_true_loss_finite(rngs):
+    """A few surrogate-steered-SGES steps keep the true loss finite/sane."""
+    model = TinyClassifier(6, 12, 3, axn.superspike(), rngs=rngs)
+    T, B, C = 8, 4, 6
+    x = (jax.random.uniform(jax.random.PRNGKey(5), (T, B, C)) < 0.3).astype(jnp.float32)
+    y = jnp.array([0, 1, 2, 1])
+    ce = fn.integral_crossentropy(smoothing=0.2)
+
+    def loss_fn(m, xb, yb):
+        return ce(m(xb), yb)
+
+    optimizer = nnx.Optimizer(model, optax.adam(5e-3), wrt=nnx.Param)
+    step = make_sges_hybrid_train_step(loss_fn, loss_fn, num_samples=8, sigma=0.01)
+    key = jax.random.PRNGKey(6)
+    losses = []
+    for _ in range(4):
+        key, sub = jax.random.split(key)
+        losses.append(float(step(model, optimizer, sub, x, y)))
+    for value in losses:
+        assert jnp.isfinite(value)
     assert losses[-1] <= losses[0] + 0.5
