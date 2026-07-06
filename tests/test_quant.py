@@ -312,6 +312,32 @@ def test_feedforward_quant_is_not_a_silent_noop():
 
 
 @needs_qwix
+@pytest.mark.parametrize("weight_qtype", ["nvfp4", "mxfp4"])
+def test_microscaled_fp4_quant_is_not_a_silent_noop(weight_qtype):
+    """Microscaled FP4 weight-only rules auto-fill tile_size and really quantize.
+
+    The ``nvfp4`` / ``mxfp4`` formats need a per-format ``tile_size`` (16 / 32)
+    that qwix enforces; the builders auto-fill it from the qtype. This mirrors
+    :func:`test_feedforward_quant_is_not_a_silent_noop` for the FP4 path:
+    weight-only (``act_qtype=None``), CPU-emulated, and the quantized output
+    must differ measurably from the full-precision matmul.
+    """
+    rngs = nnx.Rngs(0)
+    # Contraction axis (32) is divisible by both required tile sizes (16, 32).
+    lin = nnx.Linear(32, 8, use_bias=False, rngs=rngs)
+    W = jnp.asarray(lin.kernel.value, dtype=jnp.float32)
+
+    rules = spyx.quant.weights_only_rules(weight_qtype=weight_qtype)
+    assert rules[0].act_qtype is None
+    expected_tile = {"nvfp4": 16, "mxfp4": 32}[weight_qtype]
+    assert rules[0].tile_size == expected_tile
+
+    x = jax.random.uniform(jax.random.PRNGKey(4), (4, 32))
+    qmodel = spyx.quant.quantize(lin, x, rules=rules, mode="ptq")
+    assert float(jnp.max(jnp.abs(qmodel(x) - x @ W))) > 1e-4
+
+
+@needs_qwix
 def test_spiking_feedforward_leaves_recurrent_einsum_in_fp32():
     """A recurrent einsum weight stays fp32 while the feedforward kernel is int8."""
 

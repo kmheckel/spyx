@@ -90,10 +90,51 @@ def _require_qwix() -> Any:
     return _qwix
 
 
+# qwix's microscaled FP formats (``nvfp4`` / ``mxfp4`` / ``mxfp8``) attach a
+# small shared exponent to each contiguous block ("tile") of the quantized
+# axis, and qwix *enforces* a specific tile size per format - constructing a
+# rule with the wrong value raises ``ValueError: Format <fmt> requires a tile
+# size of <N>``. These are the required values (confirmed against qwix 0.1.8):
+# NVFP4 blocks 16 elements, the MX formats block 32.
+_MICROSCALED_TILE_SIZES = {"nvfp4": 16, "mxfp4": 32, "mxfp8": 32}
+
+
+def _default_tile_size(qtype: str | None) -> int | None:
+    """Return qwix's required tile size for a microscaled qtype, else ``None``.
+
+    ``nvfp4`` requires a tile size of ``16``; ``mxfp4`` and ``mxfp8`` require
+    ``32`` (qwix raises ``ValueError`` otherwise). Every other qtype - the
+    integer grids ``"int8"`` / ``"int4"`` / ``"int2"``, the plain floats, and
+    ``None`` - is not tiled and returns ``None``, so integer recipes keep their
+    historical ``tile_size=None`` behaviour untouched.
+    """
+    if qtype is None:
+        return None
+    return _MICROSCALED_TILE_SIZES.get(qtype)
+
+
+def _effective_tile_size(
+    tile_size: int | float | None,
+    weight_qtype: str | None,
+    act_qtype: str | None = None,
+) -> int | float | None:
+    """Resolve the tile size to hand qwix, auto-filling for microscaled formats.
+
+    An explicit ``tile_size`` always wins. When it is ``None`` we derive the
+    required value from ``weight_qtype`` (and fall back to ``act_qtype`` so an
+    activation-only microscaled setup still tiles correctly); for non-microscaled
+    qtypes this stays ``None`` and the produced rule is byte-identical to before.
+    """
+    if tile_size is not None:
+        return tile_size
+    return _default_tile_size(weight_qtype) or _default_tile_size(act_qtype)
+
+
 def linear_only_rules(
     weight_qtype: str | None = "int8",
     act_qtype: str | None = "int8",
     extra_op_names: Sequence[str] = (),
+    tile_size: int | float | None = None,
 ) -> list[Any]:
     """Quantize only the dense / conv layers of an SNN, leaving spiking dynamics alone.
 
@@ -103,10 +144,17 @@ def linear_only_rules(
     transforms and let the neurons run in fp32.
 
     :param weight_qtype: dtype string accepted by :class:`qwix.QuantizationRule`
-        (e.g. ``"int8"``, ``"int4"``, ``"fp8"``). ``None`` disables weight quant.
+        (e.g. ``"int8"``, ``"int4"``, ``"fp8"``, or the microscaled FP4/FP8
+        formats ``"nvfp4"`` / ``"mxfp4"`` / ``"mxfp8"``). ``None`` disables
+        weight quant.
     :param act_qtype: same options for activations. ``None`` disables.
     :param extra_op_names: additional op names to quantize alongside the default
         matmul / conv ops (e.g. a custom primitive).
+    :param tile_size: block size for the shared scale of microscaled formats. If
+        ``None`` (default) it is auto-filled from ``weight_qtype`` / ``act_qtype``
+        - ``16`` for ``"nvfp4"`` and ``32`` for ``"mxfp4"`` / ``"mxfp8"`` - which
+        are the values qwix requires; non-microscaled qtypes stay untiled. The
+        microscaled path is emulated on CPU / ROCm and accelerates on Blackwell.
     :return: a single-element list with a qwix :class:`QuantizationRule`.
 
     .. note::
@@ -124,12 +172,14 @@ def linear_only_rules(
     """
     qwix = _require_qwix()
     op_names = ("dot_general", "conv_general_dilated", *extra_op_names)
+    tile_size = _effective_tile_size(tile_size, weight_qtype, act_qtype)
     return [
         qwix.QuantizationRule(
             module_path=".*",
             op_names=op_names,
             weight_qtype=weight_qtype,
             act_qtype=act_qtype,
+            tile_size=tile_size,
         )
     ]
 
@@ -138,6 +188,7 @@ def weights_only_rules(
     weight_qtype: str = "int8",
     module_path: str = ".*",
     op_names: Sequence[str] = ("dot_general", "conv_general_dilated"),
+    tile_size: int | float | None = None,
 ) -> list[Any]:
     """Quantize only the weights, leaving activations in fp32.
 
@@ -147,14 +198,29 @@ def weights_only_rules(
     Selects work by op name rather than module class — see
     :func:`linear_only_rules` for why (qwix ``module_path`` matches the NNX
     attribute path, not the class name).
+
+    :param weight_qtype: dtype string for the weights. Integer grids (``"int8"``
+        / ``"int4"`` / ``"int2"``) and the microscaled FP formats ``"nvfp4"`` /
+        ``"mxfp4"`` / ``"mxfp8"`` are all accepted.
+    :param module_path: qwix ``module_path`` regex (matched against the NNX
+        attribute path, *not* the class name).
+    :param op_names: ops to quantize; defaults to the dense / conv feedforward
+        transforms.
+    :param tile_size: block size for the shared scale of microscaled formats. If
+        ``None`` (default) it is auto-filled from ``weight_qtype`` - ``16`` for
+        ``"nvfp4"`` and ``32`` for ``"mxfp4"`` / ``"mxfp8"``, the values qwix
+        requires; integer qtypes stay untiled. The microscaled path is emulated
+        on CPU / ROCm and accelerates on Blackwell.
     """
     qwix = _require_qwix()
+    tile_size = _effective_tile_size(tile_size, weight_qtype)
     return [
         qwix.QuantizationRule(
             module_path=module_path,
             op_names=tuple(op_names),
             weight_qtype=weight_qtype,
             act_qtype=None,
+            tile_size=tile_size,
         )
     ]
 
@@ -164,6 +230,7 @@ def spiking_feedforward_rules(
     *,
     module_path: str = ".*",
     extra_op_names: Sequence[str] = (),
+    tile_size: int | float | None = None,
 ) -> list[Any]:
     """Weight-only quantization of the ``spike -> Linear`` feedforward path.
 
@@ -190,24 +257,32 @@ def spiking_feedforward_rules(
     recurrent path requires.
 
     :param weight_qtype: dtype string for the feedforward weights (``"int8"``
-        default; ``"int4"`` / ``"int2"`` for more compression). Activations are
-        never quantized here.
+        default; ``"int4"`` / ``"int2"`` for more compression, or the microscaled
+        ``"nvfp4"`` / ``"mxfp4"`` / ``"mxfp8"`` FP formats). Activations are never
+        quantized here.
     :param module_path: qwix ``module_path`` regex (matched against the NNX
         attribute path, *not* the class name - see :func:`linear_only_rules`).
     :param extra_op_names: additional feedforward op names to quantize. Do
         **not** add ``"einsum"`` unless you intend to quantize the recurrent
         path (which Q-S5 advises against).
+    :param tile_size: block size for the shared scale of microscaled formats. If
+        ``None`` (default) it is auto-filled from ``weight_qtype`` - ``16`` for
+        ``"nvfp4"`` and ``32`` for ``"mxfp4"`` / ``"mxfp8"``, the values qwix
+        requires; integer qtypes stay untiled. The microscaled path is emulated
+        on CPU / ROCm and accelerates on Blackwell.
     :return: a single-element list with a weight-only qwix
         :class:`QuantizationRule`.
     """
     qwix = _require_qwix()
     op_names = ("dot_general", "conv_general_dilated", *extra_op_names)
+    tile_size = _effective_tile_size(tile_size, weight_qtype)
     return [
         qwix.QuantizationRule(
             module_path=module_path,
             op_names=op_names,
             weight_qtype=weight_qtype,
             act_qtype=None,
+            tile_size=tile_size,
         )
     ]
 
