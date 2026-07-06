@@ -81,6 +81,7 @@ nav:
       - Design & architecture: explanation/design.md
       - SNN primer: explanation/snn-primer.md
       - Parallel spiking neurons: explanation/parallel-spiking-neurons.md
+      - Substrates & the hardware lottery: explanation/substrate-and-the-hardware-lottery.md
       - Research with Spyx: explanation/research.md
       - Glossary: explanation/glossary.md
 
