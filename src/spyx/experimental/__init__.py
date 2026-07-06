@@ -12,6 +12,10 @@ Contents:
 - :class:`~spyx.experimental.PSU_LIF` — reset-free parallel LIF (parallel
   associative-scan spiking neuron). *Physically defined in* ``spyx.nn`` *and
   surfaced here as its supported, experimental entry point.*
+- :class:`~spyx.experimental.AssociativeLIF` — thin alias of ``PSU_LIF`` at
+  exact numeric parity with snnTorch v1.0.0 ``snntorch.StateLeaky`` (after a
+  ``beta`` reparameterisation). It does **not** replicate snnTorch's
+  ``AssociativeLeaky``, which is a different matrix-state associative-memory SSM.
 - :class:`~spyx.experimental.ResonateFire` — complex resonate-and-fire oscillatory
   neuron. *Physically defined in* ``spyx.phasor``.
 - :mod:`spyx.experimental.raven` — Routing Slot Memories (``RavenRSM``) and the
@@ -41,7 +45,7 @@ Related research studies live under ``research/new/`` in the repository.
 
 # Re-exported from the stable modules where they are physically defined; grouped
 # here so the experimental surface is discoverable in one place.
-from ..nn import PSU_LIF
+from ..nn import PSU_LIF, AssociativeLIF
 from ..phasor import ResonateFire
 from . import compress, evolve, hybrid, matfree, onnx, raven, stochastic, zoo
 from .compress import pack_spikes, packed_spike_dense, unpack_spikes
@@ -72,6 +76,7 @@ __all__ = [
     "stochastic",
     "zoo",
     "PSU_LIF",
+    "AssociativeLIF",
     "ResonateFire",
     "RavenRSM",
     "SpikingSlotMemory",

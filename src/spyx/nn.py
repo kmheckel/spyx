@@ -338,6 +338,70 @@ class PSU_LIF(nnx.Module):
         return jnp.zeros((batch_size,) + self.hidden_shape)
 
 
+class AssociativeLIF(PSU_LIF):
+    r"""Reset-free parallel LIF, named for snnTorch cross-referencing.
+
+    .. note::
+       **Experimental.** Supported entry point:
+       :class:`spyx.experimental.AssociativeLIF`. Thin alias of
+       :class:`PSU_LIF` — same ``__init__`` signature, same
+       ``(x, V) -> (spikes, V)`` step contract, same :meth:`parallel`
+       associative scan. It exists purely for discoverability by users
+       coming from snnTorch.
+
+    **Parity target.** This is at exact numeric parity (float32, verified to
+    ``< 1e-6`` max-abs membrane difference; spike trains identical) with
+    snnTorch v1.0.0 ``snntorch.StateLeaky`` — the reset-free scalar parallel
+    leaky integrator — *after a single beta reparameterisation* (see below).
+
+    .. warning::
+       Despite the name, this does **not** replicate snnTorch's
+       ``snntorch.AssociativeLeaky``. That neuron is *not* a leaky
+       integrate-and-fire unit at all: it is a matrix-valued associative-memory
+       SSM (linear-attention / fast-weight style) that forms key/value outer
+       products, decays a matrix state in log-space, and reads out
+       ``S_t @ Q_t`` with input-dependent per-column decay. A scalar LIF cannot
+       express it; that behaviour would be a separate linear-attention module.
+
+    **Decay reparameterisation.** ``PSU_LIF`` uses ``beta`` directly as the
+    per-step decay, :math:`V_t = \beta V_{t-1} + x_t`. ``StateLeaky`` instead
+    reads ``beta`` as a continuous time constant :math:`\tau = 1/(1-\beta)` and
+    builds a kernel :math:`h[t] = e^{-t/\tau}`, so its *effective* per-step
+    decay is :math:`e^{-1/\tau} = e^{-(1-\beta_\text{snn})}`. The same symbol
+    means different things: ``beta_snn = 0.9`` gives an effective decay of
+    ``0.9048``, not ``0.9``. Use :meth:`beta_from_snntorch` to convert a
+    snnTorch ``beta`` into the spyx ``beta`` that reproduces StateLeaky exactly,
+    and :meth:`snntorch_beta_from_beta` for the inverse.
+    """
+
+    @staticmethod
+    def beta_from_snntorch(beta_snn):
+        r"""Convert a snnTorch ``StateLeaky`` beta into the spyx ``beta``.
+
+        ``StateLeaky`` treats ``beta`` as a time constant
+        :math:`\tau = 1/(1 - \beta_\text{snn})` and uses an effective per-step
+        decay :math:`e^{-1/\tau} = e^{-(1 - \beta_\text{snn})}`. Passing the
+        returned value as this class's ``beta`` makes the membrane trace (and
+        therefore the spikes) match ``StateLeaky`` exactly.
+
+        :beta_snn: snnTorch ``StateLeaky`` beta in ``(0, 1)``.
+        :return: the equivalent spyx per-step decay ``beta``.
+        """
+        return jnp.exp(-(1.0 - jnp.asarray(beta_snn)))
+
+    @staticmethod
+    def snntorch_beta_from_beta(beta):
+        r"""Inverse of :meth:`beta_from_snntorch`.
+
+        Recovers the snnTorch ``StateLeaky`` beta from a spyx per-step decay
+        via :math:`\beta_\text{snn} = 1 + \ln \beta`.
+
+        :beta: spyx per-step decay ``beta`` in ``(0, 1]``.
+        :return: the equivalent snnTorch ``StateLeaky`` beta.
+        """
+        return 1.0 + jnp.log(jnp.asarray(beta))
+
+
 class CuBaLIF(nnx.Module):
     def __init__(
         self,
