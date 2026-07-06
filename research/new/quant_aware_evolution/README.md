@@ -125,27 +125,42 @@ time and the per-precision STE-bias gap.
 
 ## Findings
 
-**PENDING a full run.** Not yet filled in — the numbers below must come from a
-non-smoke run (multiple seeds, full ES population/generation budget), and are
-deliberately left blank rather than fabricated.
+**Full run on the Radeon 8060S / gfx1151 GPU** (C=32, H=64, 4 classes, T=16, 15
+epochs, CR-FM-NES POP=64 × 150 generations, seeds 0/1/2). All arms **converged** —
+accuracy 99–100 % everywhere, well above the 25 % chance floor — so this is a fair
+comparison, not an under-budgeted one.
 
-| Precision | fp32 ref | STE-QAT true loss | ES true loss | STE-bias gap (STE − ES) | Verdict |
+| Precision | fp32 ref | STE-QAT true loss | ES true loss | STE-bias gap (STE − ES) | seed spread |
 | --- | --- | --- | --- | --- | --- |
-| nvfp4 | see JSON | pending | pending | pending | pending |
-| ternary | see JSON | pending | pending | pending | pending |
+| nvfp4 | 0.6719 (99.5 %) | 0.6786 (99.2 %) | 0.6735 (99.7 %) | **+0.0051** (ES lower) | ±0.006 / ±0.006 |
+| ternary | 0.6719 (99.5 %) | 0.6445 (99.7 %) | 0.6486 (100 %) | **−0.0041** (STE lower) | ±0.012 / ±0.005 |
 
-To fill in: run the full config, then report (a) the per-precision STE-bias gap
-and its seed spread, (b) whether the gap **grows** from nvfp4 to ternary (the
-core hypothesis), and (c) the compute each arm spent (wall time / forward-eval
-count) so any ES win is stated *with* its cost. Report the actual outcome —
-including "ES loses once compute is normalized" — without reshaping the claim.
+**Honest verdict: a null result — no measurable STE-bias gap on this task.** Both
+gaps (±0.005) are **smaller than the per-arm seed spread** (±0.005–0.012), so they
+are statistically indistinguishable from zero, and they do **not** grow from nvfp4
+to ternary — the core hypothesis is *not* supported here. The reason is visible in
+the accuracies: the synthetic task is easy enough that **even ternary reaches
+100 %**, so the quantized model has capacity to spare and there is simply *no STE
+bias for ES to remove*. STE's biased gradient only misleads when the quantization
+actually costs accuracy; here it doesn't.
 
-**Smoke self-check (plumbing only, NOT a result).** `SPYX_SMOKE=1` on CPU
-completes the full fp32 + 2×(STE-QAT, ES) sweep in a few seconds and prints
-per-arm true-quant loss/accuracy and both STE-bias gaps. In this tiny regime the
-ES budget (POP=16, 20 generations) is far too small to converge, so ES trails STE
-at both precisions — this confirms the comparison *runs*, and says nothing about
-the claim.
+**And ES is not free.** At nvfp4 it spent ~2× the STE-QAT wall time (2.4 s vs 1.1 s)
+for a loss difference in the noise — so on an easy, well-conditioned task **STE-QAT
+dominates once compute is normalized.** This mirrors the honest-negative pattern of
+the sibling hybrid study: the gradient-free method's edge needs a regime with
+genuinely large bias, and an easy task doesn't provide one.
+
+**Where the real test lives (next step).** To actually stress the STE bias, the
+quantized model must be **capacity-constrained on a hard task** so that nvfp4 /
+ternary *degrades* accuracy — e.g. real SHD (20 classes, 128 channels, long T) with
+a tight hidden width, where the fp32→ternary drop is large. Only there can ES's
+unbiased optimization of the true quantized objective plausibly pull ahead. On an
+easy task where every precision saturates, it cannot, and this run says so plainly.
+
+**Smoke self-check (plumbing only, NOT a result).** `SPYX_SMOKE=1` completes the
+sweep in seconds with a deliberately tiny ES budget (POP=16, 20 generations) that
+does not converge; it confirms the comparison *runs* and says nothing about the
+claim.
 
 ## Reproducibility
 
