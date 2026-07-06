@@ -58,7 +58,7 @@ result = spyx.bench.benchmark(
 | `spike_rate` | Mean fraction of non-zero output activations — the SNN **energy proxy**. |
 | `peak_mem_mb` | Peak device memory (`None` if the backend does not expose it). |
 | `flops` | FLOPs from XLA's cost model (`None` if unavailable). |
-| `mfu` | Model-FLOP-utilisation = achieved FLOP/s ÷ device peak (`None` when the device peak is unknown — never guessed). |
+| `mfu` | Model-FLOP-utilisation = achieved FLOP/s ÷ device peak (`None` when the device peak is unknown — never guessed). The peak is the **dense fp32** ceiling — see the int8 caveat below. |
 | `param_count`, `device`, `seq_len`, `batch` | Run metadata. |
 
 `spike_rate` is the standard event-driven energy proxy for spiking networks:
@@ -111,6 +111,16 @@ crossover widening as the sequence grows and the sequential critical path starts
 to dominate. Passing thunks (as above) gives every sweep point a fresh module.
 `BenchResult.as_dict()` returns a plain dict if you would rather push results into
 a DataFrame or log them.
+
+!!! warning "int8 MFU is measured against the fp32 ceiling"
+    The MFU peak-FLOPs table is the device's **dense fp32** peak. A quantized
+    (int8/int4) model's MFU is therefore reported against the fp32 ceiling, not
+    the (higher) integer tensor-core peak — so int8 and fp32 MFU numbers are
+    **not directly comparable**. A quantized model can be faster (lower
+    `fwd_latency_ms`) while showing a *lower* MFU here. Compare quantized models
+    on latency / throughput, and treat MFU as an fp32-relative diagnostic. See
+    [How to quantize a model](quantize.md) and the
+    [deployment guide](deploy.md).
 
 !!! note "Numbers are hardware-specific"
     Latency, throughput, and MFU depend entirely on the accelerator, driver, and

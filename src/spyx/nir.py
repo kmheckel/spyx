@@ -448,8 +448,37 @@ def _spyx_recurrent_to_nirgraph(layer, node_key, dt) -> nir.NIRGraph:
     return nir.NIRGraph(nodes=sub_nodes, edges=sub_edges)
 
 
+def _is_quantized_layer(layer) -> bool:
+    """True if ``layer`` carries qwix quantization state.
+
+    qwix tags every quantized submodule with a ``qwix_path`` attribute and, in
+    PTQ mode, swaps the plain fp32 kernel ``Variable`` for a quantized-array
+    wrapper whose ``[...]`` value is no longer a bare ``jax.Array``. Either
+    signal means the layer's weights no longer live on the plain fp32 grid that
+    a NIR graph assumes, so :func:`to_nir` refuses rather than silently drop the
+    quantization (see the ``ValueError`` it raises).
+    """
+    if hasattr(layer, "qwix_path"):
+        return True
+    kernel = getattr(layer, "kernel", None)
+    if kernel is not None:
+        try:
+            value = kernel[...]
+        except Exception:  # a quantized kernel wrapper may not support [...]
+            return True
+        if not isinstance(value, (jax.Array, np.ndarray)):
+            return True
+    return False
+
+
 def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
-    """Converts a Spyx/NNX model to a NIR graph."""
+    """Converts a Spyx/NNX model to a NIR graph.
+
+    :raises ValueError: if any layer is qwix-quantized. NIR stores fp32 weights
+        and continuous time constants with no int8/int4 or scale/zero-point
+        fields, so it cannot carry quantization; export to NIR *before*
+        quantizing (or target ONNX + onnxruntime for an int8 deployment — see
+        ``docs/how-to/deploy.md``)."""
 
     nodes = {"input": nir.Input(input_shape), "output": nir.Output(output_shape)}
     edges = []
@@ -470,6 +499,18 @@ def to_nir(model, input_shape, output_shape, dt=1) -> nir.NIRGraph:
 
     for i, layer in enumerate(layers):
         node_key = f"layer_{i}"
+
+        if _is_quantized_layer(layer):
+            raise ValueError(
+                f"Layer {i} ({type(layer).__name__}) is qwix-quantized, but NIR "
+                "export cannot carry quantization: a NIR graph stores fp32 "
+                "weights and continuous time constants, with no int8/int4 or "
+                "scale/zero-point fields to encode a quantized tensor. Export "
+                "the model to NIR *before* quantizing it (or dequantize first). "
+                "For an int8 deployment target, export to ONNX instead "
+                "(spyx.experimental.onnx.to_onnx) and run it under onnxruntime. "
+                "See docs/how-to/deploy.md."
+            )
 
         if isinstance(layer, nnx.Linear):
             if layer.bias is not None:

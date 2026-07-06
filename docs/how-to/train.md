@@ -2,6 +2,8 @@
 
 To train a Spyx model you need three ingredients: a loss function from [`spyx.fn`](../reference/fn.md), an [Optax](https://optax.readthedocs.io/) optimizer, and batches of `(events, targets)`. You can then either use the high-level `spyx.optimize.fit` loop or write the NNX training step yourself.
 
+This page covers the **surrogate-gradient** method. For when to reach instead for gradient-free evolution, quantization-aware training, ANN→SNN conversion, or the hybrid surrogate+evolution trainer, see [Choosing an approach](../explanation/choosing-an-approach.md).
+
 Both recipes below assume this model and loss:
 
 ```python

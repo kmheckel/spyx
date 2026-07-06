@@ -1,7 +1,9 @@
+import jax
 import jax.numpy as jnp
 import pytest
+from flax import nnx
 
-from spyx import fn
+from spyx import fn, nn
 
 
 def test_integral_accuracy():
@@ -105,6 +107,44 @@ def test_integral_crossentropy_rejects_bad_time_axis():
     loss = fn.integral_crossentropy(time_axis=99)
     with pytest.raises(ValueError, match="out of range"):
         loss(jnp.zeros((2, 4, 5)), jnp.zeros((2,), dtype=jnp.int32))
+
+
+def test_run_batch_major_aligns_with_fn_time_axis():
+    """run(..., batch_major=True) outputs line up with fn's time_axis=1 default.
+
+    This pins the time-axis trap fix: ``run`` is time-major by default while the
+    ``spyx.fn`` losses/metrics default to ``time_axis=1`` (batch-major). With
+    ``batch_major=True``, ``run`` returns ``[Batch, Time, Classes]`` so an ``fn``
+    loss reduces over *time* (leaving the batch), not over the batch. B != T so
+    the reduction axis is unambiguous.
+    """
+    rngs = nnx.Rngs(0)
+    B, T, C = 3, 5, 4
+    model = nn.Sequential(
+        nnx.Linear(4, C, rngs=rngs),
+        nn.LIF((C,), rngs=rngs),
+    )
+    x = jax.random.normal(jax.random.key(0), (B, T, 4))
+
+    outputs, _ = nn.run(model, x, batch_major=True)
+    assert outputs.shape == (B, T, C)
+
+    targets = jnp.zeros((B,), dtype=jnp.int32)
+
+    # fn defaults to time_axis=1; on [B, T, C] that reduces over time, leaving
+    # one prediction per batch item. If run were left time-major [T, B, C], this
+    # would reduce over the batch and the shape check would raise instead.
+    acc = fn.integral_accuracy(time_axis=1)
+    score, preds = acc(outputs, targets)
+    assert preds.shape == (B,)
+
+    # The reduction is genuinely over time: argmax of the time-sum per batch item.
+    expected_preds = jnp.argmax(jnp.sum(outputs, axis=1), axis=-1)
+    assert jnp.array_equal(preds, expected_preds)
+
+    # A loss over the same aligned outputs is finite and scalar.
+    loss = fn.integral_crossentropy(smoothing=0.0, time_axis=1)(outputs, targets)
+    assert jnp.isfinite(loss) and loss.ndim == 0
 
 
 def test_shape_check_accepts_valid_shapes():

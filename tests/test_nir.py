@@ -269,6 +269,34 @@ def test_nir_export_resonatefire_not_implemented():
         spyx_nir.to_nir(model, {"input": (8,)}, {"output": (6,)})
 
 
+def test_to_nir_quantized_raises():
+    """NIR cannot carry quantization (fp32 weights + continuous time constants,
+    no int8/scale fields), so exporting a qwix-quantized model must raise a
+    clear ValueError telling the user to export *before* quantizing — not
+    silently drop the quantization (QAT) or crash on the wrapped kernel (PTQ).
+    """
+    pytest.importorskip("qwix")
+    from spyx import quant
+
+    rngs = nnx.Rngs(0)
+    model = nn.Sequential(
+        nnx.Linear(16, 8, use_bias=False, rngs=rngs),
+        nn.LIF((8,), beta=0.8, rngs=rngs),
+        nnx.Linear(8, 4, use_bias=False, rngs=rngs),
+        nn.LI((4,), rngs=rngs),
+    )
+    b = 4
+    sample_x = jnp.zeros((b, 16))
+    sample_state = model.initial_state(b)
+
+    # PTQ swaps the kernel for a quantized-array wrapper; QAT keeps fp32 but
+    # tags the layers. Both must be refused with the same clear guidance.
+    for mode in ("ptq", "qat"):
+        qmodel = quant.quantize(model, sample_x, sample_state, mode=mode)
+        with pytest.raises(ValueError, match="quantiz"):
+            spyx_nir.to_nir(qmodel, {"input": (16,)}, {"output": (4,)})
+
+
 def test_from_nir_return_all_states():
     """return_all_states yields (outputs, per-layer states)."""
     rngs = nnx.Rngs(0)

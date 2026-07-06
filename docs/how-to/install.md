@@ -1,6 +1,6 @@
 # How to install Spyx
 
-Spyx supports **Python 3.11 and 3.12** (`>=3.11, <3.13`). The default install is
+Spyx supports **Python 3.11–3.14** (`>=3.11, <3.15`). The default install is
 CPU-only and deliberately lean; accelerators and heavier features live behind
 extras (see below).
 
@@ -51,6 +51,7 @@ pip install "spyx[loaders]"
 |---|---|---|
 | `spyx[loaders]` | `tonic`, `numba` | `spyx.data.SHD_loader`, `spyx.data.NMNIST_loader` |
 | `spyx[quant]` | `qwix` (from GitHub) | `spyx.quant` (int8 / int4 / ternary QAT) |
+| `spyx[evo]` | `evosax` | gradient-free neuroevolution / the [cartpole tutorial](../examples/neuroevolution/cartpole_evo.ipynb) |
 | `spyx[docs]` | `mkdocs`, `mkdocs-material`, `mkdocstrings`, `matplotlib` | building these docs locally |
 
 !!! note "qwix has no PyPI release"

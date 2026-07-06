@@ -56,6 +56,11 @@ ModuleOrThunk = Union[nnx.Module, Callable[[], nnx.Module]]
 # to turn measured FLOP/s into a Model-FLOP-Utilisation ratio; when no key
 # matches, the peak is ``None`` and MFU is reported as ``None`` (never guessed).
 # Add entries as needed — being absent only costs you the MFU column.
+#
+# NOTE: this ceiling is the *dense fp32* peak. A quantized (int8/int4) model's
+# MFU is therefore reported against the fp32 ceiling, not the (higher) integer
+# tensor-core peak, so int8 vs fp32 MFU numbers are NOT directly comparable —
+# a quantized model can beat fp32 on latency while showing a *lower* MFU here.
 _PEAK_FLOPS: dict[str, float] = {
     # NVIDIA data-center GPUs (fp32, non-tensor-core, approximate).
     "a100": 19.5e12,
