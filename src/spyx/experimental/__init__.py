@@ -43,7 +43,7 @@ Related research studies live under ``research/new/`` in the repository.
 # here so the experimental surface is discoverable in one place.
 from ..nn import PSU_LIF
 from ..phasor import ResonateFire
-from . import compress, evolve, hybrid, onnx, raven, stochastic, zoo
+from . import compress, evolve, hybrid, matfree, onnx, raven, stochastic, zoo
 from .compress import pack_spikes, packed_spike_dense, unpack_spikes
 from .hybrid import (
     es_gradient,
@@ -66,6 +66,7 @@ __all__ = [
     "compress",
     "evolve",
     "hybrid",
+    "matfree",
     "onnx",
     "raven",
     "stochastic",
