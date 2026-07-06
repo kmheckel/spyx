@@ -80,6 +80,128 @@ def test_if():
     assert jnp.all(spikes2 == 1)
 
 
+def test_if_accepts_and_ignores_rngs():
+    """IF must be drop-in interchangeable with parametric neurons.
+
+    Swapping ``LIF((n,), rngs=rngs)`` -> ``IF((n,), rngs=rngs)`` used to raise
+    TypeError because IF's constructor rejected ``rngs=``. IF is parameterless,
+    so it accepts and ignores it.
+    """
+    rngs = nnx.Rngs(0)
+    model = nn.IF((10,), rngs=rngs)  # must not raise
+    x = jnp.ones((5, 10)) * 2.0
+    V = model.initial_state(5)
+    spikes, V_next = model(x, V)
+    assert spikes.shape == (5, 10)
+    assert V_next.shape == (5, 10)
+
+    # Behaviour must be identical to constructing IF without rngs.
+    plain = nn.IF((10,))
+    s2, v2 = plain(x, plain.initial_state(5))
+    assert jnp.array_equal(spikes, s2)
+    assert jnp.array_equal(V_next, v2)
+
+
+def test_cubalif_single_subtractive_reset():
+    """CuBaLIF must apply the subtractive reset exactly once per spike.
+
+    Regression for a double-reset bug where the reset was subtracted both from
+    the raw membrane (``V = V - reset``) and again from the integrated membrane
+    (``V = beta * V + current_I - reset``). Here we drive a neuron above
+    threshold with fixed alpha/beta and compare against a hand-computed
+    single-reset reference. A re-introduced double reset shifts V_final by one
+    threshold and fails this test.
+    """
+    rngs = nnx.Rngs(0)
+    alpha, beta, threshold = 0.9, 0.8, 1.0
+    model = nn.CuBaLIF((1,), alpha=alpha, beta=beta, threshold=threshold, rngs=rngs)
+
+    # State layout is [V | current_I] concatenated on the last axis.
+    V0, I0, x = 2.0, 0.5, 0.3  # V0 > threshold => the neuron spikes
+    VI = jnp.array([[V0, I0]])
+    x_in = jnp.array([[x]])
+
+    spikes, VI_next = model(x_in, VI)
+    V_next, I_next = jnp.split(VI_next, 2, -1)
+
+    assert float(spikes[0, 0]) == 1.0  # sanity: it fired
+
+    # Single-reset reference (what CuBaLIF should compute):
+    V_after_reset = V0 - 1.0 * threshold
+    I_ref = alpha * I0 + x
+    V_ref = beta * V_after_reset + I_ref
+
+    assert jnp.allclose(I_next, I_ref)
+    assert jnp.allclose(V_next, V_ref)
+
+    # And it must NOT match the old double-reset value (V_ref - threshold).
+    assert not jnp.allclose(V_next, V_ref - threshold)
+
+
+def test_cubalif_matches_scratch_current_lif_over_sequence():
+    """CuBaLIF scanned over time matches a from-scratch single-reset CuBa-LIF.
+
+    A second, independent guard against a re-introduced double reset: run a
+    short sequence and compare against a reference loop implementing a single
+    subtractive reset step by step.
+    """
+    rngs = nnx.Rngs(0)
+    alpha, beta, threshold = 0.7, 0.85, 1.0
+    C = 4
+    model = nn.CuBaLIF((C,), alpha=alpha, beta=beta, threshold=threshold, rngs=rngs)
+    spike_fn = model.spike
+
+    T, B = 8, 3
+    x = jax.random.normal(jax.random.key(1), (T, B, C)) * 3.0
+
+    outputs, _ = nn.run(model, x)
+
+    # Reference: single-reset current-based LIF, hand-rolled.
+    V = jnp.zeros((B, C))
+    current_I = jnp.zeros((B, C))
+    ref_spikes = []
+    for t in range(T):
+        s = spike_fn(V - threshold)
+        V = V - s * threshold
+        current_I = alpha * current_I + x[t]
+        V = beta * V + current_I
+        ref_spikes.append(s)
+    ref = jnp.stack(ref_spikes, axis=0)
+
+    assert jnp.allclose(outputs, ref)
+
+
+def test_stateful_layer_protocol():
+    """Spyx neurons satisfy the runtime-checkable StatefulLayer contract."""
+    rngs = nnx.Rngs(0)
+    assert isinstance(nn.LIF((4,), rngs=rngs), nn.StatefulLayer)
+    assert isinstance(nn.IF((4,)), nn.StatefulLayer)
+    assert isinstance(nn.CuBaLIF((4,), rngs=rngs), nn.StatefulLayer)
+    # A plain stateless layer does NOT satisfy it (no initial_state).
+    assert not isinstance(nnx.Linear(4, 4, rngs=rngs), nn.StatefulLayer)
+
+
+def test_run_batch_major_matches_transpose_run_transpose():
+    """run(..., batch_major=True) == transpose -> run -> transpose."""
+    rngs = nnx.Rngs(0)
+    model = nn.Sequential(
+        nnx.Linear(8, 4, rngs=rngs),
+        nn.LIF((4,), rngs=rngs),
+    )
+    T, B = 6, 3
+    x_bt = jax.random.normal(jax.random.key(2), (B, T, 8))
+
+    outs_bm, state_bm = nn.run(model, x_bt, batch_major=True)
+    assert outs_bm.shape == (B, T, 4)
+
+    # Manual equivalent: transpose to time-major, run, transpose back.
+    x_tb = jnp.swapaxes(x_bt, 0, 1)
+    outs_tm, state_tm = nn.run(model, x_tb)
+    assert jnp.allclose(outs_bm, jnp.swapaxes(outs_tm, 0, 1))
+    # Final state is batch-leading in both cases and should be identical.
+    assert jnp.allclose(state_bm[1], state_tm[1])
+
+
 def test_alif():
     rngs = nnx.Rngs(0)
     model = nn.ALIF((10,), rngs=rngs)

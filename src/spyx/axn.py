@@ -120,10 +120,10 @@ def triangular(k: float = 2) -> Activation:
     :return: JIT compiled triangular surrogate gradient function.
     """
 
-    def grad_traingle(x):
+    def grad_triangle(x):
         return jnp.maximum(0, 1 - jnp.abs(k * x))
 
-    return custom(grad_traingle, heaviside)
+    return custom(grad_triangle, heaviside)
 
 
 def arctan(k: float = 2) -> Activation:

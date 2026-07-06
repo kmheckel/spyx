@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import Optional, Union
+from typing import Any, Optional, Protocol, Union, runtime_checkable
 
 import jax
 import jax.numpy as jnp
@@ -9,6 +9,32 @@ from .axn import superspike
 
 # Module-level singleton for default activation to avoid B008
 _DEFAULT_ACTIVATION = superspike()
+
+
+@runtime_checkable
+class StatefulLayer(Protocol):
+    """The contract every Spyx neuron/stateful layer follows.
+
+    This is a *documentation aid*, not an enforced base class — Spyx neurons
+    are plain :class:`flax.nnx.Module` subclasses and do **not** inherit from
+    this Protocol. It captures, in one place, the two-method contract that
+    :func:`run`, :class:`Sequential`, and :mod:`spyx.nir` rely on:
+
+    * ``initial_state(batch_size)`` returns a fresh zero state for a batch of
+      the given size (the leading axis is the batch dimension).
+    * ``__call__(x, state)`` advances one timestep, returning
+      ``(out, new_state)`` where ``new_state`` has the same structure as
+      ``state`` so it can be threaded through :func:`jax.lax.scan`.
+
+    Because it is ``@runtime_checkable``, ``isinstance(layer, StatefulLayer)``
+    checks for the *presence* of these methods (not their signatures), which is
+    handy in tests. New neurons should match this shape so they drop straight
+    into :class:`Sequential` and :func:`run`.
+    """
+
+    def initial_state(self, batch_size: int) -> Any: ...
+
+    def __call__(self, x: Any, state: Any) -> tuple[Any, Any]: ...
 
 
 class ALIF(nnx.Module):
@@ -119,12 +145,16 @@ class IF(nnx.Module):
     Integrate and Fire neuron model.
     """
 
-    def __init__(self, hidden_shape, threshold=1, activation=None):
+    def __init__(self, hidden_shape, threshold=1, activation=None, *, rngs=None):
         """
         :hidden_shape: Shape of the layer.
         :threshold: threshold for reset. Defaults to 1.
         :activation: spyx.activation function.
+        :rngs: Accepted and ignored — IF is parameterless, but taking ``rngs``
+            keeps it drop-in interchangeable with the parametric neurons
+            (``LIF``, ``CuBaLIF``, ...) that require it.
         """
+        del rngs  # parameterless; accepted only for a uniform constructor
         self.hidden_shape = hidden_shape
         self.threshold = threshold
         self.spike = activation if activation is not None else _DEFAULT_ACTIVATION
@@ -349,12 +379,15 @@ class CuBaLIF(nnx.Module):
         alpha = jnp.clip(self.alpha[...], 0, 1)
         beta = jnp.clip(self.beta[...], 0, 1)
 
-        # calculate whether spike is generated, and update membrane potential
+        # calculate whether spike is generated, and update membrane potential.
+        # The subtractive reset is applied exactly ONCE, before the leaky
+        # integration of the synaptic current (mirroring RCuBaLIF); applying
+        # `- reset` a second time on the integrated membrane would double-count
+        # the reset.
         spikes = self.spike(V - self.threshold)
-        reset = spikes * self.threshold
-        V = V - reset
+        V = V - spikes * self.threshold
         current_I = alpha * current_I + x
-        V = beta * V + current_I - reset
+        V = beta * V + current_I
 
         VI = jnp.concatenate([V, current_I], axis=-1)
         return spikes, VI
@@ -661,22 +694,47 @@ class Flatten(nnx.Module):
         return x.reshape(x.shape[0], -1)
 
 
-def run(model, x, state=None):
+def run(model, x, state=None, *, batch_major=False):
     """
     Execute a model over a sequence of inputs using jax.lax.scan.
 
     :model: A stateful Flax NNX Module, typically :class:`Sequential` or a
-        Spyx neuron. It must either take ``(x_t, state) -> (out, next_state)``
-        or expose an ``initial_state(batch_size)`` method (or both). Plain
-        stateless modules like ``nnx.Linear`` don't fit the contract — wrap
-        them in a :class:`Sequential` with at least one stateful layer, or
-        use ``jax.vmap`` if you just want to apply the module per timestep.
-    :x: Input data with shape [Time, Batch, ...].
+        Spyx neuron following the :class:`StatefulLayer` contract. It must
+        either take ``(x_t, state) -> (out, next_state)`` or expose an
+        ``initial_state(batch_size)`` method (or both). Plain stateless modules
+        like ``nnx.Linear`` don't fit the contract — wrap them in a
+        :class:`Sequential` with at least one stateful layer, or use
+        ``jax.vmap`` if you just want to apply the module per timestep.
+    :x: Input data. By default this is **time-major** ``[Time, Batch, ...]``
+        (``jax.lax.scan`` walks the leading axis). Pass ``batch_major=True`` if
+        your data is ``[Batch, Time, ...]`` instead.
     :state: Initial state for the model. If None, ``model.initial_state`` is
         consulted; if the model has no ``initial_state`` and no state is
         supplied explicitly, a clear error is raised.
-    :return: (outputs, final_state)
+    :batch_major: When ``True``, ``x`` is treated as ``[Batch, Time, ...]``:
+        it is transposed to time-major internally for the scan and the outputs
+        are transposed back to ``[Batch, Time, ...]``. Default ``False``
+        preserves the historical time-major behaviour.
+    :return: ``(outputs, final_state)``. ``outputs`` is time-major
+        ``[Time, Batch, ...]`` by default, or ``[Batch, Time, ...]`` when
+        ``batch_major=True``.
+
+    .. note::
+        **Mind the time axis when computing losses.** ``run`` is time-major by
+        default (time on axis 0), whereas the :mod:`spyx.fn` losses/metrics
+        default to ``time_axis=1`` (batch-major, ``[Batch, Time, Classes]``).
+        Feeding time-major ``run`` outputs straight into an ``fn`` loss reduces
+        over the *batch* axis instead of *time* — silently wrong, and
+        undetectable when ``Time == Batch``. Pick one of:
+
+        * call ``run(..., batch_major=True)`` so outputs are ``[Batch, Time,
+          ...]`` and line up with the ``fn`` default, or
+        * keep time-major and pass ``time_axis=0`` to the ``spyx.fn`` factory.
     """
+
+    if batch_major:
+        # [Batch, Time, ...] -> [Time, Batch, ...] for the scan.
+        x = jnp.swapaxes(x, 0, 1)
 
     if state is None:
         if not hasattr(model, "initial_state"):
@@ -694,4 +752,9 @@ def run(model, x, state=None):
         return next_state, out
 
     final_state, outputs = jax.lax.scan(scan_fn, state, x)
+
+    if batch_major:
+        # [Time, Batch, ...] -> [Batch, Time, ...] to match the input layout.
+        outputs = jnp.swapaxes(outputs, 0, 1)
+
     return outputs, final_state

@@ -162,7 +162,7 @@ def rate_code(num_steps, max_r=0.75):
 def angle_code(neuron_count, min_val, max_val):
     """
     Higher-order-function which returns an angle encoding function; given a continuous value, an angle converter generates a one-hot vector corresponding to where the value falls between a specified minimum and maximum.
-    To achieve non-linear descritization, apply a function to the continuous value before feeding it into the encoder.
+    To achieve non-linear discretization, apply a function to the continuous value before feeding it into the encoder.
 
     :neuron_count: The number of output channels for the angle encoder
     :min_val: A lower bound on the continuous input channel
