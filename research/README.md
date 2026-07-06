@@ -33,18 +33,24 @@ Method, Spyx modules used, How to run, Results table, Findings, Reproducibility.
 
 Research here runs on a loop with a human gate:
 
+- **[`/research-scout`](../.claude/skills/research-scout.md)** — surveys current
+  papers and proposes backlog **candidates**, each classified `replication` /
+  `extension` / `novelty` against the taxonomy above. You triage candidates to `ready`.
 - **[BACKLOG.md](BACKLOG.md)** — the queue of falsifiable claims to study. Current
   focus track: **quantization & efficient architectures.**
+- **[`/research-study`](../.claude/skills/research-study.md)** — the runner: pulls the
+  top backlog item, builds and adversarially verifies one study, opens a PR + ledger
+  row, and **stops at the gate**. Two modes — **scheduled web** (smoke/CPU only) and
+  **local loop** on the AMD GPU (bounded small-scale *real* runs). Never edits core,
+  never promotes, never merges.
 - **[FINDINGS.md](FINDINGS.md)** — the ledger: every study's honest verdict and its
   promotion status. Your review surface.
 - **[PROMOTION.md](PROMOTION.md)** — the gate: criteria for `research →
   spyx.experimental → core`. Every rung up is a human decision.
-- **[`/research-study`](../.claude/skills/research-study.md)** — the unattended runner
-  (a scheduled Claude Code web task): pulls the top backlog item, builds and
-  adversarially verifies one study, opens a PR + ledger row, and **stops at the gate**
-  — never edits core, never runs GPU/full budgets, never promotes.
 - **[`/promote-finding`](../.claude/skills/promote-finding.md)** — you invoke this when
   you decide to graduate a finding; it runs the checklist and stages the promotion PR.
+
+The loop: **scout → triage → study (web breadth / local-GPU depth) → review → promote.**
 
 Honest negatives and nulls are first-class: they stay in `research/`, indexed in the
 ledger, and are never deleted or reshaped.
