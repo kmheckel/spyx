@@ -172,10 +172,15 @@ section above for the contract):
   antithetic-NES estimate of the true (hard-spike) loss gradient, projected
   orthogonal to the surrogate (the complement of Guided-ES). Also
   `make_hybrid_train_step`, `es_gradient`, `hybrid_diagnostics`. A `normalize=True`
-  mode makes λ a fraction of the surrogate step (`λ·‖g_s‖/‖g_orth‖`). See
-  `research/new/hybrid_evo_surrogate/` for the study (honest result: self-norm λ
-  removes the raw failure mode and reaches parity, but does not beat the surrogate
-  on easy tasks — a large-surrogate-bias regime is needed for a real win).
+  mode makes λ a fraction of the surrogate step (`λ·‖g_s‖/‖g_orth‖`). `sges_gradient`
+  / `make_sges_hybrid_train_step` add the **surrogate-steered Self-Guided-ES**
+  variant: the surrogate direction is SGES's guiding subspace, the along-guide
+  derivative is measured exactly and ES is spent on the orthogonal complement —
+  several-fold lower variance than isotropic ES (verified). See
+  `research/new/hybrid_evo_surrogate/` for the studies (honest result: the ES
+  variants remove the raw failure mode and SGES cuts estimate variance, but the
+  surrogate still wins on easy tasks; a large-surrogate-bias regime is needed for
+  a real win).
 - `zoo` — runnable reference recipes keyed by application and tagged by training
   method × architecture. `REGISTRY`/`list_recipes`/`get`; each recipe exposes
   `build`, `synthetic_batch`, `demo` on synthetic data: `control-lif-es`

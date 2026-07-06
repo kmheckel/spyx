@@ -1,0 +1,51 @@
+{
+  "config": {
+    "smoke": false,
+    "channels": 24,
+    "hidden": 32,
+    "n_classes": 4,
+    "sample_T": 16,
+    "epochs": 15,
+    "K": 16,
+    "sigma": 0.02,
+    "lr": 0.005,
+    "seeds": [
+      0,
+      1,
+      2
+    ]
+  },
+  "arms": {
+    "1st  surrogate": {
+      "true_loss": 0.6963302493095398,
+      "true_loss_std": 0.013838228192123317,
+      "acc": 0.9765625
+    },
+    "0th  ES": {
+      "true_loss": 1.0312937100728352,
+      "true_loss_std": 0.05707464865257094,
+      "acc": 0.6692708333333334
+    },
+    "0+1  hybrid-orth": {
+      "true_loss": 0.7201159000396729,
+      "true_loss_std": 0.037264709374886996,
+      "acc": 0.9505208333333334
+    },
+    "0+1  SGES(\u03bb=1)": {
+      "true_loss": 0.8557332158088684,
+      "true_loss_std": 0.011636119328916207,
+      "acc": 0.8828125
+    },
+    "0+1  SGES(\u03bb=.5)": {
+      "true_loss": 0.8049673438072205,
+      "true_loss_std": 0.02406283734538012,
+      "acc": 0.9010416666666666
+    }
+  },
+  "es_estimate_variance": {
+    "isotropic": 17280.9375,
+    "sges": 2476.148193359375,
+    "reduction_factor": 6.978959315256108
+  },
+  "wall_s": 297.2891877749935
+}
