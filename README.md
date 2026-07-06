@@ -1,6 +1,6 @@
 ⚡🧠💻 Welcome to Spyx! 💻🧠⚡
 ============================
-[![arXiv](https://img.shields.io/badge/arXiv-2402.18994-b31b1b.svg)](https://arxiv.org/abs/2402.18994) [![DOI](https://zenodo.org/badge/656877506.svg)](https://zenodo.org/badge/latestdoi/656877506) [![PyPI version](https://badge.fury.io/py/spyx.svg)](https://badge.fury.io/py/spyx)
+[![arXiv](https://img.shields.io/badge/arXiv-2402.18994-b31b1b.svg)](https://arxiv.org/abs/2402.18994) [![DOI](https://zenodo.org/badge/656877506.svg)](https://zenodo.org/badge/latestdoi/656877506) [![PyPI version](https://badge.fury.io/py/spyx.svg)](https://badge.fury.io/py/spyx) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kmheckel/spyx/blob/main/docs/examples/surrogate_gradient/SurrogateGradientTutorial.ipynb)
 
 [![](https://dcbadge.vercel.app/api/server/TCYQFWsBwj)](https://discord.gg/TCYQFWsBwj)
 
@@ -10,35 +10,105 @@
 Why use Spyx?
 =============
 
-Spyx (pronounced "spikes") is a compact spiking neural network library built on JAX and Flax NNX, offering the flexibility and extensibility of PyTorch-based frameworks while enabling the extreme performance of SNN libraries which implement custom CUDA kernels for their dynamics.
+Spyx (pronounced "spikes") is a compact spiking neural network library built on JAX and Flax NNX. It offers the flexibility and extensibility of a PyTorch-style framework while reaching the throughput of SNN libraries that hand-write custom CUDA kernels — because the whole network, including its temporal dynamics, is JIT-compiled by XLA.
 
-The library currently supports training SNNs via surrogate gradient descent and neuroevolution, with additional capabilities such as ANN2SNN conversion and Phasor Networks being planned for the future. Spyx offers a number of predefined neuron models but is designed for it to be easy to define your own and plug it into a model; the hope is to soon include definitions of SpikingRWKV and other more sophisticated model blocks into the framework.
+What ships today:
+
+- **Two ways to train** — surrogate-gradient descent (backprop through time) and gradient-free neuroevolution (`spyx[evo]`, via evosax).
+- **A neuron zoo** — LIF, LI, ALIF, CuBaLIF, IF and their recurrent variants, all as plain `flax.nnx.Module`s. Defining your own and dropping it into `spyx.nn.Sequential` is a few lines.
+- **Sequence & complex layers** — diagonal state-space models (`spyx.ssm`: LRU, S5Diag, Mamba, ChunkedSSM) and complex-valued phasor / spiking-phasor networks (`spyx.phasor`), all parallelized with the same associative-scan machinery as the spiking neurons.
+- **Efficiency tooling** — int8 / int4 / BitNet-ternary quantization (`spyx.quant`, QAT + PTQ) and a benchmark harness that reports latency, throughput, MFU, and spike-rate as an energy proxy (`spyx.bench`).
+- **Interoperability** — import/export to the [Neuromorphic Intermediate Representation](https://neuroir.org) (`spyx.nir`) for neuromorphic hardware, plus ONNX export (`spyx.experimental.onnx`).
+- **A research vehicle** — `spyx.experimental` stages unstable building blocks (parallel spiking neurons, resonate-and-fire, routing-slot memory, a hybrid surrogate+evolution trainer, runnable recipe zoo) before they graduate into the stable core.
+
+New to spiking networks? Start with the [Quickstart](#quickstart) below (zero downloads), then [Your first SNN](docs/tutorials/first-snn.md) trains a real model, and the [glossary](docs/explanation/glossary.md) defines the vocabulary.
 
 Installation:
 =============
 
-Spyx now uses [uv](https://github.com/astral-sh/uv) for package management.
-
-To install Spyx:
+Spyx is on PyPI and installs with either [uv](https://github.com/astral-sh/uv) or pip:
 
 ```bash
-uv add spyx
+uv add spyx          # into a uv-managed project
+pip install spyx     # or with plain pip
 ```
 
-If you need the data loading utilities:
+The default install is CPU-only and lean; a laptop CPU is plenty for the quickstart and the tutorials. For the event-dataset loaders, add the extra:
 
 ```bash
-uv add spyx[loaders]
+uv add "spyx[loaders]"      # or: pip install "spyx[loaders]"
 ```
 
-Note: As with other libraries built on top of JAX, you need to install jax with GPU if you want to get the full benefit of this library. Directions for installing JAX with GPU support can be found at the following: https://github.com/google/jax#installation
+See [How to install Spyx](docs/how-to/install.md) for the full extras table (`loaders`, `quant`, `evo`, `docs`) and for GPU/TPU wheels.
+
+Note: as with other JAX libraries, install the accelerator build of JAX to train on a GPU/TPU. See the [JAX installation guide](https://docs.jax.dev/en/latest/installation.html).
+
+Quickstart
+==========
+
+This trains a tiny SNN on synthetic spike trains — **no dataset download** — and prints a falling loss and rising accuracy. Copy-paste it into a file and run `python quickstart.py`:
+
+```python
+import jax, jax.numpy as jnp, optax
+from flax import nnx
+import spyx, spyx.nn as snn, spyx.optimize as opt
+
+rngs = nnx.Rngs(0)
+model = snn.Sequential(
+    nnx.Linear(8, 32, use_bias=False, rngs=rngs),
+    snn.LIF((32,), activation=spyx.axn.triangular(), rngs=rngs),
+    nnx.Linear(32, 3, use_bias=False, rngs=rngs),
+    snn.LI((3,), rngs=rngs),  # non-spiking leaky readout -> class logits
+)
+
+T, B, C, n_cls = 16, 32, 8, 3  # time, batch, channels, classes
+
+def make_batch(k):  # class c => channel c fires often (learnable structure)
+    ky, ks = jax.random.split(k)
+    y = jax.random.randint(ky, (B,), 0, n_cls)
+    prob = jnp.full((B, C), 0.05).at[jnp.arange(B), y].set(0.5)
+    x = (jax.random.uniform(ks, (T, B, C)) < prob).astype(jnp.float32)
+    return x, y  # x is time-major (T, B, C)
+
+Loss = spyx.fn.integral_crossentropy(time_axis=0)
+Acc = spyx.fn.integral_accuracy(time_axis=0)
+
+def loss_fn(m, x, y):
+    return Loss(snn.run(m, x)[0], y)
+
+def eval_fn(m, x, y):
+    traces = snn.run(m, x)[0]
+    return Acc(traces, y)[0], Loss(traces, y)
+
+key = jax.random.PRNGKey(0)
+train_iter = lambda: (make_batch(jax.random.fold_in(key, i)) for i in range(8))
+eval_iter = lambda: iter([make_batch(jax.random.PRNGKey(999))])
+
+opt.fit(
+    model, optax.adam(2e-3), loss_fn, train_iter,
+    epochs=15, eval_iter=eval_iter, eval_fn=eval_fn,
+    on_epoch_end=lambda e, m: print(
+        f"epoch {e:2d}  train_loss={m['train_loss']:.3f}  eval_acc={m['eval_acc']:.2%}"),
+)
+```
+
+You should see the loss fall and accuracy climb well above the 33% chance level:
+
+```text
+epoch  0  train_loss=3.536  eval_acc=28.12%
+epoch  3  train_loss=1.192  eval_acc=68.75%
+epoch  7  train_loss=0.862  eval_acc=81.25%
+epoch 14  train_loss=0.790  eval_acc=90.62%
+```
+
+That's a complete surrogate-gradient training loop, JIT-compiled end to end. For real data, continue to [Your first SNN](docs/tutorials/first-snn.md); to choose between surrogate gradients, evolution, quantization, and conversion, see [Choosing an approach](docs/explanation/choosing-an-approach.md).
 
 Hardware Requirements:
 ======================
 
-Spyx achieves extremely high performance by maintaining the entire dataset in the GPU's vRAM; as such a decent amount of memory for both the CPU and GPU are needed to handle the dataset loading and then training. For smaller networks of only several hundred thousand parameters, the training process can be comfortably executed on even laptop GPU's with only 6GB of vRAM. For large SNNs or for neuroevolution it is recommended to use a higher memory card.
+Spyx runs anywhere JAX does — a laptop CPU is enough for the quickstart, the tutorials, and small-to-medium models. For larger workloads it leans on an accelerator: Spyx reaches its headline throughput by keeping the entire dataset resident in GPU vRAM, so big SNNs and neuroevolution sweeps benefit from a higher-memory card. Networks of a few hundred thousand parameters train comfortably on a laptop GPU with 6 GB of vRAM.
 
-Since Spyx is developed on top of the current JAX version, it does not work on Google Colab's TPUs which use an older version. Cloud TPU support will be tested in the near future.
+Cloud TPUs: Spyx tracks the current JAX release, so it does not run on Google Colab's older-JAX TPU runtime. Use a **GPU** (or CPU) Colab runtime — the [Colab tutorial](https://colab.research.google.com/github/kmheckel/spyx/blob/main/docs/examples/surrogate_gradient/SurrogateGradientTutorial.ipynb) runs there directly.
 
 Development:
 ============

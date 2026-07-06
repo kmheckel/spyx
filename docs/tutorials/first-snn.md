@@ -6,7 +6,9 @@ In this tutorial you will build, train, and evaluate a spiking neural network (S
 - a three-layer spiking network for the [Spiking Heidelberg Digits](https://compneuro.net/posts/2019-spiking-heidelberg-digits/) (SHD) audio dataset,
 - a trained model, and an understanding of how state, time, and gradients flow through it.
 
-No prior SNN experience is needed, but you should be comfortable with Python and have seen JAX or Flax before. If you want the conceptual background first, read the [SNN primer](../explanation/snn-primer.md) — this tutorial focuses on doing.
+No prior SNN experience is needed, but you should be comfortable with Python and have seen JAX or Flax before. If you want the conceptual background first, read the [SNN primer](../explanation/snn-primer.md) — this tutorial focuses on doing. Unfamiliar with a term (membrane potential, surrogate gradient, integral loss, time-major)? The [glossary](../explanation/glossary.md) defines the vocabulary used here.
+
+Want to see training happen right now, with no 500 MB download? The [Quickstart](../how-to/quickstart.md) trains the same architecture on synthetic data in a few seconds; this tutorial takes the fuller path with a real dataset.
 
 ## 1. Set up your environment
 
@@ -182,6 +184,11 @@ print("first 10 labels:     ", labels[:10])
 That's it — you have trained a spiking neural network with surrogate gradient descent, entirely JIT-compiled by JAX.
 
 ## Where to go next
+
+You just trained with the **surrogate-gradient** method. That is one of several
+approaches Spyx supports — see [Choosing an approach](../explanation/choosing-an-approach.md)
+for when to reach instead for gradient-free evolution, quantization-aware
+training, ANN→SNN conversion, or the hybrid surrogate+evolution trainer.
 
 - [Surrogate Gradient Tutorial](../examples/surrogate_gradient/SurrogateGradientTutorial.ipynb) — the extended notebook version of this walkthrough.
 - [How to quantize a model](../how-to/quantize.md) — compress the network you just trained to int8 or ternary weights.

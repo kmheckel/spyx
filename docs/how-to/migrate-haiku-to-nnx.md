@@ -25,7 +25,7 @@ instead of threading a `params` pytree through `SNN.apply`.**
 | JIT | `@jax.jit` on the pure `apply` | `@nnx.jit` on a `model`-taking fn |
 | Data loaders | `spyx.loaders` | `spyx.data` |
 | Mixed precision | `jmp` + `hk.mixed_precision.set_policy` | pass `param_dtype=`/`dtype=` to layers |
-| Python | `>=3.10` | `>=3.11, <3.13` |
+| Python | `>=3.10` | `>=3.11, <3.15` |
 
 New dependencies: `flax>=0.11`, `grain`. Removed: `dm-haiku`, `jmp`. New
 optional modules: [`spyx.ssm`](../reference/ssm.md),
@@ -201,4 +201,4 @@ nnx.Linear(in_dim, hidden, use_bias=False, dtype=jnp.bfloat16,
 - [ ] Optimiser → `nnx.Optimizer(model, tx, wrt=nnx.Param)` + `optimizer.update(model, grads)`.
 - [ ] `@jax.jit` → `@nnx.jit` for functions that take a `model`.
 - [ ] `spyx.loaders` → `spyx.data`; iterate loaders and `jnp.unpackbits` the obs.
-- [ ] Python 3.11 or 3.12.
+- [ ] Python 3.11–3.14.

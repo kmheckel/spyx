@@ -50,14 +50,17 @@ nav:
       - State-Space Models: examples/ssm/ssm_intro.ipynb
       - Phasor Networks: examples/phasor/phasor_intro.ipynb
   - How-to guides:
+      - Quickstart: how-to/quickstart.md
       - Install Spyx: how-to/install.md
-      - Migrate from Haiku to NNX: how-to/migrate-haiku-to-nnx.md
       - Train a model: how-to/train.md
       - Quantize a model: how-to/quantize.md
       - Export & import via NIR: how-to/nir.md
+      - Export to ONNX: how-to/onnx.md
       - Use SSM & phasor layers: how-to/recurrent-layers.md
       - Benchmark neurons & models: how-to/benchmarking.md
+      - Deploy a trained SNN: how-to/deploy.md
       - Load event data: how-to/load-data.md
+      - Migrate from Haiku to NNX: how-to/migrate-haiku-to-nnx.md
   - Reference:
       - spyx.nn: reference/nn.md
       - spyx.axn: reference/axn.md
@@ -70,6 +73,7 @@ nav:
       - spyx.phasor: reference/phasor.md
       - spyx.bench: reference/bench.md
       - spyx.experimental: reference/experimental.md
+      - spyx.experimental.onnx: reference/onnx.md
   - Explanation:
       - Training methods: explanation/training-methods.md
       - Choosing an approach: explanation/choosing-an-approach.md
@@ -78,6 +82,7 @@ nav:
       - SNN primer: explanation/snn-primer.md
       - Parallel spiking neurons: explanation/parallel-spiking-neurons.md
       - Research with Spyx: explanation/research.md
+      - Glossary: explanation/glossary.md
 
 markdown_extensions:
   - pymdownx.highlight:
