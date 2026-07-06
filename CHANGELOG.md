@@ -3,7 +3,7 @@
 All notable changes to Spyx are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [1.0.0] — unreleased
+## [1.0.0] — 2026-07-06
 
 The **modernization release** and Spyx's first stable major: Spyx moves from
 DeepMind Haiku to **Flax NNX** and gains state-space, phasor, and quantization
