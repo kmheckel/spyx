@@ -22,6 +22,7 @@ matmul-free layers, SSMs, and the training methods that fit them.
 | --- | --- | --- | --- | --- |
 | [ternary_llm](new/ternary_llm/) | BitNet-ternary QAT path generalizes from spiking nets to transformers | ✅ | experimental | `spyx.experimental.matfree` |
 | [quant_aware_evolution](new/quant_aware_evolution/) | Gradient-free ES beats STE-QAT at extreme precision (no STE bias) | ➖ | new | null on easy task; needs a hard, capacity-constrained task |
+| [quant_aware_evolution_hard](new/quant_aware_evolution_hard/) | The STE-bias gap appears once quantization costs accuracy | ❌ | new | claim reversed: ES *breaks* at ternary (coarse rounding flattens the fitness landscape), fine at nvfp4; premise (quant costs acc) unmet on this synthetic task |
 | [hybrid_evo_surrogate](new/hybrid_evo_surrogate/) | Orthogonal-ES correction / SGES beats surrogate on the hard-spike loss | ➖ | experimental | `spyx.experimental.hybrid` (safe, not a win — needs large-bias regime) |
 | [pallas_neurons](new/pallas_neurons/) | A fused Pallas neuron kernel is worth building (#24) | ❌ | new | matmul-bound; `associative_scan` already gives 2–21× portably |
 

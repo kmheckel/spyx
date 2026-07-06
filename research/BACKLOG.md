@@ -16,7 +16,7 @@ proposes buckets from the literature into **Candidates** below; you triage them 
 
 ## Active track: quantization & efficient architectures
 
-1. **`ready` — Hard-task quantization-aware evolution.** The
+1. **`in-review: #66` — Hard-task quantization-aware evolution.** The
    [quant_aware_evolution](new/quant_aware_evolution/) null result came from an easy
    task (every precision hit ~100%). Re-run ES-vs-STE-QAT on a **capacity-constrained**
    setup where nvfp4/ternary actually *degrades* accuracy — real SHD (20 classes, 128
