@@ -1,0 +1,59 @@
+{
+  "config": {
+    "smoke": true,
+    "channels": 16,
+    "hidden": 16,
+    "n_classes": 3,
+    "sample_T": 10,
+    "epochs": 8,
+    "pop": 16,
+    "generations": 20,
+    "lr": 0.005,
+    "std_init": 0.1,
+    "seeds": [
+      0,
+      1
+    ],
+    "precisions": [
+      "nvfp4",
+      "ternary"
+    ]
+  },
+  "arms": {
+    "fp32 (surrogate)": {
+      "true_loss": 0.9749669432640076,
+      "true_loss_std": 0.05142456293106079,
+      "acc": 0.671875,
+      "wall_s": 0.8902672535041347
+    },
+    "STE-QAT @ nvfp4": {
+      "true_loss": 0.9715300798416138,
+      "true_loss_std": 0.04065287113189697,
+      "acc": 0.671875,
+      "wall_s": 0.602779154010932
+    },
+    "ES @ nvfp4": {
+      "true_loss": 1.0657902956008911,
+      "true_loss_std": 0.20858299732208252,
+      "acc": 0.5,
+      "wall_s": 1.0133882959926268
+    },
+    "STE-QAT @ ternary": {
+      "true_loss": 0.9496652781963348,
+      "true_loss_std": 0.06595543026924133,
+      "acc": 0.546875,
+      "wall_s": 0.49960320550599135
+    },
+    "ES @ ternary": {
+      "true_loss": 1.0901114344596863,
+      "true_loss_std": 0.1544838547706604,
+      "acc": 0.40625,
+      "wall_s": 0.681760100487736
+    }
+  },
+  "ste_bias_gap": {
+    "nvfp4": -0.09426021575927734,
+    "ternary": -0.14044615626335144
+  },
+  "wall_s": 3.687798009501421
+}
