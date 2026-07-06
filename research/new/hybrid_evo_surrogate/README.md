@@ -150,6 +150,50 @@ truly diverges from the smooth one) and larger `K`. We report parity-plus-safety
 not a win, and do not overclaim. The mechanics (global orthogonalisation, exact
 `λ·‖g_s‖` scaling, drop-in grad pytree) are unit-tested and correct.
 
+## Companion: SHD training-method comparison
+
+The `methods_shd_*.py` scripts in this directory are a sibling study line: instead
+of the synthetic task above they pit **0th-order evolution, 1st-order surrogate,
+and 0+1 hybrids/SGES against each other on real SHD** (128 channels, 20 classes,
+the `Linear→LIF→Linear→LI` classifier, ~9,556 SNN weights). Each script isolates
+one variable and writes its own `shd_*_results.json`; all use `integral_crossentropy`
+fitness and JIT-scanned ask/tell loops. This directly instruments the thesis
+finding that neuroevolution's competitiveness is **dimensionality-dependent**.
+
+| Script | Search space | Result (test acc) | Takeaway |
+| --- | --- | --- | --- |
+| `methods_shd.py` | full 9,556-d | surrogate **29.2%** · ES 5.4% · SGES 7.4% | isotropic ES *collapses* in full space |
+| `methods_shd_hyper.py` / `_population.py` | full vs 256-d hyper | full-ES ~8% vs hyper roughly at par | compression helps ES more than surrogate |
+| `methods_shd_jit.py` | 128-d hyper latent, K=512 | **SGES 43.2% > surrogate 34.3% > ES 32.6%** | the honest headline: in a *compressed* space SGES wins |
+| `methods_shd_solvers.py` | 512-d latent | surrogate 32.4% ≈ ES 32.8% ≫ CMA-ES 7.1% | naive CMA-ES needs the `std_init` fix |
+| `methods_shd_cmaes.py` | 128-d hyper latent | CMA-ES 22.2% · primed 31.5% | adaptive full-cov ES, `std_init` matched to param scale |
+| **`methods_shd_crfmnes.py`** | **full 9,556-d (no hypernet)** | **CR-FM-NES 29.6% · primed 23.4%** | **full-space adaptive ES — reproduces the thesis's *hard* config** |
+
+**The CR-FM-NES full-space arm (new).** CR-FM-NES (Nomura & Ono, CEC 2022) is the
+rank-1 + diagonal, **O(d)** adaptive ES the thesis actually used to scale
+neuroevolution past a million parameters — the one strategy that *can* run directly
+on all 9,556 weights where CMA-ES (O(d²)) and isotropic ES cannot. Run here it
+reaches **29.6% test / 33.5% train** (loss 84.3 → 2.56 over 500 generations): it
+optimises cleanly (a monotone fitness curve, and it beats isotropic ES's 5–8%
+full-space collapse by ~4×), but it under-converges relative to both the compressed
+SGES arm (43.2%) and the thesis's own SHD number (73.3% test).
+
+This is a **faithful reproduction of the thesis's explicitly-flagged hard
+configuration, not a contradiction of it.** The thesis reached 73.3% only after
+three changes this smoke config deliberately omits: **Adaptive-LIF** neurons (not
+plain LIF), a **spike-rate MSE** objective (not integral cross-entropy), a **LIF**
+output layer (not LI), and a **full-dataset, 2,500-epoch** budget (not a fixed
+8-batch subset over 500 generations). Train accuracy tops out at 33.5% → the mean
+is *under-converged*, not overfit. The takeaway matches the thesis's conclusion:
+adaptive ES scales to the full parameter space, but closing the last gap to
+surrogate-competitive accuracy needs the richer neuron/objective/budget — which is
+why the thesis (and this repo's `spyx.experimental.hybrid`/`sges`) argues for
+**hybridising** surrogate and evolutionary methods rather than picking one.
+
+```bash
+uv run python research/new/hybrid_evo_surrogate/methods_shd_crfmnes.py   # writes shd_crfmnes_results.json
+```
+
 ## Reproducibility
 
 - **Seeds:** `jax.random.PRNGKey(0)` for perturbations/data; `nnx.Rngs(0)` for
