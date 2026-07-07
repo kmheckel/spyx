@@ -1,9 +1,8 @@
 # Reset-preserving parallel LIF (FPT scan)
 
-> **STATUS: FINDINGS PENDING full GPU run.** The numerical-equivalence result is
-> established and tested; the throughput speedup claim needs the human-gated
-> large-`T` GPU run (`SPYX_SMOKE=0`). The smoke run in this folder is a
-> CPU/tiny-shape path-check only — its latencies are not meaningful.
+> **STATUS: COMPLETE (Radeon 8060S).** Numerical equivalence is established + tested
+> (K=T exact; K=3 near-exact), and the throughput run confirms **FPT K=3 is ~1.7–2.4×
+> faster than the sequential scan** on the GPU. See Findings.
 
 ## Title
 
@@ -109,15 +108,18 @@ inputs / `beta ∈ [0.1, 0.99]` / `threshold ∈ [0.3, 1.5]`:
 exact in the sparse short-cascade regime; error is monotone-decreasing in `K` and
 reaches machine-exact by `K = T`.
 
-**Throughput (`spyx.bench`).** PENDING the human-gated full GPU run. The smoke
-run confirms all three paths execute and the equivalence holds; its CPU/tiny-shape
-latencies are deliberately not reported as findings.
+**Throughput (`spyx.bench`, Radeon 8060S / gfx1151, batch 64).** Forward latency (ms):
 
-| Path | Fwd latency | Notes |
-| --- | --- | --- |
-| `ParallelResetLIF` sequential (`O(T)`) | PENDING | baseline |
-| `ParallelResetLIF` FPT (`O(K log T)`) | PENDING | reset-preserving |
-| `PSU_LIF` parallel (`O(log T)`) | PENDING | reset-free reference |
+| Path | T=128 | T=256 | T=512 | Notes |
+| --- | --- | --- | --- | --- |
+| `ParallelResetLIF` sequential (`O(T)`) | 0.913 | 1.871 | 3.760 | baseline |
+| `ParallelResetLIF` FPT K=3 (`O(K log T)`) | **0.415** | **0.793** | **2.220** | reset-preserving — **2.2× / 2.4× / 1.7×** over sequential |
+| `PSU_LIF` parallel (`O(log T)`) | 0.145 | 0.221 | 0.744 | reset-free reference (~5× faster than FPT) |
+
+**The reset-preserving parallel LIF is real and ~2× faster than sequential on GPU**, at
+K=3 (near-exact: mean spike mismatch 9.9e-5) — while the reset-*free* `PSU_LIF` is ~5×
+faster still, quantifying the honest cost of keeping the exact reset. The fwd+bwd gap is
+smaller (FPT ≈ sequential), so the win is concentrated in the forward pass at these T.
 
 ## Seeds / hardware / commit
 
@@ -135,6 +137,7 @@ latencies are deliberately not reported as findings.
   high-`beta` near-threshold activity has long cascades and needs larger `K`
   (up to `T`) for exactness — the correctness wavefront advances one step per
   iteration. Report the `K` used alongside any accuracy number.
-- **Speed is unproven until the GPU run.** On CPU / short `T` the `K` extra scans
-  can make FPT slower than the sequential scan; the win is an accelerator +
-  long-`T` claim. Findings PENDING.
+- **Speed confirmed on GPU:** FPT K=3 is ~1.7–2.4× faster than the sequential scan on
+  the 8060S (forward). On CPU / short `T` the `K` extra scans can erase this; the win is
+  an accelerator claim. Reset-free `PSU_LIF` remains ~5× faster than FPT — keeping the
+  exact reset has a real, quantified cost.

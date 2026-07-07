@@ -92,17 +92,29 @@ box; do not run them inside the agent workflow.
 | Metric | Value | Notes |
 | --- | --- | --- |
 | Scan-exactness (seq vs parallel) | spikes `max|Δ| = 0.0`; real-trace `max|Δ| ≈ 2.4e-6` | `tests/test_rf_ssm.py`, incl. reset on + LRU init |
-| Accuracy (RFSSM / ResonateFire / PSU_LIF) | PENDING | full run only |
-| Fwd / fwd+bwd latency | PENDING | `spyx.bench`, full run |
-| Spike rate (energy proxy) | PENDING | `spyx.bench` |
+| Accuracy (RFSSM / ResonateFire / PSU_LIF) | **82.6% / 100% / 100%** | long-range T=784, 30 ep, 8060S |
+| Parallel speedup (parallel ÷ seq fwd) | **RFSSM 4.0× · ResonateFire 3.9× · PSU_LIF 4.8×** | `spyx.bench`, T=784 |
+| Spike rate | RFSSM 0.35 · ResonateFire 0.17 · PSU_LIF 0.22 | `spyx.bench` |
 
 ## Findings
 
-**PENDING full run.** The neuron and its correctness guarantees are in place and
-tested (the decoupled reset provably preserves the exact parallel scan), but the
-long-range accuracy comparison vs `ResonateFire` / `PSU_LIF`, and the SSC /
-psMNIST numbers, require the human-gated GPU run. Record confirmed / partial /
-refuted here once those land — including honest negatives.
+**Full run on the Radeon 8060S** (long-range T=784, N=4096, hidden 128, 30 epochs).
+
+**1. Honest negative on accuracy: RFSSM does NOT help on this task.** RFSSM reaches
+**82.6%** while plain `ResonateFire` and `PSU_LIF` both hit **100%** — the S5/HiPPO init
++ decoupled reset made the neuron *harder to train here*, and the task is easy enough
+that the simpler parallel neurons already saturate it. The S5-RF treatment is not a win
+on a task the baselines solve; a genuinely hard long-range task (real SSC / psMNIST, the
+regime S5-RF targets) is where it would need to prove itself — human-gated, not yet run.
+
+**2. The moat holds: all three neurons get ~4× from the associative scan.** RFSSM 4.0×,
+ResonateFire 3.9×, PSU_LIF 4.8× (parallel ÷ sequential forward, T=784) — the parallel-
+in-time path is a real GPU speedup across the neuron family, and RFSSM's decoupled reset
+keeps the scan **exact** (spikes max|Δ|=0 vs its sequential reference).
+
+**Verdict:** ✅ correct + parallel (scan-exact, ~4×) · ❌ no accuracy win over the
+simpler neurons on this task. Reported straight — RFSSM earns its keep only if a hard
+long-range benchmark shows the S5-RF dynamics matter, which this task doesn't stress.
 
 ## Reproducibility
 
