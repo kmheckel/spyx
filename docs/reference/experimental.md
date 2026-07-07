@@ -29,6 +29,9 @@ of the library.
 | [`spyx.experimental.stochastic`](#spyxexperimentalstochastic) | Module | Stochastic (Bernoulli-spiking) and parallelizable prototypes: `SPSN`, `StochasticAssociative{LIF,CuBaLIF}`, and the `sigmoid_bernoulli` activations. |
 | [`spyx.experimental.hybrid`](#spyxexperimentalhybrid) | Module | The 0+1 hybrid trainer: surrogate gradient + antithetic-NES correction projected orthogonal to the surrogate (`hybrid_gradient`, `make_hybrid_train_step`, `es_gradient`, `hybrid_diagnostics`), plus the surrogate-steered **Self-Guided ES** variant (`sges_gradient`, `make_sges_hybrid_train_step`) — the surrogate direction is SGES's guiding subspace, so ES is spent on the orthogonal complement at several-fold lower variance. |
 | [`spyx.experimental.matfree`](#spyxexperimentalmatfree) | Module | Matmul-free linear primitives — ternary (BitNet: `TernaryLinear`, `TernaryMLP`) and shift-add (DeepShift: `ShiftAddLinear`) layers that replace dense multiplies with accumulations / bit-shifts, plus `MatMulFreeBlock`, `MLGRU`, `RMSNorm`, and the `ternary_weights` / `power_of_two_weights` / `activation_quant` STE helpers. The native train-from-scratch counterpart to the post-training [`spyx.quant.bitnet_ternary_rules`](quant.md) path. |
+| [`spyx.experimental.ttt`](#spyxexperimentalttt) | Module | Test-time-training / fast-weight sequence layer (`TTTFastWeight`): the hidden *state is a weight matrix* updated online per token by a hebb rule (scalar transition → `.parallel` associative scan) or error-correcting delta rule (matrix transition → sequential `spyx.nn.run`). |
+| [`spyx.experimental.local_learning`](#spyxexperimentallocal_learning) | Module | Local online three-factor (e-prop / OTTT-style) plasticity (`ThreeFactorLIF`): a per-synapse eligibility trace + modulator-gated update applied *during* the forward pass (no BPTT), with meta-learnable coefficients an outer SGD/ES loop can tune. |
+| [`spyx.experimental.feedback_alignment`](#spyxexperimentalfeedback_alignment) | Module | Backprop-free training via fixed *random* feedback: Feedback Alignment (`FALinear`, `fa_dense`) and Direct Feedback Alignment (`dfa_inject`, `dfa_gradient`), composing with surrogate spiking neurons through `jax.custom_vjp`. |
 | [`spyx.experimental.zoo`](#spyxexperimentalzoo) | Package | Runnable reference recipes keyed by application (control / classification / language) and tagged by training method × architecture (`REGISTRY`, `list_recipes`, `get`). |
 | [`spyx.experimental.onnx`](#spyxexperimentalonnx) | Module | Export a spiking model to ONNX — per-timestep step, or the whole `spyx.nn.run` loop as a native ONNX `Scan`/`Loop`. Conversion deps imported lazily. |
 
@@ -85,6 +88,18 @@ estimators. See [Training methods](../explanation/training-methods.md) for where
 this sits relative to post-training quantization ([`spyx.quant`](quant.md)).
 
 ::: spyx.experimental.matfree
+
+## spyx.experimental.ttt
+
+::: spyx.experimental.ttt
+
+## spyx.experimental.local_learning
+
+::: spyx.experimental.local_learning
+
+## spyx.experimental.feedback_alignment
+
+::: spyx.experimental.feedback_alignment
 
 ## spyx.experimental.onnx
 
