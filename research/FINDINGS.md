@@ -34,6 +34,7 @@ FP4×SNN gap and its neighbours).
 | [parallel_spiking_neurons](new/parallel_spiking_neurons/) | Reset-free / R&F neurons parallelize the time loop, no accuracy loss | ✅ | core | `spyx.nn.PSU_LIF`, `spyx.phasor.ResonateFire` |
 | [reset_preserving_parallel_lif](new/reset_preserving_parallel_lif/) | Parallelize a hard-reset LIF while keeping the exact reset (FPT) | ✅ | experimental | `ParallelResetLIF`: exact + ~1.7–2.4× over sequential on GPU |
 | [rf_ssm](new/rf_ssm/) | S5-RF (HiPPO init + decoupled reset) beats plain R&F on long-range | ➖ | experimental | `RFSSM`: scan-exact + ~4×, but **no accuracy win** over the simpler neurons here |
+| [sigma_delta_neuron](new/sigma_delta_neuron/) | Graded sigma-delta neuron transmits fewer events at matched accuracy on redundant input | ✅ | experimental | `spyx.experimental.SigmaDelta`: **3.84× fewer events** vs LIF at matched acc (redundancy-dependent; event-driven-HW win) |
 | [pallas_neurons](new/pallas_neurons/) | A fused Pallas neuron kernel is worth building (#24) | ❌ | new | matmul-bound; `associative_scan` already gives 2–21× portably |
 
 ### Training methods, SSMs & memory
