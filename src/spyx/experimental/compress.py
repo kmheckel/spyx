@@ -266,5 +266,5 @@ def packing_footprint(n_elements, bits, density):
         "sparse_mask+%dbit" % bits: math.ceil(n_elements / 8)
         + math.ceil(nnz * bits / 8),
     }
-    best = min(schemes, key=schemes.get)
+    best = min(schemes, key=lambda name: schemes[name])
     return {**schemes, "best": best, "crossover_density": (bits - 1) / bits}
