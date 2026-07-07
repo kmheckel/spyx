@@ -90,6 +90,7 @@ STATE_SCHEMES = ["nvfp4", "int8"]
 EFFECTIVE_BITS = {
     "fp32": 32.0,
     "int8": 8.0,
+    "int4": 4.0,  # symmetric absmax int4 (levels -7..7); matched-bit vs FP4.
     "nvfp4": 4.0 + 8.0 / NVFP4_TILE,
     "mxfp4": 4.0 + 8.0 / MXFP4_TILE,
     "ternary": math.log2(3),
@@ -238,15 +239,23 @@ class SpikingClassifier(nnx.Module):
         return jnp.transpose(traces, (1, 0, 2))
 
 
+# Model class that ``build_flat`` instantiates. Overridable so sibling studies
+# can swap in a richer neuron (e.g. ALIF) or a deeper stack while keeping the
+# weight-QAT path (kernel STE-QAT via ``_quant_kernels``) fully intact. Any
+# replacement must accept ``state_scheme``/``state_ste``/``rngs`` and expose the
+# same ``__call__(x_TBC) -> [B, T, N_CLASSES]`` contract.
+MODEL_CLS = SpikingClassifier
+
+
 def build_flat(seed, state_scheme):
     """Flat fp32 params + graphdefs for the STE-train and true-eval models.
 
     The two graphdefs differ only in the static ``state_ste`` flag; the params
     (and ``rest``) are identical, so trained ``theta`` merges into either.
     """
-    m_tr = SpikingClassifier(state_scheme=state_scheme, state_ste=True, rngs=nnx.Rngs(seed))
+    m_tr = MODEL_CLS(state_scheme=state_scheme, state_ste=True, rngs=nnx.Rngs(seed))
     gd_tr, params, rest = nnx.split(m_tr, nnx.Param, ...)
-    m_ev = SpikingClassifier(
+    m_ev = MODEL_CLS(
         state_scheme=state_scheme, state_ste=False, rngs=nnx.Rngs(seed)
     )
     gd_ev, _, _ = nnx.split(m_ev, nnx.Param, ...)

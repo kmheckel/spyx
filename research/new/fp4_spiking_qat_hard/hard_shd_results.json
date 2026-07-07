@@ -1,0 +1,175 @@
+{
+  "config": {
+    "smoke": false,
+    "device": "rocm:0",
+    "neuron": "alif",
+    "channels": 128,
+    "sample_T": 128,
+    "n_classes": 20,
+    "hiddens": [
+      128,
+      64,
+      32
+    ],
+    "epochs": 30,
+    "seeds": [
+      0,
+      1
+    ],
+    "schemes": [
+      "fp32",
+      "int8",
+      "int4",
+      "nvfp4",
+      "mxfp4",
+      "ternary"
+    ],
+    "wall_s": 624.9546882600116
+  },
+  "rows": [
+    {
+      "hidden": 128,
+      "scheme": "fp32",
+      "acc": 0.54833984375,
+      "acc_std": 0.01904296875,
+      "eff_bits": 32.0,
+      "drop_vs_fp32": 0.0
+    },
+    {
+      "hidden": 128,
+      "scheme": "int8",
+      "acc": 0.5927734375,
+      "acc_std": 0.013671875,
+      "eff_bits": 8.0,
+      "drop_vs_fp32": -0.04443359375
+    },
+    {
+      "hidden": 128,
+      "scheme": "int4",
+      "acc": 0.51708984375,
+      "acc_std": 0.0224609375,
+      "eff_bits": 4.0,
+      "drop_vs_fp32": 0.03125
+    },
+    {
+      "hidden": 128,
+      "scheme": "nvfp4",
+      "acc": 0.498046875,
+      "acc_std": 0.0166015625,
+      "eff_bits": 4.5,
+      "drop_vs_fp32": 0.05029296875
+    },
+    {
+      "hidden": 128,
+      "scheme": "mxfp4",
+      "acc": 0.36279296875,
+      "acc_std": 0.03369140625,
+      "eff_bits": 4.25,
+      "drop_vs_fp32": 0.185546875
+    },
+    {
+      "hidden": 128,
+      "scheme": "ternary",
+      "acc": 0.46533203125,
+      "acc_std": 0.033203125,
+      "eff_bits": 1.584962500721156,
+      "drop_vs_fp32": 0.0830078125
+    },
+    {
+      "hidden": 64,
+      "scheme": "fp32",
+      "acc": 0.574462890625,
+      "acc_std": 0.012939453125,
+      "eff_bits": 32.0,
+      "drop_vs_fp32": 0.0
+    },
+    {
+      "hidden": 64,
+      "scheme": "int8",
+      "acc": 0.591796875,
+      "acc_std": 0.0126953125,
+      "eff_bits": 8.0,
+      "drop_vs_fp32": -0.017333984375
+    },
+    {
+      "hidden": 64,
+      "scheme": "int4",
+      "acc": 0.463623046875,
+      "acc_std": 0.081298828125,
+      "eff_bits": 4.0,
+      "drop_vs_fp32": 0.11083984375
+    },
+    {
+      "hidden": 64,
+      "scheme": "nvfp4",
+      "acc": 0.48974609375,
+      "acc_std": 0.04931640625,
+      "eff_bits": 4.5,
+      "drop_vs_fp32": 0.084716796875
+    },
+    {
+      "hidden": 64,
+      "scheme": "mxfp4",
+      "acc": 0.53955078125,
+      "acc_std": 0.001953125,
+      "eff_bits": 4.25,
+      "drop_vs_fp32": 0.034912109375
+    },
+    {
+      "hidden": 64,
+      "scheme": "ternary",
+      "acc": 0.39697265625,
+      "acc_std": 0.0234375,
+      "eff_bits": 1.584962500721156,
+      "drop_vs_fp32": 0.177490234375
+    },
+    {
+      "hidden": 32,
+      "scheme": "fp32",
+      "acc": 0.5634765625,
+      "acc_std": 0.00927734375,
+      "eff_bits": 32.0,
+      "drop_vs_fp32": 0.0
+    },
+    {
+      "hidden": 32,
+      "scheme": "int8",
+      "acc": 0.5556640625,
+      "acc_std": 0.02783203125,
+      "eff_bits": 8.0,
+      "drop_vs_fp32": 0.0078125
+    },
+    {
+      "hidden": 32,
+      "scheme": "int4",
+      "acc": 0.410888671875,
+      "acc_std": 0.009033203125,
+      "eff_bits": 4.0,
+      "drop_vs_fp32": 0.152587890625
+    },
+    {
+      "hidden": 32,
+      "scheme": "nvfp4",
+      "acc": 0.465576171875,
+      "acc_std": 0.018798828125,
+      "eff_bits": 4.5,
+      "drop_vs_fp32": 0.097900390625
+    },
+    {
+      "hidden": 32,
+      "scheme": "mxfp4",
+      "acc": 0.427978515625,
+      "acc_std": 0.031005859375,
+      "eff_bits": 4.25,
+      "drop_vs_fp32": 0.135498046875
+    },
+    {
+      "hidden": 32,
+      "scheme": "ternary",
+      "acc": 0.358642578125,
+      "acc_std": 0.001220703125,
+      "eff_bits": 1.584962500721156,
+      "drop_vs_fp32": 0.204833984375
+    }
+  ]
+}
