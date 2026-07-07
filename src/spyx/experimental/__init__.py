@@ -29,8 +29,12 @@ Contents:
   spiking sibling ``SpikingSlotMemory``, after Raven (Afzal, Bick, Xing, Cevher,
   Gu 2026). Plus ``SlotRouter`` and the ``make_recall_batch`` MQAR generator.
 - :mod:`spyx.experimental.compress` — bit-packed activation storage for
-  memory-efficient BPTT (``packed_spike_dense``, ``pack_spikes``,
-  ``unpack_spikes``).
+  memory-efficient BPTT. Binary spikes (``packed_spike_dense``, ``pack_spikes``,
+  ``unpack_spikes``) plus the *quantized/sparse* generalisation: k-bit bit-plane
+  packing (``pack_nbit``/``unpack_nbit``), a k-bit BPTT dense
+  (``packed_quant_dense``), sparse occupancy-mask + code packing
+  (``sparse_quant_pack``/``sparse_quant_unpack``), and a ``packing_footprint``
+  byte-count / crossover helper.
 - :mod:`spyx.experimental.onnx` — export a spiking model to ONNX: the
   per-timestep step ``(x_t, state) -> (out, new_state)`` (flat tensor I/O), or,
   when a sequence length is given, the whole ``spyx.nn.run`` temporal loop as a
@@ -67,7 +71,17 @@ from . import (
     stochastic,
     zoo,
 )
-from .compress import pack_spikes, packed_spike_dense, unpack_spikes
+from .compress import (
+    pack_nbit,
+    pack_spikes,
+    packed_quant_dense,
+    packed_spike_dense,
+    packing_footprint,
+    sparse_quant_pack,
+    sparse_quant_unpack,
+    unpack_nbit,
+    unpack_spikes,
+)
 from .hybrid import (
     es_gradient,
     hybrid_diagnostics,
@@ -115,6 +129,12 @@ __all__ = [
     "packed_spike_dense",
     "pack_spikes",
     "unpack_spikes",
+    "pack_nbit",
+    "unpack_nbit",
+    "packed_quant_dense",
+    "sparse_quant_pack",
+    "sparse_quant_unpack",
+    "packing_footprint",
     "SPSN",
     "StochasticAssociativeLIF",
     "StochasticAssociativeCuBaLIF",

@@ -122,8 +122,14 @@ why MoE routing and block-sparse attention are dense-within-block. So the user
 intuition ("skip empty sections of spiking data") is the right *goal*; the
 engineering reality is it must be made **coarse and structured** to beat dense.
 spyx already holds the storage half of this — bit-packed spikes in
-[`spyx.experimental.compress`](../reference/experimental.md) — the missing half is a
-block-sparse consumer kernel.
+[`spyx.experimental.compress`](../reference/experimental.md), now generalised to
+**quantized + sparse** activations: pack at *k* bits (`pack_nbit`,
+`packed_quant_dense`) for graded/low-precision events, or store a 1-bit occupancy
+mask plus only the nonzero codes (`sparse_quant_pack`) — which beats dense *k*-bit
+packing below a density of `(bits-1)/bits` (see
+[`research/new/activation_packing/`](https://github.com/kmheckel/spyx/tree/main/research/new/activation_packing)).
+That is the storage/transmission win; the missing half is still a block-sparse
+consumer kernel that turns the saved bytes into skipped matmuls.
 
 ## Does matmul-free lose to NVFP4?
 

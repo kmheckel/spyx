@@ -26,6 +26,7 @@ FP4×SNN gap and its neighbours).
 | [honest_energy_accounting](new/honest_energy_accounting/) | Honest (memory-inclusive, QANN-baselined) SNN energy accounting | ✅ | new | crossover 5.99% ≈ literature 6.4%; SOP proxy under-reports ~700× |
 | [quant_aware_evolution](new/quant_aware_evolution/) | Gradient-free ES beats STE-QAT at extreme precision (no STE bias) | ➖ | new | null on easy task |
 | [quant_aware_evolution_hard](new/quant_aware_evolution_hard/) | The STE-bias gap appears once quantization costs accuracy | ❌ | new | reversed: ES *breaks* at ternary (coarse rounding flattens the ES landscape) |
+| [activation_packing](new/activation_packing/) | Sparse+quantized activations pack exactly; mask+value beats dense k-bit below a density crossover | ✅ | experimental | `spyx.experimental.compress`: k-bit `pack_nbit`/`packed_quant_dense` + `sparse_quant_pack`; crossover `(bits-1)/bits` confirmed 18/18; 5.3× vs fp32 BPTT residual |
 
 ### Parallel spiking neurons
 

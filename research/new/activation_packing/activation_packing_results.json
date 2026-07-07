@@ -1,0 +1,203 @@
+{
+  "config": {
+    "smoke": true,
+    "device": "cpu:0",
+    "n_elem": 4096,
+    "step": 0.25,
+    "densities": [
+      0.02,
+      0.1,
+      0.25,
+      0.5,
+      0.75,
+      0.9
+    ],
+    "bitwidths": [
+      2,
+      4,
+      8
+    ]
+  },
+  "exactness": {
+    "roundtrip_bit_exact": true,
+    "max_grad_abs_err": 0.001953125
+  },
+  "footprint_sweep": [
+    {
+      "bits": 2,
+      "density": 0.02,
+      "dense_kbit_bytes": 1024,
+      "sparse_bytes": 526,
+      "model_best": "sparse_mask+2bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.5
+    },
+    {
+      "bits": 2,
+      "density": 0.1,
+      "dense_kbit_bytes": 1024,
+      "sparse_bytes": 576,
+      "model_best": "sparse_mask+2bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.5
+    },
+    {
+      "bits": 2,
+      "density": 0.25,
+      "dense_kbit_bytes": 1024,
+      "sparse_bytes": 682,
+      "model_best": "sparse_mask+2bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.5
+    },
+    {
+      "bits": 2,
+      "density": 0.5,
+      "dense_kbit_bytes": 1024,
+      "sparse_bytes": 858,
+      "model_best": "sparse_mask+2bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.5
+    },
+    {
+      "bits": 2,
+      "density": 0.75,
+      "dense_kbit_bytes": 1024,
+      "sparse_bytes": 1028,
+      "model_best": "dense_2bit",
+      "empirical_best": "dense",
+      "crossover_density": 0.5
+    },
+    {
+      "bits": 2,
+      "density": 0.9,
+      "dense_kbit_bytes": 1024,
+      "sparse_bytes": 1124,
+      "model_best": "dense_2bit",
+      "empirical_best": "dense",
+      "crossover_density": 0.5
+    },
+    {
+      "bits": 4,
+      "density": 0.02,
+      "dense_kbit_bytes": 2048,
+      "sparse_bytes": 548,
+      "model_best": "sparse_mask+4bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.75
+    },
+    {
+      "bits": 4,
+      "density": 0.1,
+      "dense_kbit_bytes": 2048,
+      "sparse_bytes": 708,
+      "model_best": "sparse_mask+4bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.75
+    },
+    {
+      "bits": 4,
+      "density": 0.25,
+      "dense_kbit_bytes": 2048,
+      "sparse_bytes": 996,
+      "model_best": "sparse_mask+4bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.75
+    },
+    {
+      "bits": 4,
+      "density": 0.5,
+      "dense_kbit_bytes": 2048,
+      "sparse_bytes": 1476,
+      "model_best": "sparse_mask+4bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.75
+    },
+    {
+      "bits": 4,
+      "density": 0.75,
+      "dense_kbit_bytes": 2048,
+      "sparse_bytes": 1960,
+      "model_best": "sparse_mask+4bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.75
+    },
+    {
+      "bits": 4,
+      "density": 0.9,
+      "dense_kbit_bytes": 2048,
+      "sparse_bytes": 2212,
+      "model_best": "dense_4bit",
+      "empirical_best": "dense",
+      "crossover_density": 0.75
+    },
+    {
+      "bits": 8,
+      "density": 0.02,
+      "dense_kbit_bytes": 4096,
+      "sparse_bytes": 600,
+      "model_best": "sparse_mask+8bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.875
+    },
+    {
+      "bits": 8,
+      "density": 0.1,
+      "dense_kbit_bytes": 4096,
+      "sparse_bytes": 912,
+      "model_best": "sparse_mask+8bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.875
+    },
+    {
+      "bits": 8,
+      "density": 0.25,
+      "dense_kbit_bytes": 4096,
+      "sparse_bytes": 1520,
+      "model_best": "sparse_mask+8bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.875
+    },
+    {
+      "bits": 8,
+      "density": 0.5,
+      "dense_kbit_bytes": 4096,
+      "sparse_bytes": 2544,
+      "model_best": "sparse_mask+8bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.875
+    },
+    {
+      "bits": 8,
+      "density": 0.75,
+      "dense_kbit_bytes": 4096,
+      "sparse_bytes": 3584,
+      "model_best": "sparse_mask+8bit",
+      "empirical_best": "sparse",
+      "crossover_density": 0.875
+    },
+    {
+      "bits": 8,
+      "density": 0.9,
+      "dense_kbit_bytes": 4096,
+      "sparse_bytes": 4184,
+      "model_best": "dense_8bit",
+      "empirical_best": "dense",
+      "crossover_density": 0.875
+    }
+  ],
+  "bptt_residual": {
+    "shape_TBH": [
+      8,
+      8,
+      24
+    ],
+    "event_density": 0.9212239980697632,
+    "grid_bits": 6,
+    "fp32_residual_bytes": 6144,
+    "dense_kbit_bytes": 1152,
+    "sparse_bytes": 1254,
+    "dense_vs_fp32_x": 5.333333333333333,
+    "sparse_vs_fp32_x": 4.899521531100478
+  }
+}
