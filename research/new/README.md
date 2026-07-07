@@ -19,11 +19,13 @@ Once an idea here is published, its follow-up work moves to
   [reproductions](../reproductions/README.md) or
   [extensions](../extensions/README.md).
 
-## In progress
+## Index
 
-- [`parallel_spiking_neurons/`](parallel_spiking_neurons/README.md) —
-  **PSU_LIF & ResonateFire vs LIF: accuracy vs speed on SHD.** Reserved stub;
-  results pending.
+Every study here — with its one-line claim, honest verdict, and promotion status —
+is indexed in the **[findings ledger](../FINDINGS.md)** (grouped by theme:
+quantization & low precision · parallel spiking neurons · training methods / SSMs /
+memory). That ledger is the single source of truth; this folder is just where the
+study code lives.
 
 ## Related prior art
 
