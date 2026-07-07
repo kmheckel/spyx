@@ -24,12 +24,14 @@ import time
 import jax
 import jax.numpy as jnp
 import numpy as np
+from flax import nnx
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.normpath(os.path.join(_HERE, "..", "fp4_spiking_qat")))
 import fp4_spiking_qat as fp4  # noqa: E402  (sibling study; verified quant arms)
 
 import spyx.data as data  # noqa: E402
+import spyx.nn as snn  # noqa: E402
 
 SMOKE = bool(os.environ.get("SPYX_SMOKE") or os.environ.get("SMOKE"))
 CHANNELS, SAMPLE_T, N_CLASSES, BATCH = 128, 128, 20, 256
@@ -39,7 +41,68 @@ else:
     HIDDENS, EPOCHS, SEEDS, NTR, NTE = [128, 64, 32], 30, [0, 1], None, None
 
 # None => fp32 baseline (no weight quant); rest are STE-QAT weight formats.
-SCHEMES = [None, "int8", "nvfp4", "mxfp4", "ternary"]
+# int4 (symmetric absmax, 4.0b) is the matched-bit comparator the feasibility
+# study lacked: FP4 (nvfp4 4.5b / mxfp4 4.25b) vs int4 (4.0b) vs int8 vs ternary.
+SCHEMES = [None, "int8", "int4", "nvfp4", "mxfp4", "ternary"]
+
+# Hidden-neuron model. "lif" = the sibling study's plain QStateLIF (feasibility
+# ceiling ~54-59%); "alif" = spyx.nn.ALIF (adaptive threshold, richer temporal
+# state) to lift the fp32 ceiling; "lif2" = a two-hidden-layer LIF stack. Every
+# variant keeps the weight-QAT path unchanged (all Linear kernels STE-QAT'd),
+# so the format ranking is measured on a stronger baseline. Set via SPYX_NEURON.
+NEURON = os.environ.get("SPYX_NEURON", "alif").lower()
+
+
+class ALIFClassifier(nnx.Module):
+    """Richer baseline: adaptive-threshold ALIF hidden layer.
+
+    Drop-in for ``fp4.SpikingClassifier`` (same signature + ``__call__``
+    contract). ALIF's beta/gamma are rank-1 params, so ``_quant_kernels`` still
+    quantizes only the rank-2 Linear kernels — the weight-QAT arms (incl. int4)
+    are identical; only the neuron's temporal expressivity changes.
+    """
+
+    def __init__(self, *, state_scheme=None, state_ste=True, rngs):
+        del state_scheme, state_ste  # ALIF has no membrane-state quant path
+        self.net = snn.Sequential(
+            nnx.Linear(fp4.CHANNELS, fp4.HIDDEN, rngs=rngs),
+            snn.ALIF((fp4.HIDDEN,), rngs=rngs),
+            nnx.Linear(fp4.HIDDEN, fp4.N_CLASSES, rngs=rngs),
+            snn.LI((fp4.N_CLASSES,), rngs=rngs),
+        )
+
+    def __call__(self, x_TBC):
+        traces, _ = snn.run(self.net, x_TBC)
+        return jnp.transpose(traces, (1, 0, 2))
+
+
+class TwoLayerLIFClassifier(nnx.Module):
+    """Fallback richer baseline: two QStateLIF hidden layers (deeper stack).
+
+    Keeps the QStateLIF neuron (so SQUAT state-quant remains available) but adds
+    a second hidden layer + Linear; all three Linear kernels are STE-QAT'd.
+    """
+
+    def __init__(self, *, state_scheme=None, state_ste=True, rngs):
+        self.net = snn.Sequential(
+            nnx.Linear(fp4.CHANNELS, fp4.HIDDEN, rngs=rngs),
+            fp4.QStateLIF(
+                (fp4.HIDDEN,), state_scheme=state_scheme, state_ste=state_ste, rngs=rngs
+            ),
+            nnx.Linear(fp4.HIDDEN, fp4.HIDDEN, rngs=rngs),
+            fp4.QStateLIF(
+                (fp4.HIDDEN,), state_scheme=state_scheme, state_ste=state_ste, rngs=rngs
+            ),
+            nnx.Linear(fp4.HIDDEN, fp4.N_CLASSES, rngs=rngs),
+            snn.LI((fp4.N_CLASSES,), rngs=rngs),
+        )
+
+    def __call__(self, x_TBC):
+        traces, _ = snn.run(self.net, x_TBC)
+        return jnp.transpose(traces, (1, 0, 2))
+
+
+_MODELS = {"lif": None, "alif": ALIFClassifier, "lif2": TwoLayerLIFClassifier}
 
 
 def _unpack(o):
@@ -69,9 +132,16 @@ def _bits(scheme):
 
 
 def main():
+    if NEURON not in _MODELS:
+        raise ValueError(f"SPYX_NEURON={NEURON!r} not in {sorted(_MODELS)}")
+    # Swap the hidden neuron/depth by overriding the model fp4.build_flat builds;
+    # the weight-QAT machinery (train_snn / evaluate / _quant_kernels) is untouched.
+    if _MODELS[NEURON] is not None:
+        fp4.MODEL_CLS = _MODELS[NEURON]
     print(
-        f"backend={jax.default_backend()} SMOKE={SMOKE} real-SHD C={CHANNELS} T={SAMPLE_T} "
-        f"classes={N_CLASSES} hiddens={HIDDENS} epochs={EPOCHS} seeds={SEEDS} schemes={SCHEMES}",
+        f"backend={jax.default_backend()} SMOKE={SMOKE} neuron={NEURON} real-SHD "
+        f"C={CHANNELS} T={SAMPLE_T} classes={N_CLASSES} hiddens={HIDDENS} "
+        f"epochs={EPOCHS} seeds={SEEDS} schemes={SCHEMES}",
         flush=True,
     )
     t0 = time.perf_counter()
@@ -101,10 +171,10 @@ def main():
                   f"{_bits(scheme):.2f}b{dstr}", flush=True)
     dt = time.perf_counter() - t0
 
-    out = {"config": {"smoke": SMOKE, "device": str(jax.devices()[0]), "channels": CHANNELS,
-                      "sample_T": SAMPLE_T, "n_classes": N_CLASSES, "hiddens": HIDDENS,
-                      "epochs": EPOCHS, "seeds": SEEDS, "schemes": [s or "fp32" for s in SCHEMES],
-                      "wall_s": dt}, "rows": rows}
+    out = {"config": {"smoke": SMOKE, "device": str(jax.devices()[0]), "neuron": NEURON,
+                      "channels": CHANNELS, "sample_T": SAMPLE_T, "n_classes": N_CLASSES,
+                      "hiddens": HIDDENS, "epochs": EPOCHS, "seeds": SEEDS,
+                      "schemes": [s or "fp32" for s in SCHEMES], "wall_s": dt}, "rows": rows}
     with open(os.path.join(_HERE, "hard_shd_results.json"), "w") as f:
         json.dump(out, f, indent=2)
     print(f"\nwrote hard_shd_results.json  ({dt:.0f}s)", flush=True)
