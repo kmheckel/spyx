@@ -42,6 +42,7 @@ FP4×SNN gap and its neighbours).
 
 | Study | Claim (short) | Verdict | Status | Landed in / note |
 | --- | --- | --- | --- | --- |
+| [es_meta_plasticity_scout](new/es_meta_plasticity_scout/) | ES-meta-learned local plasticity for spiking nets is an unclaimed gap | ❌ | new | **CLAIMED** (3/3 skeptics): Confavreux 2025 (CMA-ES) + Jordan 2021 (genetic prog) both do ES × local-plasticity × spiking; only the assoc-scan-parallel framing is residual. Shipped TTT / three-factor / FA-DFA as cited building blocks |
 | [hybrid_evo_surrogate](new/hybrid_evo_surrogate/) | Orthogonal-ES / SGES correction beats surrogate on the hard-spike loss | ➖ | experimental | `spyx.experimental.hybrid` (safe, not a win — needs large-bias regime) |
 | [raven_sparse_memory_recall](new/raven_sparse_memory_recall/) | Routing-slot memory beats a diagonal SSM on recall | ✅ (modest) | experimental | `spyx.experimental.raven` (regime-dependent) |
 | [ssm_to_spiking_transfer](new/ssm_to_spiking_transfer/) | R&F *is* a thresholded S5Diag; transferring SSM dynamics helps spiking | ➖ | new | equivalence exact; S5Diag still beats the spiking variant |
