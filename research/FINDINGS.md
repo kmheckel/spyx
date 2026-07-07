@@ -13,27 +13,37 @@ human flips Status** (research → experimental → core).
 > stays in `research/` permanently so the question is not re-litigated. It is never
 > deleted, and never reshaped into a positive to justify promotion.
 
-## Active track: quantization & efficient architectures
+Grouped by theme. The **active track is quantization & low precision** (the confirmed
+FP4×SNN gap and its neighbours).
 
-The current focus. Studies probing low-precision (NVFP4/MXFP4, ternary),
-matmul-free layers, SSMs, and the training methods that fit them.
+### Quantization & low precision
 
-| Study | Claim (short) | Verdict | Status | Landed in / next |
+| Study | Claim (short) | Verdict | Status | Landed in / note |
 | --- | --- | --- | --- | --- |
-| [ternary_llm](new/ternary_llm/) | BitNet-ternary QAT path generalizes from spiking nets to transformers | ✅ | experimental | `spyx.experimental.matfree` |
-| [quant_aware_evolution](new/quant_aware_evolution/) | Gradient-free ES beats STE-QAT at extreme precision (no STE bias) | ➖ | new | null on easy task; needs a hard, capacity-constrained task |
-| [quant_aware_evolution_hard](new/quant_aware_evolution_hard/) | The STE-bias gap appears once quantization costs accuracy | ❌ | new | claim reversed: ES *breaks* at ternary (coarse rounding flattens the fitness landscape), fine at nvfp4; premise (quant costs acc) unmet on this synthetic task |
-| [hybrid_evo_surrogate](new/hybrid_evo_surrogate/) | Orthogonal-ES correction / SGES beats surrogate on the hard-spike loss | ➖ | experimental | `spyx.experimental.hybrid` (safe, not a win — needs large-bias regime) |
+| [fp4_spiking_qat_hard](new/fp4_spiking_qat_hard/) | Which sub-8-bit weight format is best for SNNs on a hard task | ✅ | new | **NVFP4 most reliable**: nvfp4 ≥ int4 (holds better when tight) ≥ mxfp4/ternary; int8 near-lossless; ALIF didn't lift the ceiling |
+| [fp4_spiking_qat](new/fp4_spiking_qat/) | FP4 (NVFP4/MXFP4) microscaling is a viable SNN weight format | ✅ | new | feasibility: first FP4×SNN datapoints, lossless on an easy task (no ranking there) |
+| [ternary_llm](new/ternary_llm/) | BitNet-ternary QAT generalizes from spiking nets to transformers | ✅ | experimental | `spyx.experimental.matfree` |
+| [honest_energy_accounting](new/honest_energy_accounting/) | Honest (memory-inclusive, QANN-baselined) SNN energy accounting | ✅ | new | crossover 5.99% ≈ literature 6.4%; SOP proxy under-reports ~700× |
+| [quant_aware_evolution](new/quant_aware_evolution/) | Gradient-free ES beats STE-QAT at extreme precision (no STE bias) | ➖ | new | null on easy task |
+| [quant_aware_evolution_hard](new/quant_aware_evolution_hard/) | The STE-bias gap appears once quantization costs accuracy | ❌ | new | reversed: ES *breaks* at ternary (coarse rounding flattens the ES landscape) |
+
+### Parallel spiking neurons
+
+| Study | Claim (short) | Verdict | Status | Landed in / note |
+| --- | --- | --- | --- | --- |
+| [parallel_spiking_neurons](new/parallel_spiking_neurons/) | Reset-free / R&F neurons parallelize the time loop, no accuracy loss | ✅ | core | `spyx.nn.PSU_LIF`, `spyx.phasor.ResonateFire` |
+| [reset_preserving_parallel_lif](new/reset_preserving_parallel_lif/) | Parallelize a hard-reset LIF while keeping the exact reset (FPT) | ✅ | experimental | `ParallelResetLIF`: exact + ~1.7–2.4× over sequential on GPU |
+| [rf_ssm](new/rf_ssm/) | S5-RF (HiPPO init + decoupled reset) beats plain R&F on long-range | ➖ | experimental | `RFSSM`: scan-exact + ~4×, but **no accuracy win** over the simpler neurons here |
 | [pallas_neurons](new/pallas_neurons/) | A fused Pallas neuron kernel is worth building (#24) | ❌ | new | matmul-bound; `associative_scan` already gives 2–21× portably |
 
-## Other studies
+### Training methods, SSMs & memory
 
-| Study | Claim (short) | Verdict | Status | Landed in / next |
+| Study | Claim (short) | Verdict | Status | Landed in / note |
 | --- | --- | --- | --- | --- |
-| [parallel_spiking_neurons](new/parallel_spiking_neurons/) | Reset-free / R&F neurons parallelize the time loop with no accuracy loss | ✅ | core | `spyx.nn.PSU_LIF`, `spyx.phasor.ResonateFire` |
+| [hybrid_evo_surrogate](new/hybrid_evo_surrogate/) | Orthogonal-ES / SGES correction beats surrogate on the hard-spike loss | ➖ | experimental | `spyx.experimental.hybrid` (safe, not a win — needs large-bias regime) |
 | [raven_sparse_memory_recall](new/raven_sparse_memory_recall/) | Routing-slot memory beats a diagonal SSM on recall | ✅ (modest) | experimental | `spyx.experimental.raven` (regime-dependent) |
 | [ssm_to_spiking_transfer](new/ssm_to_spiking_transfer/) | R&F *is* a thresholded S5Diag; transferring SSM dynamics helps spiking | ➖ | new | equivalence exact; S5Diag still beats the spiking variant |
-| [pretrain_finetune_curriculum](new/pretrain_finetune_curriculum/) | A pretrain→finetune curriculum lifts spiking accuracy | ❌ | new | honest negative; boundary condition recorded |
+| [pretrain_finetune_curriculum](new/pretrain_finetune_curriculum/) | A pretrain→finetune curriculum lifts spiking accuracy | ❌ | new | honest negative; boundary recorded |
 
 ## How to read / update this
 
