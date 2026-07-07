@@ -1,0 +1,115 @@
+{
+  "config": {
+    "T": 784,
+    "N_TRAIN": 4096,
+    "HIDDEN": 128,
+    "EPOCHS": 30,
+    "smoke": false
+  },
+  "accuracy": [
+    {
+      "kind": "RFSSM",
+      "test_acc": 0.826171875,
+      "train_s": 101.34401637798874,
+      "epochs": 30
+    },
+    {
+      "kind": "ResonateFire",
+      "test_acc": 1.0,
+      "train_s": 95.08003605098929,
+      "epochs": 30
+    },
+    {
+      "kind": "PSU_LIF",
+      "test_acc": 1.0,
+      "train_s": 93.08188183500897,
+      "epochs": 30
+    }
+  ],
+  "neuron_bench": [
+    {
+      "name": "RFSSM (seq)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 784,
+      "batch": 128,
+      "param_count": 512,
+      "fwd_latency_ms": 6.161463010357693,
+      "fwd_bwd_latency_ms": 26.600174503983,
+      "throughput_elem_ts_per_s": 16287040.891311662,
+      "spike_rate": 0.34550708532333374,
+      "peak_mem_mb": 411.184814453125,
+      "flops": 151298.0,
+      "mfu": 2.455553165630652e-06
+    },
+    {
+      "name": "RFSSM (parallel)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 784,
+      "batch": 128,
+      "param_count": 512,
+      "fwd_latency_ms": 1.5588995011057705,
+      "fwd_bwd_latency_ms": 6.06014700315427,
+      "throughput_elem_ts_per_s": 64373617.36841763,
+      "spike_rate": 0.34550654888153076,
+      "peak_mem_mb": 411.184814453125,
+      "flops": 305801088.0,
+      "mfu": 0.019616472247446795
+    },
+    {
+      "name": "ResonateFire (seq)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 784,
+      "batch": 128,
+      "param_count": 256,
+      "fwd_latency_ms": 6.047573493560776,
+      "fwd_bwd_latency_ms": 20.14029999554623,
+      "throughput_elem_ts_per_s": 16593762.788802972,
+      "spike_rate": 0.16697350144386292,
+      "peak_mem_mb": 411.184814453125,
+      "flops": 134402.0,
+      "mfu": 2.2224120160442215e-06
+    },
+    {
+      "name": "ResonateFire (parallel)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 784,
+      "batch": 128,
+      "param_count": 256,
+      "fwd_latency_ms": 1.5364674909505993,
+      "fwd_bwd_latency_ms": 4.951545502990484,
+      "throughput_elem_ts_per_s": 65313454.785765156,
+      "spike_rate": 0.16697350144386292,
+      "peak_mem_mb": 411.184814453125,
+      "flops": 254420352.0,
+      "mfu": 0.01655878523291061
+    },
+    {
+      "name": "PSU_LIF (seq)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 784,
+      "batch": 128,
+      "param_count": 128,
+      "fwd_latency_ms": 5.860385484993458,
+      "fwd_bwd_latency_ms": 19.484205506159924,
+      "throughput_elem_ts_per_s": 17123788.231502663,
+      "spike_rate": 0.2173229157924652,
+      "peak_mem_mb": 411.184814453125,
+      "flops": 98434.0,
+      "mfu": 1.679650600665391e-06
+    },
+    {
+      "name": "PSU_LIF (parallel)",
+      "device": "gpu:Radeon 8060S Graphics",
+      "seq_len": 784,
+      "batch": 128,
+      "param_count": 128,
+      "fwd_latency_ms": 1.2304455158300698,
+      "fwd_bwd_latency_ms": 3.1566465040668845,
+      "throughput_elem_ts_per_s": 81557451.10932574,
+      "spike_rate": 0.2173229157924652,
+      "peak_mem_mb": 411.184814453125,
+      "flops": 174496512.0,
+      "mfu": 0.014181571614106216
+    }
+  ]
+}
