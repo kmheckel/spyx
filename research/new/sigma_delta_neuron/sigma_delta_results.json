@@ -1,0 +1,27 @@
+{
+  "config": {
+    "smoke": false,
+    "device": "rocm:0",
+    "channels": 32,
+    "hidden": 64,
+    "n_classes": 5,
+    "sample_T": 80,
+    "step": 0.5,
+    "seeds": [
+      0,
+      1
+    ],
+    "wall_s": 24.81659023600514
+  },
+  "arms": {
+    "lif": {
+      "acc": 0.994140625,
+      "event_rate": 0.11017284588888288
+    },
+    "sigma_delta": {
+      "acc": 0.998046875,
+      "event_rate": 0.028721237438730896
+    }
+  },
+  "event_reduction_x": 3.8359366000127006
+}

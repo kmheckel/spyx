@@ -18,6 +18,13 @@ Contents:
   ``AssociativeLeaky``, which is a different matrix-state associative-memory SSM.
 - :class:`~spyx.experimental.ResonateFire` — complex resonate-and-fire oscillatory
   neuron. *Physically defined in* ``spyx.phasor``.
+- :class:`~spyx.experimental.ParallelResetLIF` — reset-*preserving* parallel LIF
+  (FPT fixed-point scan: keeps the exact hard reset while parallelising the time loop).
+- :class:`~spyx.experimental.RFSSM` — resonate-and-fire as a scaled spiking SSM
+  (S5/HiPPO pole init + PRF decoupled reset; alias ``ResonateFireSSM``).
+- :class:`~spyx.experimental.SigmaDelta` — graded sigma-delta neuron that transmits
+  only the quantized *change* in its membrane, so temporally-redundant input is nearly
+  free (``graded_quant`` is the straight-through grid quantiser).
 - :mod:`spyx.experimental.raven` — Routing Slot Memories (``RavenRSM``) and the
   spiking sibling ``SpikingSlotMemory``, after Raven (Afzal, Bick, Xing, Cevher,
   Gu 2026). Plus ``SlotRouter`` and the ``make_recall_batch`` MQAR generator.
@@ -56,6 +63,7 @@ from . import (
     parallel_reset,
     raven,
     rf_ssm,
+    sigma_delta,
     stochastic,
     zoo,
 )
@@ -71,6 +79,7 @@ from .hybrid import (
 from .parallel_reset import ParallelResetLIF
 from .raven import RavenRSM, SlotRouter, SpikingSlotMemory, make_recall_batch
 from .rf_ssm import RFSSM, ResonateFireSSM
+from .sigma_delta import SigmaDelta, graded_quant
 from .stochastic import (
     SPSN,
     StochasticAssociativeCuBaLIF,
@@ -88,11 +97,14 @@ __all__ = [
     "parallel_reset",
     "raven",
     "rf_ssm",
+    "sigma_delta",
     "stochastic",
     "zoo",
     "ParallelResetLIF",
     "RFSSM",
     "ResonateFireSSM",
+    "SigmaDelta",
+    "graded_quant",
     "PSU_LIF",
     "AssociativeLIF",
     "ResonateFire",
