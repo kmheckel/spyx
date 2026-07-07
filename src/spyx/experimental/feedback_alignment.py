@@ -236,7 +236,7 @@ def dfa_gradient(
     def _forward_logits(p):
         m = nnx.merge(graphdef, p, rest)
         h = x
-        for layer in m.layers:
+        for layer in m.layers:  # ty: ignore[unresolved-attribute]  # merged Sequential
             if hasattr(layer, "initial_state"):
                 h, _ = layer(h, layer.initial_state(batch))
             else:
@@ -251,7 +251,7 @@ def dfa_gradient(
         h = x
         k = 0
         total = jnp.asarray(0.0, logits.dtype)
-        for layer in m.layers:
+        for layer in m.layers:  # ty: ignore[unresolved-attribute]  # merged Sequential
             if hasattr(layer, "initial_state"):
                 out, _ = layer(h, layer.initial_state(batch))
                 # Seed cotangent error @ feedbacks[k] at this hidden output.
