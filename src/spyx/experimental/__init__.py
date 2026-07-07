@@ -43,6 +43,22 @@ Contents:
 - :mod:`spyx.experimental.stochastic` — stochastic (Bernoulli-spiking) and
   parallelizable prototypes: ``SPSN``, ``StochasticAssociativeLIF``,
   ``StochasticAssociativeCuBaLIF`` and the ``sigmoid_bernoulli`` activations.
+- :class:`~spyx.experimental.TTTFastWeight` — test-time-training / fast-weight
+  sequence layer whose hidden *state is a weight matrix* updated online per token
+  by a hebb (``rule="hebb"``, scalar transition → ``.parallel`` associative scan,
+  a matrix-valued ``PSU_LIF``) or error-correcting delta rule (``rule="delta"``,
+  matrix transition → sequential ``spyx.nn.run``; chunked-DeltaNet for parallel).
+- :mod:`spyx.experimental.local_learning` — local online three-factor
+  (e-prop / OTTT-style) plasticity: :class:`ThreeFactorLIF`, a plastic-synapse
+  LIF that maintains a per-synapse eligibility trace and applies a
+  modulator-gated ``ΔW = eta * <mod * trace>`` *during* the forward-through-time
+  pass (no BPTT), with meta-learnable coefficients an outer SGD/ES loop can tune.
+  It is the neuromorphic, spiking sibling of the ``TTTFastWeight`` delta rule.
+- :mod:`spyx.experimental.feedback_alignment` — backprop-free training via fixed
+  *random* feedback (weight-transport-free): :class:`FALinear` / ``fa_dense``
+  (layer-local Feedback Alignment, Lillicrap 2016) and ``dfa_inject`` /
+  ``dfa_gradient`` (Direct Feedback Alignment, Nøkland 2016), composing with
+  surrogate spiking neurons and ``spyx.nn.run`` via ``jax.custom_vjp``.
 - :mod:`spyx.experimental.hybrid` — the 0+1 hybrid trainer: a surrogate
   gradient corrected by an antithetic-NES estimate of the true (hard-spike)
   loss, projected orthogonal to the surrogate (``hybrid_gradient``,
@@ -61,7 +77,9 @@ from ..phasor import ResonateFire
 from . import (
     compress,
     evolve,
+    feedback_alignment,
     hybrid,
+    local_learning,
     matfree,
     onnx,
     parallel_reset,
@@ -69,6 +87,7 @@ from . import (
     rf_ssm,
     sigma_delta,
     stochastic,
+    ttt,
     zoo,
 )
 from .compress import (
@@ -82,6 +101,13 @@ from .compress import (
     unpack_nbit,
     unpack_spikes,
 )
+from .feedback_alignment import (
+    FALinear,
+    Feedback,
+    dfa_gradient,
+    dfa_inject,
+    fa_dense,
+)
 from .hybrid import (
     es_gradient,
     hybrid_diagnostics,
@@ -90,6 +116,7 @@ from .hybrid import (
     make_sges_hybrid_train_step,
     sges_gradient,
 )
+from .local_learning import ThreeFactorLIF, surrogate_deriv
 from .parallel_reset import ParallelResetLIF
 from .raven import RavenRSM, SlotRouter, SpikingSlotMemory, make_recall_batch
 from .rf_ssm import RFSSM, ResonateFireSSM
@@ -101,11 +128,14 @@ from .stochastic import (
     refractory_sigmoid_bernoulli,
     sigmoid_bernoulli,
 )
+from .ttt import TTTFastWeight
 
 __all__ = [
     "compress",
     "evolve",
+    "feedback_alignment",
     "hybrid",
+    "local_learning",
     "matfree",
     "onnx",
     "parallel_reset",
@@ -113,12 +143,21 @@ __all__ = [
     "rf_ssm",
     "sigma_delta",
     "stochastic",
+    "ttt",
     "zoo",
     "ParallelResetLIF",
     "RFSSM",
     "ResonateFireSSM",
     "SigmaDelta",
     "graded_quant",
+    "ThreeFactorLIF",
+    "surrogate_deriv",
+    "TTTFastWeight",
+    "Feedback",
+    "FALinear",
+    "fa_dense",
+    "dfa_inject",
+    "dfa_gradient",
     "PSU_LIF",
     "AssociativeLIF",
     "ResonateFire",
