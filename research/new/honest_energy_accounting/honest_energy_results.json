@@ -1,0 +1,338 @@
+{
+  "config": {
+    "smoke": true,
+    "architecture": {
+      "C_in": 256,
+      "H_hidden": 128,
+      "N_out": 10
+    },
+    "synapses": 34048,
+    "state_neurons": 138,
+    "snn_weight_bits": 8,
+    "snn_state_bits": 8,
+    "T_operating": 8,
+    "seeds": [
+      0
+    ],
+    "epochs": 3
+  },
+  "constants_pJ": {
+    "compute_horowitz_2014_45nm_fp32": {
+      "E_ADD32": 0.9,
+      "E_MULT32": 3.7,
+      "E_MAC32": 4.6000000000000005,
+      "note": "Horowitz, Computing's Energy Problem, ISSCC 2014, 45nm; E_AC=E_ADD32 scaled ~linearly, E_MAC mult ~quadratic in bits."
+    },
+    "snn_yan_2024_22nm": {
+      "E_ACC": 0.05448,
+      "E_CMP": 0.05448,
+      "E_SUB": 0.05448,
+      "E_MEM_weight_DRAM_per_bit": 20.0,
+      "E_MEM_onchip_dense_per_bit": 0.25,
+      "E_MEM_sparse_route_per_bit": 3.0,
+      "note": "Yan, Bai & Wong, arXiv:2409.08290, 22nm. Weight DRAM = 1300 pJ / 64-bit word ~= 20 pJ/bit; dense movement 0.25 pJ/bit."
+    }
+  },
+  "citations": [
+    "Horowitz, M. 'Computing's Energy Problem (and what we can do about it).' ISSCC 2014.",
+    "Yan, Z., Bai, Z., Wong, W.-F. 'Reconsidering the energy efficiency of spiking neural networks.' arXiv:2409.08290, 2024."
+  ],
+  "honesty": "All pJ constants are literature values (Horowitz 2014, 45nm; Yan et al. 2024, 22nm). This is an ANALYTIC energy model, not a silicon measurement. The crossover is exact given the model; its value depends on the memory assumptions and on the SNN(8b)-vs-QANN(ceil(log2(T+1))b) weight-precision asymmetry.",
+  "crossover": {
+    "per_T": {
+      "5": 0.0750292677297796,
+      "6": 0.06250729434889529,
+      "7": 0.05356302764826365,
+      "8": 0.06251846702744747,
+      "9": 0.055560573740450384,
+      "10": 0.04999425911085272
+    },
+    "mean_spike_rate_T5_to_T10": 0.059862148267614844,
+    "literature_threshold": 0.064,
+    "matches_literature": true,
+    "sensitivity_note": "Crossover ~ qann_bits / (SNN_WEIGHT_BITS * T). If SNN weights were bit-matched to the QANN (both b bits) the crossover rises to ~1/T (10-20%); if the SNN paid Loihi sparse-routing cost (3.0 pJ/bit) for weight fetch it falls to ~1-2%. The 8-bit-SNN-weight assumption is what reproduces the paper's ~6.4%."
+  },
+  "energy_sweep": [
+    {
+      "spike_rate": 0.01,
+      "hidden_spike_rate": 0.01,
+      "T": 5,
+      "e_sop_proxy_pJ": 383.04,
+      "e_snn_memory_inclusive_pJ": 275271.962624,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 0.13446459606423433,
+      "proxy_underreports_x": 718.650696073517,
+      "snn_wins": true
+    },
+    {
+      "spike_rate": 0.02,
+      "hidden_spike_rate": 0.02,
+      "T": 5,
+      "e_sop_proxy_pJ": 766.08,
+      "e_snn_memory_inclusive_pJ": 547749.058048,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 0.2675639579596169,
+      "proxy_underreports_x": 715.0024253968253,
+      "snn_wins": true
+    },
+    {
+      "spike_rate": 0.05,
+      "hidden_spike_rate": 0.05,
+      "T": 5,
+      "e_sop_proxy_pJ": 1915.2,
+      "e_snn_memory_inclusive_pJ": 1365180.34432,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 0.6668620436457645,
+      "proxy_underreports_x": 712.8134629908103,
+      "snn_wins": true
+    },
+    {
+      "spike_rate": 0.064,
+      "hidden_spike_rate": 0.064,
+      "T": 5,
+      "e_sop_proxy_pJ": 2451.456,
+      "e_snn_memory_inclusive_pJ": 1746648.2779136002,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 0.8532011502993002,
+      "proxy_underreports_x": 712.4942393065999,
+      "snn_wins": true
+    },
+    {
+      "spike_rate": 0.1,
+      "hidden_spike_rate": 0.1,
+      "T": 5,
+      "e_sop_proxy_pJ": 3830.4,
+      "e_snn_memory_inclusive_pJ": 2727565.82144,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 1.3323588531226773,
+      "proxy_underreports_x": 712.0838088554721,
+      "snn_wins": false
+    },
+    {
+      "spike_rate": 0.2,
+      "hidden_spike_rate": 0.2,
+      "T": 5,
+      "e_sop_proxy_pJ": 7660.8,
+      "e_snn_memory_inclusive_pJ": 5452336.77568,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 2.663352472076503,
+      "proxy_underreports_x": 711.7189817878028,
+      "snn_wins": false
+    },
+    {
+      "spike_rate": 0.01,
+      "hidden_spike_rate": 0.01,
+      "T": 7,
+      "e_sop_proxy_pJ": 536.2560000000001,
+      "e_snn_memory_inclusive_pJ": 385380.74767360004,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 0.1882504344899281,
+      "proxy_underreports_x": 718.6506960735171,
+      "snn_wins": true
+    },
+    {
+      "spike_rate": 0.02,
+      "hidden_spike_rate": 0.02,
+      "T": 7,
+      "e_sop_proxy_pJ": 1072.5120000000002,
+      "e_snn_memory_inclusive_pJ": 766848.6812672,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 0.37458954114346366,
+      "proxy_underreports_x": 715.0024253968253,
+      "snn_wins": true
+    },
+    {
+      "spike_rate": 0.05,
+      "hidden_spike_rate": 0.05,
+      "T": 7,
+      "e_sop_proxy_pJ": 2681.28,
+      "e_snn_memory_inclusive_pJ": 1911252.4820480002,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 0.9336068611040704,
+      "proxy_underreports_x": 712.8134629908104,
+      "snn_wins": true
+    },
+    {
+      "spike_rate": 0.064,
+      "hidden_spike_rate": 0.064,
+      "T": 7,
+      "e_sop_proxy_pJ": 3432.0384000000004,
+      "e_snn_memory_inclusive_pJ": 2445307.58907904,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 1.1944816104190201,
+      "proxy_underreports_x": 712.4942393065998,
+      "snn_wins": false
+    },
+    {
+      "spike_rate": 0.1,
+      "hidden_spike_rate": 0.1,
+      "T": 7,
+      "e_sop_proxy_pJ": 5362.56,
+      "e_snn_memory_inclusive_pJ": 3818592.1500160005,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 1.8653023943717484,
+      "proxy_underreports_x": 712.0838088554721,
+      "snn_wins": false
+    },
+    {
+      "spike_rate": 0.2,
+      "hidden_spike_rate": 0.2,
+      "T": 7,
+      "e_sop_proxy_pJ": 10725.12,
+      "e_snn_memory_inclusive_pJ": 7633271.485952001,
+      "e_qann_pJ": 2047170.56148,
+      "snn_over_qann_ratio": 3.7286934609071043,
+      "proxy_underreports_x": 711.7189817878029,
+      "snn_wins": false
+    },
+    {
+      "spike_rate": 0.01,
+      "hidden_spike_rate": 0.01,
+      "T": 10,
+      "e_sop_proxy_pJ": 766.08,
+      "e_snn_memory_inclusive_pJ": 550543.925248,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 0.20166090787546284,
+      "proxy_underreports_x": 718.650696073517,
+      "snn_wins": true
+    },
+    {
+      "spike_rate": 0.02,
+      "hidden_spike_rate": 0.02,
+      "T": 10,
+      "e_sop_proxy_pJ": 1532.16,
+      "e_snn_memory_inclusive_pJ": 1095498.116096,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 0.40127432986979655,
+      "proxy_underreports_x": 715.0024253968253,
+      "snn_wins": true
+    },
+    {
+      "spike_rate": 0.05,
+      "hidden_spike_rate": 0.05,
+      "T": 10,
+      "e_sop_proxy_pJ": 3830.4,
+      "e_snn_memory_inclusive_pJ": 2730360.68864,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 1.0001145958527977,
+      "proxy_underreports_x": 712.8134629908103,
+      "snn_wins": false
+    },
+    {
+      "spike_rate": 0.064,
+      "hidden_spike_rate": 0.064,
+      "T": 10,
+      "e_sop_proxy_pJ": 4902.912,
+      "e_snn_memory_inclusive_pJ": 3493296.5558272004,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 1.279573386644865,
+      "proxy_underreports_x": 712.4942393065999,
+      "snn_wins": false
+    },
+    {
+      "spike_rate": 0.1,
+      "hidden_spike_rate": 0.1,
+      "T": 10,
+      "e_sop_proxy_pJ": 7660.8,
+      "e_snn_memory_inclusive_pJ": 5455131.64288,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 1.9981817058244664,
+      "proxy_underreports_x": 712.0838088554721,
+      "snn_wins": false
+    },
+    {
+      "spike_rate": 0.2,
+      "hidden_spike_rate": 0.2,
+      "T": 10,
+      "e_sop_proxy_pJ": 15321.6,
+      "e_snn_memory_inclusive_pJ": 10904673.55136,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 3.994315925767803,
+      "proxy_underreports_x": 711.7189817878028,
+      "snn_wins": false
+    }
+  ],
+  "trained_operating_points": [
+    {
+      "spike_rate": 0.029571533203125,
+      "hidden_spike_rate": 0.0015411376953125,
+      "T": 8,
+      "e_sop_proxy_pJ": 1747.75078125,
+      "e_snn_memory_inclusive_pJ": 1247740.06221875,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 0.4570396333521867,
+      "proxy_underreports_x": 713.9118892719705,
+      "snn_wins": true,
+      "setting": "sparse_input",
+      "accuracy": 0.40625,
+      "input_rate": 0.029571533203125,
+      "hidden_rate": 0.0015411376953125,
+      "mean_spike_rate": 0.01555633544921875
+    },
+    {
+      "spike_rate": 0.39383697509765625,
+      "hidden_spike_rate": 0.0595703125,
+      "T": 8,
+      "e_sop_proxy_pJ": 23366.7,
+      "e_snn_memory_inclusive_pJ": 16626452.96776,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 6.090169097255598,
+      "proxy_underreports_x": 711.544761038572,
+      "snn_wins": false,
+      "setting": "regularised",
+      "accuracy": 0.453125,
+      "input_rate": 0.39383697509765625,
+      "hidden_rate": 0.0595703125,
+      "mean_spike_rate": 0.22670364379882812
+    },
+    {
+      "spike_rate": 0.07122802734375,
+      "hidden_spike_rate": 0.0135650634765625,
+      "T": 8,
+      "e_sop_proxy_pJ": 4232.45390625,
+      "e_snn_memory_inclusive_pJ": 3015242.36245375,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 1.1044650288404714,
+      "proxy_underreports_x": 712.4099704904495,
+      "snn_wins": false,
+      "setting": "low_drive",
+      "accuracy": 0.859375,
+      "input_rate": 0.07122802734375,
+      "hidden_rate": 0.0135650634765625,
+      "mean_spike_rate": 0.04239654541015625
+    },
+    {
+      "spike_rate": 0.1764984130859375,
+      "hidden_spike_rate": 0.027587890625,
+      "T": 8,
+      "e_sop_proxy_pJ": 10473.862500000001,
+      "e_snn_memory_inclusive_pJ": 7455089.39782,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 2.730754127529228,
+      "proxy_underreports_x": 711.7803387069478,
+      "snn_wins": false,
+      "setting": "mid_drive",
+      "accuracy": 0.9375,
+      "input_rate": 0.1764984130859375,
+      "hidden_rate": 0.027587890625,
+      "mean_spike_rate": 0.10204315185546875
+    },
+    {
+      "spike_rate": 0.39383697509765625,
+      "hidden_spike_rate": 0.08056640625,
+      "T": 8,
+      "e_sop_proxy_pJ": 23415.075,
+      "e_snn_memory_inclusive_pJ": 16660865.85228,
+      "e_qann_pJ": 2730047.83648,
+      "snn_over_qann_ratio": 6.102774328585307,
+      "proxy_underreports_x": 711.544415393929,
+      "snn_wins": false,
+      "setting": "high_drive",
+      "accuracy": 0.515625,
+      "input_rate": 0.39383697509765625,
+      "hidden_rate": 0.08056640625,
+      "mean_spike_rate": 0.23720169067382812
+    }
+  ],
+  "wall_seconds": 4.358025711990194
+}
